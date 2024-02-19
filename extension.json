@@ -2,8 +2,8 @@
   "name": "Java",
   "version": "0.0.1",
   "authors": [
-    "Louni Longheval <samuser107@gmail.com>"
+    "Samuser107 L.Longheval <samuser107@gmail.com>"
   ],
   "description": "Provides Java syntax highlighting and language support in Zed",
-  "repository": "https://github.com/samuser107/extensions-zed"
+  "repository": "https://github.com/samuser107/zed-java-extension"
 }
