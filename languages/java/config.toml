@@ -1,8 +1,8 @@
 name = "Java"
 grammar = "java"
-pathSuffixes = ["java"]
-lineComments = ["// "]
-autoCloseBefore = ";:.,=}])>` \n\t\""
+path_suffixes = ["java"]
+line_comments = ["// "]
+autoclose_before = ";:.,=}])>` \n\t\""
 brackets = [
     { start = "{", end = "}", close = true, newline = true },
     { start = "[", end = "]", close = true, newline = true },
