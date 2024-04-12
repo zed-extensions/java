@@ -8,3 +8,5 @@ brackets = [
     { start = "[", end = "]", close = true, newline = true },
     { start = "(", end = ")", close = true, newline = false },
 ]
+prettier_parser_name = "java"
+prettier_plugins = ["prettier-plugin-java"]
