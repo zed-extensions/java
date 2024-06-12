@@ -4,6 +4,6 @@
   "authors": [
     "Samuser107 L.Longheval <samuser107@gmail.com>"
   ],
-  "description": "Provides Java syntax highlighting in Zed (and language support is comming later)",
+  "description": "Provides Java syntax highlighting in Zed (and language support is coming later)",
   "repository": "https://github.com/samuser107/zed-java-extension"
 }
