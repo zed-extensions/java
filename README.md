@@ -4,7 +4,8 @@ This extension adds support for the [Java](https://github.com/zed-extensions/jav
 
 ## Configuration
 
-You can optionally configure the Java home that JDTLS (the language server) uses like so:
+You can optionally configure the Java home that JDTLS (the language server) uses
+in your Zed settings like so:
 
 ```json
 {
