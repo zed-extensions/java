@@ -66,13 +66,32 @@ impl zed::Extension for Java {
                     let (left, return_type) = completion.detail.as_ref()?.split_once(" : ")?;
                     let parameters = &left[left.find('(')?..];
                     let name_and_parameters = format!("{}{parameters}", completion.label);
-                    let code = format!("{return_type} {name_and_parameters} {{}}");
+                    let braces = " {}";
+                    let code = format!("{return_type} {name_and_parameters}{braces}");
 
                     return Some(CodeLabel {
                         spans: vec![
-                            CodeLabelSpan::code_range(return_type.len() + 1..code.len() - 3),
+                            CodeLabelSpan::code_range(
+                                return_type.len() + 1..code.len() - braces.len(),
+                            ),
                             CodeLabelSpan::literal(" : ", None),
                             CodeLabelSpan::code_range(0..return_type.len()),
+                        ],
+                        code,
+                        filter_range: (0..completion.label.len()).into(),
+                    });
+                }
+                CompletionKind::Class => {
+                    let class = "class ";
+                    let braces = " {}";
+                    let code = format!("{class}{}{braces}", completion.label);
+                    let detail = completion.detail?;
+                    let namespace = &detail[..detail.len() - completion.label.len() - 1];
+
+                    return Some(CodeLabel {
+                        spans: vec![
+                            CodeLabelSpan::code_range(class.len()..code.len() - braces.len()),
+                            CodeLabelSpan::literal(format!(" ({namespace})"), None),
                         ],
                         code,
                         filter_range: (0..completion.label.len()).into(),
