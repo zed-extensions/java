@@ -112,7 +112,7 @@ impl zed::Extension for Java {
                         filter_range: (0..completion.label.len()).into(),
                     });
                 }
-                CompletionKind::Keyword => {
+                CompletionKind::Keyword | CompletionKind::Variable => {
                     return Some(CodeLabel {
                         spans: vec![CodeLabelSpan::code_range(0..completion.label.len())],
                         filter_range: (0..completion.label.len()).into(),
