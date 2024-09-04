@@ -81,21 +81,46 @@ impl zed::Extension for Java {
                         filter_range: (0..completion.label.len()).into(),
                     });
                 }
-                CompletionKind::Class => {
-                    let class = "class ";
+                CompletionKind::Class | CompletionKind::Interface | CompletionKind::Enum => {
+                    let keyword = match kind {
+                        CompletionKind::Class => "class ",
+                        CompletionKind::Interface => "interface ",
+                        CompletionKind::Enum => "enum ",
+                        _ => return None,
+                    };
                     let braces = " {}";
-                    let code = format!("{class}{}{braces}", completion.label);
+                    let code = format!("{keyword}{}{braces}", completion.label);
                     let detail = completion.detail?;
                     let namespace = &detail[..detail.len() - completion.label.len() - 1];
 
                     return Some(CodeLabel {
                         spans: vec![
-                            CodeLabelSpan::code_range(class.len()..code.len() - braces.len()),
+                            CodeLabelSpan::code_range(keyword.len()..code.len() - braces.len()),
                             CodeLabelSpan::literal(format!(" ({namespace})"), None),
                         ],
                         code,
                         filter_range: (0..completion.label.len()).into(),
                     });
+                }
+                CompletionKind::Snippet => {
+                    return Some(CodeLabel {
+                        code: String::new(),
+                        spans: vec![CodeLabelSpan::literal(
+                            format!("{} - {}", completion.label, completion.detail?),
+                            None,
+                        )],
+                        filter_range: (0..completion.label.len()).into(),
+                    });
+                }
+                CompletionKind::Keyword => {
+                    return Some(CodeLabel {
+                        spans: vec![CodeLabelSpan::code_range(0..completion.label.len())],
+                        filter_range: (0..completion.label.len()).into(),
+                        code: completion.label,
+                    });
+                }
+                CompletionKind::Module => {
+                    return None;
                 }
                 _ => (),
             }
