@@ -122,6 +122,18 @@ impl zed::Extension for Java {
                 CompletionKind::Module => {
                     return None;
                 }
+                CompletionKind::Constructor => {
+                    let detail = completion.detail?;
+                    let parameters = &detail[detail.find('(')?..];
+                    let braces = " {}";
+                    let code = format!("{}{parameters}{braces}", completion.label);
+
+                    return Some(CodeLabel {
+                        spans: vec![CodeLabelSpan::code_range(0..code.len() - braces.len())],
+                        code,
+                        filter_range: (0..completion.label.len()).into(),
+                    });
+                }
                 _ => (),
             }
         }
