@@ -48,32 +48,53 @@ impl zed::Extension for Java {
     ) -> Option<zed::CodeLabel> {
         if let Some(kind) = completion.kind {
             match kind {
-                CompletionKind::Field => {
-                    let (_, field_type) = completion.detail.as_ref()?.split_once(" : ")?;
-                    let code = format!("{field_type} {};", completion.label);
+                CompletionKind::Field | CompletionKind::Constant => {
+                    let modifiers = match kind {
+                        CompletionKind::Field => "",
+                        CompletionKind::Constant => "static final ",
+                        _ => return None,
+                    };
+                    let property_type = completion.detail.as_ref().and_then(|detail| {
+                        detail
+                            .split_once(" : ")
+                            .and_then(|(_, property_type)| Some(format!("{property_type} ")))
+                    })?;
+                    let semicolon = ";";
+                    let code = format!("{modifiers}{property_type}{}{semicolon}", completion.label);
 
                     return Some(CodeLabel {
                         spans: vec![
-                            CodeLabelSpan::code_range(field_type.len() + 1..code.len() - 1),
+                            CodeLabelSpan::code_range(
+                                modifiers.len() + property_type.len()..code.len() - semicolon.len(),
+                            ),
                             CodeLabelSpan::literal(" : ", None),
-                            CodeLabelSpan::code_range(0..field_type.len()),
+                            CodeLabelSpan::code_range(
+                                modifiers.len()..modifiers.len() + property_type.len(),
+                            ),
                         ],
                         code,
                         filter_range: (0..completion.label.len()).into(),
                     });
                 }
                 CompletionKind::Method => {
-                    let (left, return_type) = completion.detail.as_ref()?.split_once(" : ")?;
-                    let parameters = &left[left.find('(')?..];
+                    let (parameters, return_type) =
+                        completion.detail.as_ref().and_then(|detail| {
+                            let (left, return_type) = detail
+                                .split_once(" : ")
+                                .and_then(|(left, return_type)| {
+                                    Some((left, format!("{return_type} ")))
+                                })
+                                .unwrap_or((detail, String::new()));
+
+                            Some((&left[left.find('(')?..], return_type))
+                        })?;
                     let name_and_parameters = format!("{}{parameters}", completion.label);
                     let braces = " {}";
-                    let code = format!("{return_type} {name_and_parameters}{braces}");
+                    let code = format!("{return_type}{name_and_parameters}{braces}");
 
                     return Some(CodeLabel {
                         spans: vec![
-                            CodeLabelSpan::code_range(
-                                return_type.len() + 1..code.len() - braces.len(),
-                            ),
+                            CodeLabelSpan::code_range(return_type.len()..code.len() - braces.len()),
                             CodeLabelSpan::literal(" : ", None),
                             CodeLabelSpan::code_range(0..return_type.len()),
                         ],
@@ -90,14 +111,19 @@ impl zed::Extension for Java {
                     };
                     let braces = " {}";
                     let code = format!("{keyword}{}{braces}", completion.label);
-                    let detail = completion.detail?;
-                    let namespace = &detail[..detail.len() - completion.label.len() - 1];
+                    let namespace = completion.detail.and_then(|detail| {
+                        Some(detail[..detail.len() - completion.label.len() - 1].to_string())
+                    });
+                    let mut spans = vec![CodeLabelSpan::code_range(
+                        keyword.len()..code.len() - braces.len(),
+                    )];
+
+                    if let Some(namespace) = namespace {
+                        spans.push(CodeLabelSpan::literal(format!(" ({namespace})"), None));
+                    }
 
                     return Some(CodeLabel {
-                        spans: vec![
-                            CodeLabelSpan::code_range(keyword.len()..code.len() - braces.len()),
-                            CodeLabelSpan::literal(format!(" ({namespace})"), None),
-                        ],
+                        spans,
                         code,
                         filter_range: (0..completion.label.len()).into(),
                     });
@@ -119,9 +145,7 @@ impl zed::Extension for Java {
                         code: completion.label,
                     });
                 }
-                CompletionKind::Module => {
-                    return None;
-                }
+                CompletionKind::Module => return None,
                 CompletionKind::Constructor => {
                     let detail = completion.detail?;
                     let parameters = &detail[detail.find('(')?..];
