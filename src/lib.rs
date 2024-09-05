@@ -46,6 +46,9 @@ impl zed::Extension for Java {
         _language_server_id: &zed::LanguageServerId,
         completion: zed::lsp::Completion,
     ) -> Option<zed::CodeLabel> {
+        // uncomment when debugging completions
+        // println!("Java completion: {completion:#?}");
+
         if let Some(kind) = completion.kind {
             match kind {
                 CompletionKind::Field | CompletionKind::Constant => {
@@ -145,7 +148,6 @@ impl zed::Extension for Java {
                         code: completion.label,
                     });
                 }
-                CompletionKind::Module => return None,
                 CompletionKind::Constructor => {
                     let detail = completion.detail?;
                     let parameters = &detail[detail.find('(')?..];
@@ -161,8 +163,6 @@ impl zed::Extension for Java {
                 _ => (),
             }
         }
-
-        println!("unhandled Java completion: {completion:#?}"); // warn
 
         None
     }
