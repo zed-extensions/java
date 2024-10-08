@@ -1,0 +1,19 @@
+id = "java"
+name = "Java"
+version = "1.0.0"
+schema_version = 1
+authors = [
+    "Samuser107 L.Longheval <samuser107@gmail.com>",
+    "Valentine Briese <valentinegb@icloud.com>",
+    "Yury Abykhodau <abehodau@gmail.com>",
+]
+description = "Java support."
+repository = "https://github.com/zed-extensions/java"
+
+[grammars.java]
+repository = "https://github.com/tree-sitter/tree-sitter-java"
+commit = "99b29f1ed957b3b424b6e21f57bd21a9732a622a"
+
+[language_servers.jdtls]
+name = "Eclipse JDT Language Server"
+language = "Java"
