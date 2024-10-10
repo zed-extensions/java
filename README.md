@@ -23,7 +23,7 @@ in your Zed settings like so:
 
 ### `classpath`
 
-You can also configure the class PATH that JDTLS will use like so:
+You can also configure the class path that JDTLS will use like so:
 
 ```json
 {
