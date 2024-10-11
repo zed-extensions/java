@@ -310,10 +310,4 @@
 ] @comment
 
 ((block_comment) @comment.doc
-  (#match? @comment.doc "^/[*][*][^*].*[*]/$"))
-
-((line_comment) @comment.doc
-  (#match? @comment.doc "^///[^/]"))
-
-((line_comment) @comment.doc
-  (#match? @comment.doc "^///$"))
+  (#match? @comment.doc "^\\/\\*\\*"))
