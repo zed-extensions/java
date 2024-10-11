@@ -84,6 +84,9 @@
 (enum_declaration
   name: (identifier) @enum)
 
+(enum_constant
+  name: (identifier) @constant)
+
 (constructor_declaration
   name: (identifier) @constructor)
 
@@ -130,7 +133,7 @@
 
 ; Variables
 ((identifier) @constant
-  (#match? @constant "^[A-Z_][A-Z%d_]+$"))
+  (#match? @constant "^[A-Z_$][A-Z\\d_$]*$"))
 
 (this) @variable
 
