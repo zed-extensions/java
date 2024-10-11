@@ -80,27 +80,32 @@ impl zed::Extension for Java {
                     });
                 }
                 CompletionKind::Method => {
-                    let (parameters, return_type) =
-                        completion.detail.as_ref().and_then(|detail| {
-                            let (left, return_type) = detail
-                                .split_once(" : ")
-                                .and_then(|(left, return_type)| {
-                                    Some((left, format!("{return_type} ")))
-                                })
-                                .unwrap_or((detail, String::new()));
-
-                            Some((&left[left.find('(')?..], return_type))
-                        })?;
-                    let name_and_parameters = format!("{}{parameters}", completion.label);
+                    let detail = completion.detail?;
+                    let (left, return_type) = detail
+                        .split_once(" : ")
+                        .and_then(|(left, return_type)| Some((left, format!("{return_type} "))))
+                        .unwrap_or((&detail, "void".to_string()));
+                    let parameters = left
+                        .find('(')
+                        .map(|parameters_start| &left[parameters_start..]);
+                    let name_and_parameters =
+                        format!("{}{}", completion.label, parameters.unwrap_or("()"));
                     let braces = " {}";
                     let code = format!("{return_type}{name_and_parameters}{braces}");
+                    let mut spans = vec![CodeLabelSpan::code_range(
+                        return_type.len()..code.len() - braces.len(),
+                    )];
+
+                    if parameters.is_some() {
+                        spans.push(CodeLabelSpan::literal(" : ", None));
+                        spans.push(CodeLabelSpan::code_range(0..return_type.len()));
+                    } else {
+                        spans.push(CodeLabelSpan::literal(" - ", None));
+                        spans.push(CodeLabelSpan::literal(detail, None));
+                    }
 
                     return Some(CodeLabel {
-                        spans: vec![
-                            CodeLabelSpan::code_range(return_type.len()..code.len() - braces.len()),
-                            CodeLabelSpan::literal(" : ", None),
-                            CodeLabelSpan::code_range(0..return_type.len()),
-                        ],
+                        spans,
                         code,
                         filter_range: (0..completion.label.len()).into(),
                     });
