@@ -4,30 +4,30 @@
 
 ; Methods
 (method_declaration
-  name: (identifier) @function.method)
+  name: (identifier) @function)
 
 (method_invocation
-  name: (identifier) @function.method.call)
+  name: (identifier) @function)
 
-(super) @function.builtin
+(super) @function
 
 ; Parameters
 (formal_parameter
-  name: (identifier) @variable.parameter)
+  name: (identifier) @variable)
 
 (catch_formal_parameter
-  name: (identifier) @variable.parameter)
+  name: (identifier) @variable)
 
 (spread_parameter
   (variable_declarator
-    name: (identifier) @variable.parameter)) ; int... foo
+    name: (identifier) @variable)) ; int... foo
 
 ; Lambda parameter
 (inferred_parameters
-  (identifier) @variable.parameter) ; (x,y) -> ...
+  (identifier) @variable) ; (x,y) -> ...
 
 (lambda_expression
-  parameters: (identifier) @variable.parameter) ; x -> ...
+  parameters: (identifier) @variable) ; x -> ...
 
 ; Operators
 [
@@ -82,54 +82,57 @@
   name: (identifier) @type)
 
 (enum_declaration
-  name: (identifier) @type)
+  name: (identifier) @enum)
 
 (constructor_declaration
-  name: (identifier) @type)
+  name: (identifier) @constructor)
 
 (type_identifier) @type
 
-((type_identifier) @type.builtin
-  (#eq? @type.builtin "var"))
+((type_identifier) @type
+  (#eq? @type "var"))
+
+(object_creation_expression
+  type: (type_identifier) @constructor)
 
 ((method_invocation
   object: (identifier) @type)
-  (#lua-match? @type "^[A-Z]"))
+  (#match? @type "^[A-Z]"))
 
 ((method_reference
   .
   (identifier) @type)
-  (#lua-match? @type "^[A-Z]"))
+  (#match? @type "^[A-Z]"))
 
 ((field_access
   object: (identifier) @type)
-  (#lua-match? @type "^[A-Z]"))
+  (#match? @type "^[A-Z]"))
 
 (scoped_identifier
   (identifier) @type
-  (#lua-match? @type "^[A-Z]"))
+  (#match? @type "^[A-Z]"))
 
 ; Fields
 (field_declaration
   declarator:
     (variable_declarator
-      name: (identifier) @variable.member))
+      name: (identifier) @property))
 
 (field_access
-  field: (identifier) @variable.member)
+  field: (identifier) @property)
 
 [
   (boolean_type)
   (integral_type)
   (floating_point_type)
   (void_type)
-] @type.builtin
+] @type
 
 ; Variables
 ((identifier) @constant
-  (#lua-match? @constant "^[A-Z_][A-Z%d_]+$"))
+  (#match? @constant "^[A-Z_][A-Z%d_]+$"))
 
-(this) @variable.builtin
+(this) @variable
 
 ; Annotations
 (annotation
@@ -145,26 +148,23 @@
 
 (escape_sequence) @string.escape
 
-(character_literal) @character
+(character_literal) @string
 
 [
   (hex_integer_literal)
   (decimal_integer_literal)
   (octal_integer_literal)
   (binary_integer_literal)
-] @number
-
-[
   (decimal_floating_point_literal)
   (hex_floating_point_literal)
-] @number.float
+] @number
 
 [
   (true)
   (false)
 ] @boolean
 
-(null_literal) @constant.builtin
+(null_literal) @type
 
 ; Keywords
 [
@@ -183,9 +183,6 @@
   "with"
 ] @keyword
 
-(synchronized_statement
-  "synchronized" @keyword)
-
 [
   "abstract"
   "final"
@@ -198,23 +195,21 @@
   "sealed"
   "static"
   "strictfp"
+  "synchronized"
   "transitive"
-] @type.qualifier
-
-(modifiers
-  "synchronized" @type.qualifier)
+] @keyword
 
 [
   "transient"
   "volatile"
-] @keyword.storage
+] @keyword
 
 [
   "return"
   "yield"
-] @keyword.return
+] @keyword
 
-"new" @keyword.operator
+"new" @operator
 
 ; Conditionals
 [
@@ -222,13 +217,13 @@
   "else"
   "switch"
   "case"
-] @keyword.conditional
+] @keyword
 
 (ternary_expression
   [
     "?"
     ":"
-  ] @keyword.conditional.ternary)
+  ] @operator)
 
 ; Loops
 [
@@ -237,7 +232,7 @@
   "do"
   "continue"
   "break"
-] @keyword.repeat
+] @keyword
 
 ; Includes
 [
@@ -249,7 +244,7 @@
   "provides"
   "requires"
   "uses"
-] @keyword.import
+] @keyword
 
 ; Punctuation
 [
@@ -290,7 +285,7 @@
   [
     "\\{"
     "}"
-  ] @punctuation.special)
+  ] @string.special.symbol)
 
 ; Exceptions
 [
@@ -299,7 +294,7 @@
   "finally"
   "try"
   "catch"
-] @keyword.exception
+] @keyword
 
 ; Labels
 (labeled_statement
@@ -309,13 +304,13 @@
 [
   (line_comment)
   (block_comment)
-] @comment @spell
+] @comment
 
-((block_comment) @comment.documentation
-  (#lua-match? @comment.documentation "^/[*][*][^*].*[*]/$"))
+((block_comment) @comment.doc
+  (#match? @comment.doc "^/[*][*][^*].*[*]/$"))
 
-((line_comment) @comment.documentation
-  (#lua-match? @comment.documentation "^///[^/]"))
+((line_comment) @comment.doc
+  (#match? @comment.doc "^///[^/]"))
 
-((line_comment) @comment.documentation
-  (#lua-match? @comment.documentation "^///$"))
+((line_comment) @comment.doc
+  (#match? @comment.doc "^///$"))
