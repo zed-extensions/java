@@ -17,19 +17,32 @@ impl zed::Extension for Java {
         language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
-        let java_home = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
-            .settings
-            .and_then(|settings| {
-                settings.get("java_home").and_then(|java_home_value| {
-                    java_home_value
-                        .as_str()
-                        .and_then(|java_home_str| Some(java_home_str.to_string()))
+        let (java_home, classpath) =
+            LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
+                .settings
+                .map(|settings| {
+                    (
+                        settings.get("java_home").and_then(|java_home_value| {
+                            java_home_value
+                                .as_str()
+                                .map(|java_home_str| java_home_str.to_string())
+                        }),
+                        settings.get("classpath").and_then(|classpath_value| {
+                            classpath_value
+                                .as_str()
+                                .map(|classpath_str| classpath_str.to_string())
+                        }),
+                    )
                 })
-            });
+                .unwrap_or_default();
         let mut env = Vec::new();
 
         if let Some(java_home) = java_home {
             env.push(("JAVA_HOME".to_string(), java_home));
+        }
+
+        if let Some(classpath) = classpath {
+            env.push(("CLASSPATH".to_string(), classpath));
         }
 
         Ok(zed::Command {

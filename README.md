@@ -5,14 +5,15 @@ This extension adds support for the [Java](https://github.com/zed-extensions/jav
 ## Configuration
 
 You can optionally configure the Java home that JDTLS (the language server) uses
-in your Zed settings like so:
+and/or the class path that it uses in your Zed settings like so:
 
 ```json
 {
   "lsp": {
     "jdtls": {
       "settings": {
-        "java_home": "/path/to/jdk"
+        "java_home": "/path/to/jdk/",
+        "classpath": "/path/to/classes.jar:/path/to/more/classes/"
       }
     }
   }
