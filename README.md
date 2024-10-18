@@ -2,22 +2,19 @@
 
 This extension adds support for the Java language.
 
-> [!NOTE]
-> The extension does not currently install [JDTLS] (the language server the extension uses) for you.
-> If you wish to enable LSP functionality, please install [JDTLS] yourself.
-
 ## Configuration
 
 ### Settings
 
-You can optionally configure the class path that [JDTLS] (the language server) uses in your Zed
-settings like so:
+You can optionally configure the version of [JDTLS] (the language server) to
+download or the class path that [JDTLS] uses in your Zed settings like so:
 
 ```json
 {
   "lsp": {
     "jdtls": {
       "settings": {
+        "version": "1.40.0", // This is the default value
         "classpath": "/path/to/classes.jar:/path/to/more/classes/"
       }
     }
@@ -27,7 +24,8 @@ settings like so:
 
 ### Initialization Options
 
-There are also many more options you can pass directly to the language server, for example:
+There are also many more options you can pass directly to the language server,
+for example:
 
 ```json
 {
@@ -110,7 +108,8 @@ There are also many more options you can pass directly to the language server, f
 
 *Example taken from JDTLS's [initialization options wiki page].*
 
-You can see all the options JDTLS accepts [here][initialization options wiki page].
+You can see all the options JDTLS accepts [here][initialization options wiki
+page].
 
 [JDTLS]: https://github.com/eclipse-jdtls/eclipse.jdt.ls
 [initialization options wiki page]: https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request
