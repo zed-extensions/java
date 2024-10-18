@@ -2,14 +2,165 @@ use zed_extension_api::{
     self as zed, lsp::CompletionKind, settings::LspSettings, CodeLabel, CodeLabelSpan,
 };
 
-struct Java;
+struct Java {
+    cached_binary_path: Option<String>,
+}
+
+impl Java {
+    fn language_server_binary_path(
+        &mut self,
+        language_server_id: &zed::LanguageServerId,
+        worktree: &zed::Worktree,
+    ) -> zed::Result<String> {
+        // Quickly return if the binary path is already cached
+        // Expect binary path to be validated when setting the cache so no checking is done here
+        if let Some(path) = &self.cached_binary_path {
+            return Ok(path.clone());
+        }
+
+        // Determine the binary name based on the current platform
+        let (platform, _) = zed::current_platform();
+        let binary_name = match platform {
+            zed::Os::Windows => "jdtls.bat",
+            _ => "jdtls",
+        }
+        .to_string();
+
+        // Use binary available on PATH if it exists
+        if let Some(path) = worktree.which(&binary_name) {
+            // Probably we want to check if the binary is executable too here
+            if std::fs::metadata(&path).map_or(false, |stat| stat.is_file()) {
+                self.cached_binary_path = Some(path.clone());
+                return Ok(path.clone());
+            }
+        }
+
+        // Attempt to install locally
+
+        zed::set_language_server_installation_status(
+            language_server_id,
+            &zed::LanguageServerInstallationStatus::CheckingForUpdate,
+        );
+
+        // Use version specified in settings or latest version released on Github
+        let version = match LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
+            .settings
+            .and_then(|settings| {
+                settings.get("version").and_then(|version_value| {
+                    version_value
+                        .as_str()
+                        .map(|version_str| version_str.trim().to_string())
+                })
+            })
+            .or_else(|| {
+                // Probably we can get the latest version from Maven?
+                Some("1.40.0".to_string())
+            }) {
+            Some(version) => version,
+            None => {
+                zed::set_language_server_installation_status(
+                    language_server_id,
+                    &zed::LanguageServerInstallationStatus::Failed(
+                        "no version specified in settings and no latest release found".to_string(),
+                    ),
+                );
+                return Err(
+                    "no version specified in settings and no latest release found".to_string(),
+                );
+            }
+        };
+
+        // Prebuilt milestone versions available at:
+        // https://download.eclipse.org/jdtls/milestones/{version}
+        // Tarball filename is specified at
+        // https://download.eclipse.org/jdtls/milestones/{version}/latest.txt
+
+        zed::set_language_server_installation_status(
+            language_server_id,
+            &zed::LanguageServerInstallationStatus::Downloading,
+        );
+
+        let install_prefix = format!("jdt-language-server-{version}");
+
+        // Download latest.txt to get the tarball filename
+        let latest_txt_path = format!("{install_prefix}-latest.txt");
+        let latest_txt_url =
+            format!("https://download.eclipse.org/jdtls/milestones/{version}/latest.txt");
+        zed::download_file(
+            &latest_txt_url,
+            &latest_txt_path,
+            zed::DownloadedFileType::Uncompressed,
+        )
+        .map_err(|e| format!("failed to download file: {e}"))
+        .inspect_err(|e| {
+            zed::set_language_server_installation_status(
+                language_server_id,
+                &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+            );
+        })?;
+        let tarball_name = std::fs::read_to_string(&latest_txt_path)
+            .map_err(|e| format!("failed to read file {latest_txt_path} : {e}"))
+            .inspect_err(|e| {
+                zed::set_language_server_installation_status(
+                    language_server_id,
+                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                );
+            })?
+            .trim()
+            .to_string();
+
+        // Download tarball and extract
+        let tarball_url =
+            format!("https://download.eclipse.org/jdtls/milestones/{version}/{tarball_name}");
+        zed::download_file(
+            &tarball_url,
+            &install_prefix,
+            zed::DownloadedFileType::GzipTar,
+        )
+        .map_err(|e| format!("failed to download file from {tarball_url} : {e}"))
+        .inspect_err(|e| {
+            zed::set_language_server_installation_status(
+                language_server_id,
+                &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+            );
+        })?;
+
+        // Validate binary
+        let binary_path = std::path::Path::new(&install_prefix)
+            .join("bin")
+            .join(binary_name)
+            .to_string_lossy()
+            .to_string();
+        if !std::fs::metadata(&binary_path).map_or(false, |stat| stat.is_file()) {
+            zed::set_language_server_installation_status(
+                language_server_id,
+                &zed::LanguageServerInstallationStatus::Failed(format!(
+                    "binary not found at {binary_path}"
+                )),
+            );
+            return Err(format!("binary not found at {binary_path}"));
+        }
+        zed::make_file_executable(&binary_path)
+            .map_err(|e| format!("failed to make file {binary_path} executable: {e}"))
+            .inspect_err(|e| {
+                zed::set_language_server_installation_status(
+                    language_server_id,
+                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                );
+            })?;
+        self.cached_binary_path = Some(binary_path.clone());
+        Ok(binary_path.clone())
+    }
+}
 
 impl zed::Extension for Java {
     fn new() -> Self
     where
         Self: Sized,
     {
-        Self
+        Self {
+            cached_binary_path: None,
+        }
     }
 
     fn language_server_command(
@@ -33,9 +184,9 @@ impl zed::Extension for Java {
         }
 
         Ok(zed::Command {
-            command: worktree
-                .which("jdtls")
-                .ok_or("could not find JDTLS in PATH")?,
+            command: self
+                .language_server_binary_path(language_server_id, worktree)
+                .map_err(|e| format!("could not find language server binary: {e}"))?,
             args: Vec::new(),
             env,
         })
