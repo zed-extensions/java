@@ -42,8 +42,8 @@ impl Java {
             &zed::LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        // Use version specified in settings or latest version released on Github
-        let version = match LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
+        // Use version specified in settings or default version
+        let version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .settings
             .and_then(|settings| {
                 settings.get("version").and_then(|version_value| {
@@ -52,23 +52,8 @@ impl Java {
                         .map(|version_str| version_str.trim().to_string())
                 })
             })
-            .or_else(|| {
-                // Probably we can get the latest version from Maven?
-                Some("1.40.0".to_string())
-            }) {
-            Some(version) => version,
-            None => {
-                zed::set_language_server_installation_status(
-                    language_server_id,
-                    &zed::LanguageServerInstallationStatus::Failed(
-                        "no version specified in settings and no latest release found".to_string(),
-                    ),
-                );
-                return Err(
-                    "no version specified in settings and no latest release found".to_string(),
-                );
-            }
-        };
+            // Probably we can get the latest version from Maven?
+            .unwrap_or("1.40.0".to_string());
 
         // Prebuilt milestone versions available at:
         // https://download.eclipse.org/jdtls/milestones/{version}
