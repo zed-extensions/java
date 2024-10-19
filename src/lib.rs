@@ -4,6 +4,7 @@ use zed_extension_api::{
 
 struct Java {
     cached_binary_path: Option<String>,
+    cached_lombok_path: Option<String>,
 }
 
 impl Java {
@@ -136,6 +137,52 @@ impl Java {
         self.cached_binary_path = Some(binary_path.clone());
         Ok(binary_path.clone())
     }
+
+    fn lombok_jar_path(
+        &mut self,
+        language_server_id: &zed::LanguageServerId,
+        worktree: &zed::Worktree,
+    ) -> zed::Result<String> {
+        // Quickly return if the lombok path is already cached
+        // Expect lombok path to be validated when setting the cache so no checking is done here
+        if let Some(path) = &self.cached_lombok_path {
+            return Ok(path.clone());
+        }
+
+        // Use lombok version specified in settings or default to latest version
+        let lombok_version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
+            .settings
+            .and_then(|settings| {
+                settings.get("lombok").and_then(|lombok| {
+                    lombok
+                        .get("version")
+                        .and_then(|version| version.as_str())
+                        .and_then(|version| Some(version.trim().to_string()))
+                })
+            });
+
+        // Download lombok jar
+        // https://projectlombok.org/downloads/lombok.jar always points to the latest version
+        // https://projectlombok.org/downloads/lombok-{version}.jar points to the specified version
+        let (lombok_url, lombok_path) = match lombok_version {
+            Some(v) => (
+                format!("https://projectlombok.org/downloads/lombok-{v}.jar"),
+                format!("lombok-{v}.jar"),
+            ),
+            None => (
+                "https://projectlombok.org/downloads/lombok.jar".to_string(),
+                "lombok.jar".to_string(),
+            ),
+        };
+        zed::download_file(
+            &lombok_url,
+            &lombok_path,
+            zed::DownloadedFileType::Uncompressed,
+        )
+        .map_err(|e| format!("failed to download file from {lombok_url} : {e}"))?;
+        self.cached_lombok_path = Some(lombok_path.to_string());
+        Ok(lombok_path.to_string())
+    }
 }
 
 impl zed::Extension for Java {
@@ -145,6 +192,7 @@ impl zed::Extension for Java {
     {
         Self {
             cached_binary_path: None,
+            cached_lombok_path: None,
         }
     }
 
@@ -168,11 +216,33 @@ impl zed::Extension for Java {
             env.push(("CLASSPATH".to_string(), classpath));
         }
 
+        let mut args = Vec::new();
+
+        // Add lombok as javaagent if enabled
+        let lombok_enabled = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
+            .settings
+            .and_then(|settings| {
+                settings
+                    .get("lombok")
+                    .and_then(|lombok| lombok.get("enabled"))
+                    .and_then(|enabled| enabled.as_bool())
+            })
+            .unwrap_or(false);
+        if lombok_enabled {
+            let lombok_jar_path = self.lombok_jar_path(language_server_id, worktree)?;
+            let lombok_jar_full_path = std::env::current_dir()
+                .map_err(|e| format!("could not get current dir: {e}"))?
+                .join(&lombok_jar_path)
+                .to_string_lossy()
+                .to_string();
+            args.push(format!("--jvm-arg=-javaagent:{lombok_jar_full_path}"));
+        }
+
         Ok(zed::Command {
             command: self
                 .language_server_binary_path(language_server_id, worktree)
                 .map_err(|e| format!("could not find language server binary: {e}"))?,
-            args: Vec::new(),
+            args,
             env,
         })
     }
