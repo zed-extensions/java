@@ -60,79 +60,74 @@ impl Java {
         // Tarball filename is specified at
         // https://download.eclipse.org/jdtls/milestones/{version}/latest.txt
 
-        zed::set_language_server_installation_status(
-            language_server_id,
-            &zed::LanguageServerInstallationStatus::Downloading,
-        );
-
         let install_prefix = format!("jdt-language-server-{version}");
-
-        // Download latest.txt to get the tarball filename
-        let latest_txt_path = format!("{install_prefix}-latest.txt");
-        let latest_txt_url =
-            format!("https://download.eclipse.org/jdtls/milestones/{version}/latest.txt");
-        zed::download_file(
-            &latest_txt_url,
-            &latest_txt_path,
-            zed::DownloadedFileType::Uncompressed,
-        )
-        .map_err(|e| format!("failed to download file: {e}"))
-        .inspect_err(|e| {
-            zed::set_language_server_installation_status(
-                language_server_id,
-                &zed::LanguageServerInstallationStatus::Failed(e.clone()),
-            );
-        })?;
-        let tarball_name = std::fs::read_to_string(&latest_txt_path)
-            .map_err(|e| format!("failed to read file {latest_txt_path} : {e}"))
-            .inspect_err(|e| {
-                zed::set_language_server_installation_status(
-                    language_server_id,
-                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
-                );
-            })?
-            .trim()
-            .to_string();
-
-        // Download tarball and extract
-        let tarball_url =
-            format!("https://download.eclipse.org/jdtls/milestones/{version}/{tarball_name}");
-        zed::download_file(
-            &tarball_url,
-            &install_prefix,
-            zed::DownloadedFileType::GzipTar,
-        )
-        .map_err(|e| format!("failed to download file from {tarball_url} : {e}"))
-        .inspect_err(|e| {
-            zed::set_language_server_installation_status(
-                language_server_id,
-                &zed::LanguageServerInstallationStatus::Failed(e.clone()),
-            );
-        })?;
-
-        // Validate binary
         let binary_path = std::path::Path::new(&install_prefix)
             .join("bin")
             .join(binary_name)
             .to_string_lossy()
             .to_string();
+
+        // Validate binary
         if !std::fs::metadata(&binary_path).map_or(false, |stat| stat.is_file()) {
             zed::set_language_server_installation_status(
                 language_server_id,
-                &zed::LanguageServerInstallationStatus::Failed(format!(
-                    "binary not found at {binary_path}"
-                )),
+                &zed::LanguageServerInstallationStatus::Downloading,
             );
-            return Err(format!("binary not found at {binary_path}"));
-        }
-        zed::make_file_executable(&binary_path)
-            .map_err(|e| format!("failed to make file {binary_path} executable: {e}"))
+
+            // Download latest.txt to get the tarball filename
+            let latest_txt_path = format!("{install_prefix}-latest.txt");
+            let latest_txt_url =
+                format!("https://download.eclipse.org/jdtls/milestones/{version}/latest.txt");
+            zed::download_file(
+                &latest_txt_url,
+                &latest_txt_path,
+                zed::DownloadedFileType::Uncompressed,
+            )
+            .map_err(|e| format!("failed to download file: {e}"))
             .inspect_err(|e| {
                 zed::set_language_server_installation_status(
                     language_server_id,
                     &zed::LanguageServerInstallationStatus::Failed(e.clone()),
                 );
             })?;
+            let tarball_name = std::fs::read_to_string(&latest_txt_path)
+                .map_err(|e| format!("failed to read file {latest_txt_path} : {e}"))
+                .inspect_err(|e| {
+                    zed::set_language_server_installation_status(
+                        language_server_id,
+                        &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                    );
+                })?
+                .trim()
+                .to_string();
+
+            // Download tarball and extract
+            let tarball_url =
+                format!("https://download.eclipse.org/jdtls/milestones/{version}/{tarball_name}");
+
+            zed::download_file(
+                &tarball_url,
+                &install_prefix,
+                zed::DownloadedFileType::GzipTar,
+            )
+            .map_err(|e| format!("failed to download file from {tarball_url} : {e}"))
+            .inspect_err(|e| {
+                zed::set_language_server_installation_status(
+                    language_server_id,
+                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                );
+            })?;
+
+            zed::make_file_executable(&binary_path)
+                .map_err(|e| format!("failed to make file {binary_path} executable: {e}"))
+                .inspect_err(|e| {
+                    zed::set_language_server_installation_status(
+                        language_server_id,
+                        &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                    );
+                })?;
+        }
+
         self.cached_binary_path = Some(binary_path.clone());
         Ok(binary_path.clone())
     }
