@@ -188,6 +188,7 @@ impl Java {
                 );
             })?;
         }
+
         self.cached_lombok_path = Some(lombok_path.to_string());
         Ok(lombok_path.to_string())
     }
@@ -237,7 +238,6 @@ impl zed::Extension for Java {
                 .and_then(|enabled| enabled.as_bool())
             })
             .unwrap_or(false);
-        println!("lombok_enabled: {:?}", lombok_enabled);
         if lombok_enabled {
             let lombok_jar_path = self.lombok_jar_path(language_server_id, worktree)?;
             let lombok_jar_full_path = std::env::current_dir()
@@ -342,7 +342,7 @@ impl zed::Extension for Java {
                         keyword.len()..code.len() - braces.len(),
                     )];
 
-                    if let Some(namespace) = namespace {
+                    if let Some(namespace); = namespace {
                         spans.push(CodeLabelSpan::literal(format!(" ({namespace})"), None));
                     }
 
