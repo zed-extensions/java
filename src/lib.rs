@@ -188,7 +188,6 @@ impl Java {
                 );
             })?;
         }
-
         self.cached_lombok_path = Some(lombok_path.to_string());
         Ok(lombok_path.to_string())
     }
@@ -342,7 +341,7 @@ impl zed::Extension for Java {
                         keyword.len()..code.len() - braces.len(),
                     )];
 
-                    if let Some(namespace); = namespace {
+                    if let Some(namespace) = namespace {
                         spans.push(CodeLabelSpan::literal(format!(" ({namespace})"), None));
                     }
 
