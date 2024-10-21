@@ -1,5 +1,6 @@
 use zed_extension_api::{
-    self as zed, lsp::CompletionKind, settings::LspSettings, CodeLabel, CodeLabelSpan,
+    self as zed, lsp::CompletionKind, serde_json::Value, settings::LspSettings, CodeLabel,
+    CodeLabelSpan,
 };
 
 struct Java {
@@ -47,8 +48,8 @@ impl Java {
         let version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .settings
             .and_then(|settings| {
-                settings.get("version").and_then(|version_value| {
-                    version_value
+                get_value(vec!["jdtls", "version"], &settings).and_then(|version| {
+                    version
                         .as_str()
                         .map(|version_str| version_str.trim().to_string())
                 })
@@ -144,17 +145,16 @@ impl Java {
             return Ok(path.clone());
         }
 
-        // Use lombok version specified in settings or default to latest version
+        // Use lombok version specified in settings
+        // Unspecified version (None here) defaults to the latest version
         let lombok_version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .settings
             .and_then(|settings| {
-                settings.get("lombok").and_then(|lombok| {
-                    lombok
-                        .get("version")
-                        .and_then(|version| version.as_str())
-                        .and_then(|version| Some(version.trim().to_string()))
-                })
-            });
+                get_value(vec!["lombok", "version"], &settings)
+                    .and_then(|version| version.as_str())
+                    .map(|version_str| version_str.to_string())
+            })
+            .map(|version| version.trim().to_string());
 
         // Download lombok jar
         // https://projectlombok.org/downloads/lombok.jar always points to the latest version
@@ -169,12 +169,25 @@ impl Java {
                 "lombok.jar".to_string(),
             ),
         };
-        zed::download_file(
-            &lombok_url,
-            &lombok_path,
-            zed::DownloadedFileType::Uncompressed,
-        )
-        .map_err(|e| format!("failed to download file from {lombok_url} : {e}"))?;
+        // Do not download if lombok jar already exists
+        if !std::fs::metadata(&lombok_path).map_or(false, |stat| stat.is_file()) {
+            zed::set_language_server_installation_status(
+                language_server_id,
+                &zed::LanguageServerInstallationStatus::Downloading,
+            );
+            zed::download_file(
+                &lombok_url,
+                &lombok_path,
+                zed::DownloadedFileType::Uncompressed,
+            )
+            .map_err(|e| format!("failed to download file from {lombok_url} : {e}"))
+            .inspect_err(|e| {
+                zed::set_language_server_installation_status(
+                    language_server_id,
+                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                );
+            })?;
+        }
         self.cached_lombok_path = Some(lombok_path.to_string());
         Ok(lombok_path.to_string())
     }
@@ -213,16 +226,18 @@ impl zed::Extension for Java {
 
         let mut args = Vec::new();
 
-        // Add lombok as javaagent if enabled
+        // Add lombok as javaagent if initialization_options.settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_enabled = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
-            .settings
-            .and_then(|settings| {
-                settings
-                    .get("lombok")
-                    .and_then(|lombok| lombok.get("enabled"))
-                    .and_then(|enabled| enabled.as_bool())
+            .initialization_options
+            .and_then(|initialization_options| {
+                get_value(
+                    vec!["settings", "java", "jdt", "ls", "lombokSupport", "enabled"],
+                    &initialization_options,
+                )
+                .and_then(|enabled| enabled.as_bool())
             })
             .unwrap_or(false);
+        println!("lombok_enabled: {:?}", lombok_enabled);
         if lombok_enabled {
             let lombok_jar_path = self.lombok_jar_path(language_server_id, worktree)?;
             let lombok_jar_full_path = std::env::current_dir()
@@ -372,6 +387,17 @@ impl zed::Extension for Java {
 
         None
     }
+}
+
+fn get_value<'a>(keys: Vec<&'a str>, value: &'a Value) -> Option<&'a Value> {
+    return keys.first().and_then(|key| {
+        value.get(key).and_then(|key_value| {
+            if keys.len() > 1 {
+                return get_value(keys[1..keys.len()].to_vec(), key_value);
+            }
+            return Some(key_value);
+        })
+    });
 }
 
 zed::register_extension!(Java);
