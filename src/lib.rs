@@ -390,14 +390,15 @@ impl zed::Extension for Java {
 }
 
 fn get_value<'a>(keys: Vec<&'a str>, value: &'a Value) -> Option<&'a Value> {
-    return keys.first().and_then(|key| {
+    keys.first().and_then(|key| {
         value.get(key).and_then(|key_value| {
             if keys.len() > 1 {
-                return get_value(keys[1..keys.len()].to_vec(), key_value);
+                get_value(keys[1..keys.len()].to_vec(), key_value)
+            } else {
+                Some(key_value)
             }
-            return Some(key_value);
         })
-    });
+    })
 }
 
 zed::register_extension!(Java);
