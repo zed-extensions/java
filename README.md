@@ -15,12 +15,8 @@ download or the class path that [JDTLS] uses in your Zed settings like so:
     "jdtls": {
       "settings": {
         "classpath": "/path/to/classes.jar:/path/to/more/classes/",
-        "jdtls": {
-          "version": "1.40.0", // This is the default value
-        },
-        "lombok": { // Only needed if `initialization_options.settings.java.jdt.ls.lombokSupport.enabled` is set to `true`
-          "version": "1.18.34", // Defaults to the latest version if not set
-        }
+        "jdtls_version": "1.40.0", // This is the default value
+        "lombok_version": "1.18.34" // Defaults to the latest version if not set
       }
     }
   }

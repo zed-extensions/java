@@ -48,7 +48,7 @@ impl Java {
         let version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .settings
             .and_then(|settings| {
-                get_value(vec!["jdtls", "version"], &settings).and_then(|version| {
+                settings.get("jdtls_version").and_then(|version| {
                     version
                         .as_str()
                         .map(|version_str| version_str.trim().to_string())
@@ -150,7 +150,8 @@ impl Java {
         let lombok_version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .settings
             .and_then(|settings| {
-                get_value(vec!["lombok", "version"], &settings)
+                settings
+                    .get("lombok_version")
                     .and_then(|version| version.as_str())
                     .map(|version_str| version_str.to_string())
             })
