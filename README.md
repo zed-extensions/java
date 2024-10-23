@@ -11,8 +11,8 @@ download or the class path that [JDTLS] uses in your Zed settings.
 
 If [lombok] support is enabled via [JDTLS] initialization option
 (`initialization_options.settings.java.jdt.ls.lombokSupport.enabled`), this
-extension will add `lombok` as a javaagent to the JVM arguments for [JDTLS].
-You can also configure the version of `lombok` to use via setting the version
+extension will add [lombok] as a javaagent to the JVM arguments for [JDTLS].
+You can also configure the version of [lombok] to use via setting the version
 at `settings.lombok_version`.
 
 Below is a configuration example for this extension:
