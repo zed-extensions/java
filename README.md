@@ -9,10 +9,10 @@ This extension adds support for the Java language.
 You can optionally configure the version of [JDTLS] (the language server) to
 download or the class path that [JDTLS] uses in your Zed settings.
 
-If [lombok] support is enabled via [JDTLS] initialization option
+If [Lombok] support is enabled via [JDTLS] initialization option
 (`initialization_options.settings.java.jdt.ls.lombokSupport.enabled`), this
-extension will add [lombok] as a javaagent to the JVM arguments for [JDTLS].
-You can also configure the version of [lombok] to use via setting the version
+extension will add [Lombok] as a javaagent to the JVM arguments for [JDTLS].
+You can also configure the version of [Lombok] to use via setting the version
 at `settings.lombok_version`.
 
 Below is a configuration example for this extension:
@@ -125,4 +125,4 @@ page].
 
 [JDTLS]: https://github.com/eclipse-jdtls/eclipse.jdt.ls
 [initialization options wiki page]: https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request
-[lombok]: https://projectlombok.org
+[Lombok]: https://projectlombok.org
