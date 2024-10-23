@@ -7,15 +7,24 @@ This extension adds support for the Java language.
 ### Settings
 
 You can optionally configure the version of [JDTLS] (the language server) to
-download or the class path that [JDTLS] uses in your Zed settings like so:
+download or the class path that [JDTLS] uses in your Zed settings.
 
-```json
+If [Lombok] support is enabled via [JDTLS] initialization option
+(`initialization_options.settings.java.jdt.ls.lombokSupport.enabled`), this
+extension will add [Lombok] as a javaagent to the JVM arguments for [JDTLS].
+You can also configure the version of [Lombok] to use via setting the version
+at `settings.lombok_version`.
+
+Below is a configuration example for this extension:
+
+```jsonc
 {
   "lsp": {
     "jdtls": {
       "settings": {
-        "version": "1.40.0", // This is the default value
-        "classpath": "/path/to/classes.jar:/path/to/more/classes/"
+        "classpath": "/path/to/classes.jar:/path/to/more/classes/",
+        "jdtls_version": "1.40.0", // This is the default value
+        "lombok_version": "1.18.34" // Defaults to latest version if not set
       }
     }
   }
@@ -27,7 +36,7 @@ download or the class path that [JDTLS] uses in your Zed settings like so:
 There are also many more options you can pass directly to the language server,
 for example:
 
-```json
+```jsonc
 {
   "lsp": {
     "jdtls": {
@@ -65,6 +74,9 @@ for example:
                 "**/META-INF/maven/**",
                 "/**/test/**"
               ]
+            },
+            "lombokSupport": {
+              "enabled": false // Set this to true to enable lombok support
             },
             "referencesCodeLens": {
               "enabled": false
@@ -113,3 +125,4 @@ page].
 
 [JDTLS]: https://github.com/eclipse-jdtls/eclipse.jdt.ls
 [initialization options wiki page]: https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request
+[Lombok]: https://projectlombok.org
