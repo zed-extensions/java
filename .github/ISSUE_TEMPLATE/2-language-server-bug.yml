@@ -1,0 +1,27 @@
+name: Language Server Bug
+description: A bug related to the language server, such as a bug with autocomplete.
+labels: ["bug", "language-server"]
+body:
+  - type: checkboxes
+    id: relevance-confirmation
+    attributes:
+      label: Relevance Confirmation
+      description: Have you confirmed by checking Eclipse JDT Language Server first that this is indeed a bug with the Zed Java extension?
+      options:
+        - label: I confirmed that this is not an issue with the Eclipse JDT Language Server
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe your bug encounter.
+      placeholder: After doing A, B, and then C, I saw X, Y, and Z.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: I expected to see 1, 2, and 3.
+    validations:
+      required: true

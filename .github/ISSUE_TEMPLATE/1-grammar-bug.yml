@@ -1,0 +1,27 @@
+name: Grammar Bug
+description: A bug related to the Tree-Sitter grammar, such as a bug with syntax highlighting.
+labels: ["bug", "grammar"]
+body:
+  - type: checkboxes
+    id: relevance-confirmation
+    attributes:
+      label: Relevance Confirmation
+      description: Have you confirmed by checking the Tree-Sitter Java grammar first that this is indeed a bug with the Zed Java extension?
+      options:
+        - label: I confirmed that this is not an issue with the Tree-Sitter Java grammar
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe your bug encounter.
+      placeholder: After doing A, B, and then C, I saw X, Y, and Z.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: I expected to see 1, 2, and 3.
+    validations:
+      required: true

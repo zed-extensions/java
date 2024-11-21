@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Tree-Sitter Java
+    url: https://github.com/tree-sitter/tree-sitter-java/issues
+    about: Please create issues related to the grammar here first.
+  - name: Eclipse JDT Language Server
+    url: https://github.com/eclipse-jdtls/eclipse.jdt.ls/issues
+    about: Please create issues related to the language server here first.
