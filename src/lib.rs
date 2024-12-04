@@ -218,10 +218,25 @@ impl zed::Extension for Java {
                         .map(|classpath_str| classpath_str.to_string())
                 })
             });
+        let java_home = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
+            .initialization_options
+            .and_then(|initialization_options| {
+                initialization_options
+                    .pointer("/settings/java/home")
+                    .and_then(|java_home_value| {
+                        java_home_value
+                            .as_str()
+                            .map(|java_home_str| java_home_str.to_string())
+                    })
+            });
         let mut env = Vec::new();
 
         if let Some(classpath) = classpath {
             env.push(("CLASSPATH".to_string(), classpath));
+        }
+
+        if let Some(java_home) = java_home {
+            env.push(("JAVA_HOME".to_string(), java_home));
         }
 
         let mut args = Vec::new();
