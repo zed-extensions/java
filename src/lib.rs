@@ -262,127 +262,123 @@ impl zed::Extension for Java {
         // uncomment when debugging completions
         // println!("Java completion: {completion:#?}");
 
-        if let Some(kind) = completion.kind {
-            match kind {
-                CompletionKind::Field | CompletionKind::Constant => {
-                    let modifiers = match kind {
-                        CompletionKind::Field => "",
-                        CompletionKind::Constant => "static final ",
-                        _ => return None,
-                    };
-                    let property_type = completion.detail.as_ref().and_then(|detail| {
-                        detail
-                            .split_once(" : ")
-                            .and_then(|(_, property_type)| Some(format!("{property_type} ")))
-                    })?;
-                    let semicolon = ";";
-                    let code = format!("{modifiers}{property_type}{}{semicolon}", completion.label);
-
-                    return Some(CodeLabel {
-                        spans: vec![
-                            CodeLabelSpan::code_range(
-                                modifiers.len() + property_type.len()..code.len() - semicolon.len(),
-                            ),
-                            CodeLabelSpan::literal(" : ", None),
-                            CodeLabelSpan::code_range(
-                                modifiers.len()..modifiers.len() + property_type.len(),
-                            ),
-                        ],
-                        code,
-                        filter_range: (0..completion.label.len()).into(),
-                    });
-                }
-                CompletionKind::Method => {
-                    let detail = completion.detail?;
-                    let (left, return_type) = detail
+        completion.kind.and_then(|kind| match kind {
+            CompletionKind::Field | CompletionKind::Constant => {
+                let modifiers = match kind {
+                    CompletionKind::Field => "",
+                    CompletionKind::Constant => "static final ",
+                    _ => return None,
+                };
+                let property_type = completion.detail.as_ref().and_then(|detail| {
+                    detail
                         .split_once(" : ")
-                        .and_then(|(left, return_type)| Some((left, format!("{return_type} "))))
-                        .unwrap_or((&detail, "void".to_string()));
-                    let parameters = left
-                        .find('(')
-                        .map(|parameters_start| &left[parameters_start..]);
-                    let name_and_parameters =
-                        format!("{}{}", completion.label, parameters.unwrap_or("()"));
-                    let braces = " {}";
-                    let code = format!("{return_type}{name_and_parameters}{braces}");
-                    let mut spans = vec![CodeLabelSpan::code_range(
-                        return_type.len()..code.len() - braces.len(),
-                    )];
+                        .and_then(|(_, property_type)| Some(format!("{property_type} ")))
+                })?;
+                let semicolon = ";";
+                let code = format!("{modifiers}{property_type}{}{semicolon}", completion.label);
 
-                    if parameters.is_some() {
-                        spans.push(CodeLabelSpan::literal(" : ", None));
-                        spans.push(CodeLabelSpan::code_range(0..return_type.len()));
-                    } else {
-                        spans.push(CodeLabelSpan::literal(" - ", None));
-                        spans.push(CodeLabelSpan::literal(detail, None));
-                    }
-
-                    return Some(CodeLabel {
-                        spans,
-                        code,
-                        filter_range: (0..completion.label.len()).into(),
-                    });
-                }
-                CompletionKind::Class | CompletionKind::Interface | CompletionKind::Enum => {
-                    let keyword = match kind {
-                        CompletionKind::Class => "class ",
-                        CompletionKind::Interface => "interface ",
-                        CompletionKind::Enum => "enum ",
-                        _ => return None,
-                    };
-                    let braces = " {}";
-                    let code = format!("{keyword}{}{braces}", completion.label);
-                    let namespace = completion.detail.and_then(|detail| {
-                        Some(detail[..detail.len() - completion.label.len() - 1].to_string())
-                    });
-                    let mut spans = vec![CodeLabelSpan::code_range(
-                        keyword.len()..code.len() - braces.len(),
-                    )];
-
-                    if let Some(namespace) = namespace {
-                        spans.push(CodeLabelSpan::literal(format!(" ({namespace})"), None));
-                    }
-
-                    return Some(CodeLabel {
-                        spans,
-                        code,
-                        filter_range: (0..completion.label.len()).into(),
-                    });
-                }
-                CompletionKind::Snippet => {
-                    return Some(CodeLabel {
-                        code: String::new(),
-                        spans: vec![CodeLabelSpan::literal(
-                            format!("{} - {}", completion.label, completion.detail?),
-                            None,
-                        )],
-                        filter_range: (0..completion.label.len()).into(),
-                    });
-                }
-                CompletionKind::Keyword | CompletionKind::Variable => {
-                    return Some(CodeLabel {
-                        spans: vec![CodeLabelSpan::code_range(0..completion.label.len())],
-                        filter_range: (0..completion.label.len()).into(),
-                        code: completion.label,
-                    });
-                }
-                CompletionKind::Constructor => {
-                    let detail = completion.detail?;
-                    let parameters = &detail[detail.find('(')?..];
-                    let braces = " {}";
-                    let code = format!("{}{parameters}{braces}", completion.label);
-
-                    return Some(CodeLabel {
-                        spans: vec![CodeLabelSpan::code_range(0..code.len() - braces.len())],
-                        code,
-                        filter_range: (0..completion.label.len()).into(),
-                    });
-                }
-                _ => (),
+                return Some(CodeLabel {
+                    spans: vec![
+                        CodeLabelSpan::code_range(
+                            modifiers.len() + property_type.len()..code.len() - semicolon.len(),
+                        ),
+                        CodeLabelSpan::literal(" : ", None),
+                        CodeLabelSpan::code_range(
+                            modifiers.len()..modifiers.len() + property_type.len(),
+                        ),
+                    ],
+                    code,
+                    filter_range: (0..completion.label.len()).into(),
+                });
             }
-        }
+            CompletionKind::Method => {
+                let detail = completion.detail?;
+                let (left, return_type) = detail
+                    .split_once(" : ")
+                    .and_then(|(left, return_type)| Some((left, format!("{return_type} "))))
+                    .unwrap_or((&detail, "void".to_string()));
+                let parameters = left
+                    .find('(')
+                    .map(|parameters_start| &left[parameters_start..]);
+                let name_and_parameters =
+                    format!("{}{}", completion.label, parameters.unwrap_or("()"));
+                let braces = " {}";
+                let code = format!("{return_type}{name_and_parameters}{braces}");
+                let mut spans = vec![CodeLabelSpan::code_range(
+                    return_type.len()..code.len() - braces.len(),
+                )];
 
-        None
+                if parameters.is_some() {
+                    spans.push(CodeLabelSpan::literal(" : ", None));
+                    spans.push(CodeLabelSpan::code_range(0..return_type.len()));
+                } else {
+                    spans.push(CodeLabelSpan::literal(" - ", None));
+                    spans.push(CodeLabelSpan::literal(detail, None));
+                }
+
+                return Some(CodeLabel {
+                    spans,
+                    code,
+                    filter_range: (0..completion.label.len()).into(),
+                });
+            }
+            CompletionKind::Class | CompletionKind::Interface | CompletionKind::Enum => {
+                let keyword = match kind {
+                    CompletionKind::Class => "class ",
+                    CompletionKind::Interface => "interface ",
+                    CompletionKind::Enum => "enum ",
+                    _ => return None,
+                };
+                let braces = " {}";
+                let code = format!("{keyword}{}{braces}", completion.label);
+                let namespace = completion.detail.and_then(|detail| {
+                    Some(detail[..detail.len() - completion.label.len() - 1].to_string())
+                });
+                let mut spans = vec![CodeLabelSpan::code_range(
+                    keyword.len()..code.len() - braces.len(),
+                )];
+
+                if let Some(namespace) = namespace {
+                    spans.push(CodeLabelSpan::literal(format!(" ({namespace})"), None));
+                }
+
+                return Some(CodeLabel {
+                    spans,
+                    code,
+                    filter_range: (0..completion.label.len()).into(),
+                });
+            }
+            CompletionKind::Snippet => {
+                return Some(CodeLabel {
+                    code: String::new(),
+                    spans: vec![CodeLabelSpan::literal(
+                        format!("{} - {}", completion.label, completion.detail?),
+                        None,
+                    )],
+                    filter_range: (0..completion.label.len()).into(),
+                });
+            }
+            CompletionKind::Keyword | CompletionKind::Variable => {
+                return Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..completion.label.len())],
+                    filter_range: (0..completion.label.len()).into(),
+                    code: completion.label,
+                });
+            }
+            CompletionKind::Constructor => {
+                let detail = completion.detail?;
+                let parameters = &detail[detail.find('(')?..];
+                let braces = " {}";
+                let code = format!("{}{parameters}{braces}", completion.label);
+
+                return Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..code.len() - braces.len())],
+                    code,
+                    filter_range: (0..completion.label.len()).into(),
+                });
+            }
+            _ => None,
+        })
     }
 }
 
