@@ -1,6 +1,5 @@
 use zed_extension_api::{
-    self as zed, lsp::CompletionKind, serde_json::Value, settings::LspSettings, CodeLabel,
-    CodeLabelSpan,
+    self as zed, lsp::CompletionKind, settings::LspSettings, CodeLabel, CodeLabelSpan,
 };
 
 struct Java {
@@ -231,11 +230,9 @@ impl zed::Extension for Java {
         let lombok_enabled = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .initialization_options
             .and_then(|initialization_options| {
-                get_value(
-                    vec!["settings", "java", "jdt", "ls", "lombokSupport", "enabled"],
-                    &initialization_options,
-                )
-                .and_then(|enabled| enabled.as_bool())
+                initialization_options
+                    .pointer("settings/java/jdt/ls/lombokSupport/enabled")
+                    .and_then(|enabled| enabled.as_bool())
             })
             .unwrap_or(false);
         if lombok_enabled {
@@ -387,18 +384,6 @@ impl zed::Extension for Java {
 
         None
     }
-}
-
-fn get_value<'a>(keys: Vec<&'a str>, value: &'a Value) -> Option<&'a Value> {
-    keys.first().and_then(|key| {
-        value.get(key).and_then(|key_value| {
-            if keys.len() > 1 {
-                get_value(keys[1..keys.len()].to_vec(), key_value)
-            } else {
-                Some(key_value)
-            }
-        })
-    })
 }
 
 zed::register_extension!(Java);
