@@ -1,5 +1,8 @@
 use zed_extension_api::{
-    self as zed, lsp::CompletionKind, settings::LspSettings, CodeLabel, CodeLabelSpan,
+    self as zed, current_platform, download_file, lsp::Completion, lsp::CompletionKind,
+    make_file_executable, register_extension, set_language_server_installation_status,
+    settings::LspSettings, CodeLabel, CodeLabelSpan, DownloadedFileType, Extension,
+    LanguageServerId, LanguageServerInstallationStatus, Os, Worktree,
 };
 
 struct Java {
@@ -10,8 +13,8 @@ struct Java {
 impl Java {
     fn language_server_binary_path(
         &mut self,
-        language_server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
+        language_server_id: &LanguageServerId,
+        worktree: &Worktree,
     ) -> zed::Result<String> {
         // Quickly return if the binary path is already cached
         // Expect binary path to be validated when setting the cache so no checking is done here
@@ -20,9 +23,9 @@ impl Java {
         }
 
         // Determine the binary name based on the current platform
-        let (platform, _) = zed::current_platform();
+        let (platform, _) = current_platform();
         let binary_name = match platform {
-            zed::Os::Windows => "jdtls.bat",
+            Os::Windows => "jdtls.bat",
             _ => "jdtls",
         }
         .to_string();
@@ -38,9 +41,9 @@ impl Java {
 
         // Attempt to install locally
 
-        zed::set_language_server_installation_status(
+        set_language_server_installation_status(
             language_server_id,
-            &zed::LanguageServerInstallationStatus::CheckingForUpdate,
+            &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
         // Use version specified in settings or default version
@@ -70,33 +73,33 @@ impl Java {
 
         // Validate binary
         if !std::fs::metadata(&binary_path).map_or(false, |stat| stat.is_file()) {
-            zed::set_language_server_installation_status(
+            set_language_server_installation_status(
                 language_server_id,
-                &zed::LanguageServerInstallationStatus::Downloading,
+                &LanguageServerInstallationStatus::Downloading,
             );
 
             // Download latest.txt to get the tarball filename
             let latest_txt_path = format!("{install_prefix}-latest.txt");
             let latest_txt_url =
                 format!("https://download.eclipse.org/jdtls/milestones/{version}/latest.txt");
-            zed::download_file(
+            download_file(
                 &latest_txt_url,
                 &latest_txt_path,
-                zed::DownloadedFileType::Uncompressed,
+                DownloadedFileType::Uncompressed,
             )
             .map_err(|e| format!("failed to download file: {e}"))
             .inspect_err(|e| {
-                zed::set_language_server_installation_status(
+                set_language_server_installation_status(
                     language_server_id,
-                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                    &LanguageServerInstallationStatus::Failed(e.clone()),
                 );
             })?;
             let tarball_name = std::fs::read_to_string(&latest_txt_path)
                 .map_err(|e| format!("failed to read file {latest_txt_path} : {e}"))
                 .inspect_err(|e| {
-                    zed::set_language_server_installation_status(
+                    set_language_server_installation_status(
                         language_server_id,
-                        &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                        &LanguageServerInstallationStatus::Failed(e.clone()),
                     );
                 })?
                 .trim()
@@ -106,25 +109,21 @@ impl Java {
             let tarball_url =
                 format!("https://download.eclipse.org/jdtls/milestones/{version}/{tarball_name}");
 
-            zed::download_file(
-                &tarball_url,
-                &install_prefix,
-                zed::DownloadedFileType::GzipTar,
-            )
-            .map_err(|e| format!("failed to download file from {tarball_url} : {e}"))
-            .inspect_err(|e| {
-                zed::set_language_server_installation_status(
-                    language_server_id,
-                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
-                );
-            })?;
+            download_file(&tarball_url, &install_prefix, DownloadedFileType::GzipTar)
+                .map_err(|e| format!("failed to download file from {tarball_url} : {e}"))
+                .inspect_err(|e| {
+                    set_language_server_installation_status(
+                        language_server_id,
+                        &LanguageServerInstallationStatus::Failed(e.clone()),
+                    );
+                })?;
 
-            zed::make_file_executable(&binary_path)
+            make_file_executable(&binary_path)
                 .map_err(|e| format!("failed to make file {binary_path} executable: {e}"))
                 .inspect_err(|e| {
-                    zed::set_language_server_installation_status(
+                    set_language_server_installation_status(
                         language_server_id,
-                        &zed::LanguageServerInstallationStatus::Failed(e.clone()),
+                        &LanguageServerInstallationStatus::Failed(e.clone()),
                     );
                 })?;
         }
@@ -135,8 +134,8 @@ impl Java {
 
     fn lombok_jar_path(
         &mut self,
-        language_server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
+        language_server_id: &LanguageServerId,
+        worktree: &Worktree,
     ) -> zed::Result<String> {
         // Quickly return if the lombok path is already cached
         // Expect lombok path to be validated when setting the cache so no checking is done here
@@ -171,29 +170,25 @@ impl Java {
         };
         // Do not download if lombok jar already exists
         if !std::fs::metadata(&lombok_path).map_or(false, |stat| stat.is_file()) {
-            zed::set_language_server_installation_status(
+            set_language_server_installation_status(
                 language_server_id,
-                &zed::LanguageServerInstallationStatus::Downloading,
+                &LanguageServerInstallationStatus::Downloading,
             );
-            zed::download_file(
-                &lombok_url,
-                &lombok_path,
-                zed::DownloadedFileType::Uncompressed,
-            )
-            .map_err(|e| format!("failed to download file from {lombok_url} : {e}"))
-            .inspect_err(|e| {
-                zed::set_language_server_installation_status(
-                    language_server_id,
-                    &zed::LanguageServerInstallationStatus::Failed(e.clone()),
-                );
-            })?;
+            download_file(&lombok_url, &lombok_path, DownloadedFileType::Uncompressed)
+                .map_err(|e| format!("failed to download file from {lombok_url} : {e}"))
+                .inspect_err(|e| {
+                    set_language_server_installation_status(
+                        language_server_id,
+                        &LanguageServerInstallationStatus::Failed(e.clone()),
+                    );
+                })?;
         }
         self.cached_lombok_path = Some(lombok_path.to_string());
         Ok(lombok_path.to_string())
     }
 }
 
-impl zed::Extension for Java {
+impl Extension for Java {
     fn new() -> Self
     where
         Self: Sized,
@@ -206,8 +201,8 @@ impl zed::Extension for Java {
 
     fn language_server_command(
         &mut self,
-        language_server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
+        language_server_id: &LanguageServerId,
+        worktree: &Worktree,
     ) -> zed::Result<zed::Command> {
         let classpath = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .settings
@@ -271,9 +266,9 @@ impl zed::Extension for Java {
 
     fn label_for_completion(
         &self,
-        _language_server_id: &zed::LanguageServerId,
-        completion: zed::lsp::Completion,
-    ) -> Option<zed::CodeLabel> {
+        _language_server_id: &LanguageServerId,
+        completion: Completion,
+    ) -> Option<CodeLabel> {
         // uncomment when debugging completions
         // println!("Java completion: {completion:#?}");
 
@@ -397,4 +392,4 @@ impl zed::Extension for Java {
     }
 }
 
-zed::register_extension!(Java);
+register_extension!(Java);
