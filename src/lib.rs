@@ -56,19 +56,22 @@ impl Java {
                     .method(HttpMethod::Get)
                     .url("https://api.github.com/repos/eclipse-jdtls/eclipse.jdt.ls/tags")
                     .build()?,
-            )?
+            )
+            .map_err(|err| format!("failed to fetch GitHub tags: {err}"))?
             .body,
         )
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| format!("failed to deserialize GitHub tags response: {err}"))?;
         let latest_version = &tags_response_body
             .as_array()
-            .ok_or("expected array")?
-            .first()
-            .ok_or("expected at least one tag")?
-            .get("name")
-            .ok_or("expected tag to have name")?
-            .as_str()
-            .ok_or("expected tag name to be a string")?[1..];
+            .and_then(|tag| {
+                tag.first().and_then(|latest_tag| {
+                    latest_tag
+                        .get("name")
+                        .and_then(|tag_name| tag_name.as_str())
+                })
+            })
+            // Exclude 'v' at beginning
+            .ok_or("malformed GitHub tags response")?[1..];
         let latest_version_build = String::from_utf8(
             fetch(
                 &HttpRequest::builder()
@@ -77,10 +80,13 @@ impl Java {
                         "https://download.eclipse.org/jdtls/milestones/{latest_version}/latest.txt"
                     ))
                     .build()?,
-            )?
+            )
+            .map_err(|err| format!("failed to get latest version's build: {err}"))?
             .body,
         )
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| {
+            format!("attempt to get latest version's build resulted in a malformed response: {err}")
+        })?;
         let latest_version_build = latest_version_build.trim_end();
         // Exclude ".tar.gz"
         let build_path = &latest_version_build[..latest_version_build.len() - 7];
