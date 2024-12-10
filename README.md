@@ -6,8 +6,8 @@ This extension adds support for the Java language.
 
 ### Settings
 
-You can optionally configure the version of [JDTLS] (the language server) to
-download or the class path that [JDTLS] uses in your Zed settings.
+You can optionally configure the class path that [JDTLS] uses in your Zed
+settings.
 
 If [Lombok] support is enabled via [JDTLS] initialization option
 (`initialization_options.settings.java.jdt.ls.lombokSupport.enabled`), this
@@ -23,7 +23,6 @@ Below is a configuration example for this extension:
     "jdtls": {
       "settings": {
         "classpath": "/path/to/classes.jar:/path/to/more/classes/",
-        "jdtls_version": "1.40.0", // This is the default value
         "lombok_version": "1.18.34" // Defaults to latest version if not set
       }
     }
