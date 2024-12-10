@@ -107,13 +107,17 @@ impl Java {
 
             // ...and delete other versions
 
-            let entries = fs::read_dir(".").map_err(|err| err.to_string())?;
+            let entries = fs::read_dir(".")
+                .map_err(|err| format!("failed to list working directory: {err}"))?;
 
             for entry in entries {
-                let entry = entry.map_err(|err| err.to_string())?;
+                let entry =
+                    entry.map_err(|err| format!("failed to load directory entry: {err}"))?;
 
                 if entry.file_name().to_str() != Some(build_path) {
-                    fs::remove_dir_all(entry.path()).ok();
+                    if let Err(err) = fs::remove_dir_all(entry.path()) {
+                        println!("failed to remove directory entry: {err}");
+                    }
                 }
             }
         }
