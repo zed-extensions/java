@@ -1,8 +1,15 @@
+use std::fs;
+
 use zed_extension_api::{
-    self as zed, current_platform, download_file, lsp::Completion, lsp::CompletionKind,
-    make_file_executable, register_extension, set_language_server_installation_status,
-    settings::LspSettings, CodeLabel, CodeLabelSpan, DownloadedFileType, Extension,
-    LanguageServerId, LanguageServerInstallationStatus, Os, Worktree,
+    self as zed, current_platform, download_file,
+    http_client::{fetch, HttpMethod, HttpRequest},
+    lsp::{Completion, CompletionKind},
+    make_file_executable, register_extension,
+    serde_json::{self, Value},
+    set_language_server_installation_status,
+    settings::LspSettings,
+    CodeLabel, CodeLabelSpan, DownloadedFileType, Extension, LanguageServerId,
+    LanguageServerInstallationStatus, Os, Worktree,
 };
 
 struct Java {
@@ -16,120 +23,119 @@ impl Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<String> {
-        // Quickly return if the binary path is already cached
-        // Expect binary path to be validated when setting the cache so no checking is done here
+        // Use cached path if exists
+
         if let Some(path) = &self.cached_binary_path {
-            return Ok(path.clone());
-        }
-
-        // Determine the binary name based on the current platform
-        let (platform, _) = current_platform();
-        let binary_name = match platform {
-            Os::Windows => "jdtls.bat",
-            _ => "jdtls",
-        }
-        .to_string();
-
-        // Use binary available on PATH if it exists
-        if let Some(path) = worktree.which(&binary_name) {
-            // Probably we want to check if the binary is executable too here
-            if std::fs::metadata(&path).map_or(false, |stat| stat.is_file()) {
-                self.cached_binary_path = Some(path.clone());
+            if fs::metadata(path).map_or(false, |stat| stat.is_file()) {
                 return Ok(path.clone());
             }
         }
 
-        // Attempt to install locally
+        // Use $PATH if binary is in it
+
+        let (platform, _) = current_platform();
+        let binary_name = match platform {
+            Os::Windows => "jdtls.bat",
+            _ => "jdtls",
+        };
+
+        if let Some(path_binary) = worktree.which(binary_name) {
+            return Ok(path_binary);
+        }
+
+        // Check for latest version
 
         set_language_server_installation_status(
             language_server_id,
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        // Use version specified in settings or default version
-        let version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
-            .settings
-            .and_then(|settings| {
-                settings.get("jdtls_version").and_then(|version| {
-                    version
-                        .as_str()
-                        .map(|version_str| version_str.trim().to_string())
+        let tags_response_body = serde_json::from_slice::<Value>(
+            &fetch(
+                &HttpRequest::builder()
+                    .method(HttpMethod::Get)
+                    .url("https://api.github.com/repos/eclipse-jdtls/eclipse.jdt.ls/tags")
+                    .build()?,
+            )
+            .map_err(|err| format!("failed to fetch GitHub tags: {err}"))?
+            .body,
+        )
+        .map_err(|err| format!("failed to deserialize GitHub tags response: {err}"))?;
+        let latest_version = &tags_response_body
+            .as_array()
+            .and_then(|tag| {
+                tag.first().and_then(|latest_tag| {
+                    latest_tag
+                        .get("name")
+                        .and_then(|tag_name| tag_name.as_str())
                 })
             })
-            // Probably we can get the latest version from Maven?
-            .unwrap_or("1.40.0".to_string());
+            // Exclude 'v' at beginning
+            .ok_or("malformed GitHub tags response")?[1..];
+        let latest_version_build = String::from_utf8(
+            fetch(
+                &HttpRequest::builder()
+                    .method(HttpMethod::Get)
+                    .url(format!(
+                        "https://download.eclipse.org/jdtls/milestones/{latest_version}/latest.txt"
+                    ))
+                    .build()?,
+            )
+            .map_err(|err| format!("failed to get latest version's build: {err}"))?
+            .body,
+        )
+        .map_err(|err| {
+            format!("attempt to get latest version's build resulted in a malformed response: {err}")
+        })?;
+        let latest_version_build = latest_version_build.trim_end();
+        let prefix = "jdtls";
+        // Exclude ".tar.gz"
+        let build_directory = &latest_version_build[..latest_version_build.len() - 7];
+        let build_path = format!("{prefix}/{build_directory}");
+        let binary_path = format!("{build_path}/bin/{binary_name}");
 
-        // Prebuilt milestone versions available at:
-        // https://download.eclipse.org/jdtls/milestones/{version}
-        // Tarball filename is specified at
-        // https://download.eclipse.org/jdtls/milestones/{version}/latest.txt
+        // If latest version isn't installed,
+        if !fs::metadata(&binary_path).map_or(false, |stat| stat.is_file()) {
+            // then download it...
 
-        let install_prefix = format!("jdt-language-server-{version}");
-        let binary_path = std::path::Path::new(&install_prefix)
-            .join("bin")
-            .join(binary_name)
-            .to_string_lossy()
-            .to_string();
-
-        // Validate binary
-        if !std::fs::metadata(&binary_path).map_or(false, |stat| stat.is_file()) {
             set_language_server_installation_status(
                 language_server_id,
                 &LanguageServerInstallationStatus::Downloading,
             );
+            download_file(&format!(
+                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
+            ), &build_path, DownloadedFileType::GzipTar)?;
+            make_file_executable(&binary_path)?;
 
-            // Download latest.txt to get the tarball filename
-            let latest_txt_path = format!("{install_prefix}-latest.txt");
-            let latest_txt_url =
-                format!("https://download.eclipse.org/jdtls/milestones/{version}/latest.txt");
-            download_file(
-                &latest_txt_url,
-                &latest_txt_path,
-                DownloadedFileType::Uncompressed,
-            )
-            .map_err(|e| format!("failed to download file: {e}"))
-            .inspect_err(|e| {
-                set_language_server_installation_status(
-                    language_server_id,
-                    &LanguageServerInstallationStatus::Failed(e.clone()),
-                );
-            })?;
-            let tarball_name = std::fs::read_to_string(&latest_txt_path)
-                .map_err(|e| format!("failed to read file {latest_txt_path} : {e}"))
-                .inspect_err(|e| {
-                    set_language_server_installation_status(
-                        language_server_id,
-                        &LanguageServerInstallationStatus::Failed(e.clone()),
-                    );
-                })?
-                .trim()
-                .to_string();
+            // ...and delete other versions
 
-            // Download tarball and extract
-            let tarball_url =
-                format!("https://download.eclipse.org/jdtls/milestones/{version}/{tarball_name}");
-
-            download_file(&tarball_url, &install_prefix, DownloadedFileType::GzipTar)
-                .map_err(|e| format!("failed to download file from {tarball_url} : {e}"))
-                .inspect_err(|e| {
-                    set_language_server_installation_status(
-                        language_server_id,
-                        &LanguageServerInstallationStatus::Failed(e.clone()),
-                    );
-                })?;
-
-            make_file_executable(&binary_path)
-                .map_err(|e| format!("failed to make file {binary_path} executable: {e}"))
-                .inspect_err(|e| {
-                    set_language_server_installation_status(
-                        language_server_id,
-                        &LanguageServerInstallationStatus::Failed(e.clone()),
-                    );
-                })?;
+            // This step is expected to fail sometimes, and since we don't know
+            // how to fix it yet, we just carry on so the user doesn't have to
+            // restart the language server.
+            match fs::read_dir(prefix) {
+                Ok(entries) => {
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => {
+                                if entry.file_name().to_str() != Some(build_directory) {
+                                    if let Err(err) = fs::remove_dir_all(entry.path()) {
+                                        println!("failed to remove directory entry: {err}");
+                                    }
+                                }
+                            }
+                            Err(err) => println!("failed to load directory entry: {err}"),
+                        }
+                    }
+                }
+                Err(err) => println!("failed to list prefix directory: {err}"),
+            }
         }
 
+        // else use it
+
         self.cached_binary_path = Some(binary_path.clone());
-        Ok(binary_path.clone())
+
+        Ok(binary_path)
     }
 
     fn lombok_jar_path(
@@ -256,9 +262,7 @@ impl Extension for Java {
         }
 
         Ok(zed::Command {
-            command: self
-                .language_server_binary_path(language_server_id, worktree)
-                .map_err(|e| format!("could not find language server binary: {e}"))?,
+            command: self.language_server_binary_path(language_server_id, worktree)?,
             args,
             env,
         })
