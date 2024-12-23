@@ -88,8 +88,10 @@ impl Java {
             format!("attempt to get latest version's build resulted in a malformed response: {err}")
         })?;
         let latest_version_build = latest_version_build.trim_end();
+        let prefix = "jdtls";
         // Exclude ".tar.gz"
-        let build_path = &latest_version_build[..latest_version_build.len() - 7];
+        let build_directory = &latest_version_build[..latest_version_build.len() - 7];
+        let build_path = format!("{prefix}/{build_directory}");
         let binary_path = format!("{build_path}/bin/{binary_name}");
 
         // If latest version isn't installed,
@@ -102,23 +104,30 @@ impl Java {
             );
             download_file(&format!(
                 "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
-            ), build_path, DownloadedFileType::GzipTar)?;
+            ), &build_path, DownloadedFileType::GzipTar)?;
             make_file_executable(&binary_path)?;
 
             // ...and delete other versions
 
-            let entries = fs::read_dir(".")
-                .map_err(|err| format!("failed to list working directory: {err}"))?;
-
-            for entry in entries {
-                let entry =
-                    entry.map_err(|err| format!("failed to load directory entry: {err}"))?;
-
-                if entry.file_name().to_str() != Some(build_path) {
-                    if let Err(err) = fs::remove_dir_all(entry.path()) {
-                        println!("failed to remove directory entry: {err}");
+            // This step is expected to fail sometimes, and since we don't know
+            // how to fix it yet, we just carry on so the user doesn't have to
+            // restart the language server.
+            match fs::read_dir(prefix) {
+                Ok(entries) => {
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => {
+                                if entry.file_name().to_str() != Some(build_directory) {
+                                    if let Err(err) = fs::remove_dir_all(entry.path()) {
+                                        println!("failed to remove directory entry: {err}");
+                                    }
+                                }
+                            }
+                            Err(err) => println!("failed to load directory entry: {err}"),
+                        }
                     }
                 }
+                Err(err) => println!("failed to list prefix directory: {err}"),
             }
         }
 
