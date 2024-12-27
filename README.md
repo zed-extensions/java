@@ -9,12 +9,6 @@ This extension adds support for the Java language.
 You can optionally configure the class path that [JDTLS] uses in your Zed
 settings.
 
-If [Lombok] support is enabled via [JDTLS] initialization option
-(`initialization_options.settings.java.jdt.ls.lombokSupport.enabled`), this
-extension will add [Lombok] as a javaagent to the JVM arguments for [JDTLS].
-You can also configure the version of [Lombok] to use via setting the version
-at `settings.lombok_version`.
-
 Below is a configuration example for this extension:
 
 ```jsonc
@@ -22,8 +16,7 @@ Below is a configuration example for this extension:
   "lsp": {
     "jdtls": {
       "settings": {
-        "classpath": "/path/to/classes.jar:/path/to/more/classes/",
-        "lombok_version": "1.18.34" // Defaults to latest version if not set
+        "classpath": "/path/to/classes.jar:/path/to/more/classes/"
       }
     }
   }
@@ -31,6 +24,11 @@ Below is a configuration example for this extension:
 ```
 
 ### Initialization Options
+
+If [Lombok] support is enabled via [JDTLS] initialization option
+(`initialization_options.settings.java.jdt.ls.lombokSupport.enabled`), this
+extension will download and add [Lombok] as a javaagent to the JVM arguments for
+[JDTLS].
 
 There are also many more options you can pass directly to the language server,
 for example:
