@@ -3,8 +3,8 @@ name = "Java"
 version = "4.0.0"
 schema_version = 1
 authors = [
-    "Samuser107 L.Longheval <samuser107@gmail.com>",
     "Valentine Briese <valentinegb@icloud.com>",
+    "Samuser107 L.Longheval <samuser107@gmail.com>",
     "Yury Abykhodau <abehodau@gmail.com>",
 ]
 description = "Java support."
