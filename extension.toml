@@ -12,7 +12,7 @@ repository = "https://github.com/zed-extensions/java"
 
 [grammars.java]
 repository = "https://github.com/tree-sitter/tree-sitter-java"
-commit = "a1bbe92a6370bb4c15386735fbda12f2b812a923"
+commit = "94703d5a6bed02b98e438d7cad1136c01a60ba2c"
 
 [language_servers.jdtls]
 name = "Eclipse JDT Language Server"

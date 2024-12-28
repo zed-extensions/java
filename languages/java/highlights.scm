@@ -220,6 +220,7 @@
   "else"
   "switch"
   "case"
+  "when"
 ] @keyword
 
 (ternary_expression
