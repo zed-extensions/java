@@ -1,4 +1,4 @@
-use std::fs;
+use std::fs::{self, create_dir};
 
 use zed_extension_api::{
     self as zed, current_platform, download_file,
@@ -138,59 +138,92 @@ impl Java {
         Ok(binary_path)
     }
 
-    fn lombok_jar_path(
-        &mut self,
-        language_server_id: &LanguageServerId,
-        worktree: &Worktree,
-    ) -> zed::Result<String> {
-        // Quickly return if the lombok path is already cached
-        // Expect lombok path to be validated when setting the cache so no checking is done here
+    fn lombok_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<String> {
+        // Use cached path if exists
+
         if let Some(path) = &self.cached_lombok_path {
-            return Ok(path.clone());
+            if fs::metadata(path).map_or(false, |stat| stat.is_file()) {
+                return Ok(path.clone());
+            }
         }
 
-        // Use lombok version specified in settings
-        // Unspecified version (None here) defaults to the latest version
-        let lombok_version = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
-            .settings
-            .and_then(|settings| {
-                settings
-                    .get("lombok_version")
-                    .and_then(|version| version.as_str())
-                    .map(|version_str| version_str.to_string())
-            })
-            .map(|version| version.trim().to_string());
+        // Check for latest version
 
-        // Download lombok jar
-        // https://projectlombok.org/downloads/lombok.jar always points to the latest version
-        // https://projectlombok.org/downloads/lombok-{version}.jar points to the specified version
-        let (lombok_url, lombok_path) = match lombok_version {
-            Some(v) => (
-                format!("https://projectlombok.org/downloads/lombok-{v}.jar"),
-                format!("lombok-{v}.jar"),
-            ),
-            None => (
-                "https://projectlombok.org/downloads/lombok.jar".to_string(),
-                "lombok.jar".to_string(),
-            ),
-        };
-        // Do not download if lombok jar already exists
-        if !std::fs::metadata(&lombok_path).map_or(false, |stat| stat.is_file()) {
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::CheckingForUpdate,
+        );
+
+        let tags_response_body = serde_json::from_slice::<Value>(
+            &fetch(
+                &HttpRequest::builder()
+                    .method(HttpMethod::Get)
+                    .url("https://api.github.com/repos/projectlombok/lombok/tags")
+                    .build()?,
+            )
+            .map_err(|err| format!("failed to fetch GitHub tags: {err}"))?
+            .body,
+        )
+        .map_err(|err| format!("failed to deserialize GitHub tags response: {err}"))?;
+        let latest_version = &tags_response_body
+            .as_array()
+            .and_then(|tag| {
+                tag.first().and_then(|latest_tag| {
+                    latest_tag
+                        .get("name")
+                        .and_then(|tag_name| tag_name.as_str())
+                })
+            })
+            // Exclude 'v' at beginning
+            .ok_or("malformed GitHub tags response")?[1..];
+        let prefix = "lombok";
+        let jar_name = format!("lombok-{latest_version}.jar");
+        let jar_path = format!("{prefix}/{jar_name}");
+
+        // If latest version isn't installed,
+        if !fs::metadata(&jar_path).map_or(false, |stat| stat.is_file()) {
+            // then download it...
+
             set_language_server_installation_status(
                 language_server_id,
                 &LanguageServerInstallationStatus::Downloading,
             );
-            download_file(&lombok_url, &lombok_path, DownloadedFileType::Uncompressed)
-                .map_err(|e| format!("failed to download file from {lombok_url} : {e}"))
-                .inspect_err(|e| {
-                    set_language_server_installation_status(
-                        language_server_id,
-                        &LanguageServerInstallationStatus::Failed(e.clone()),
-                    );
-                })?;
+            create_dir(prefix).map_err(|err| err.to_string())?;
+            download_file(
+                &format!("https://projectlombok.org/downloads/{jar_name}"),
+                &jar_path,
+                DownloadedFileType::Uncompressed,
+            )?;
+
+            // ...and delete other versions
+
+            // This step is expected to fail sometimes, and since we don't know
+            // how to fix it yet, we just carry on so the user doesn't have to
+            // restart the language server.
+            match fs::read_dir(prefix) {
+                Ok(entries) => {
+                    for entry in entries {
+                        match entry {
+                            Ok(entry) => {
+                                if entry.file_name().to_str() != Some(&jar_name) {
+                                    if let Err(err) = fs::remove_dir_all(entry.path()) {
+                                        println!("failed to remove directory entry: {err}");
+                                    }
+                                }
+                            }
+                            Err(err) => println!("failed to load directory entry: {err}"),
+                        }
+                    }
+                }
+                Err(err) => println!("failed to list prefix directory: {err}"),
+            }
         }
-        self.cached_lombok_path = Some(lombok_path.to_string());
-        Ok(lombok_path.to_string())
+
+        // else use it
+
+        self.cached_lombok_path = Some(jar_path.clone());
+
+        Ok(jar_path)
     }
 }
 
@@ -247,12 +280,12 @@ impl Extension for Java {
             .initialization_options
             .and_then(|initialization_options| {
                 initialization_options
-                    .pointer("settings/java/jdt/ls/lombokSupport/enabled")
+                    .pointer("/settings/java/jdt/ls/lombokSupport/enabled")
                     .and_then(|enabled| enabled.as_bool())
             })
             .unwrap_or(false);
         if lombok_enabled {
-            let lombok_jar_path = self.lombok_jar_path(language_server_id, worktree)?;
+            let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
             let lombok_jar_full_path = std::env::current_dir()
                 .map_err(|e| format!("could not get current dir: {e}"))?
                 .join(&lombok_jar_path)
