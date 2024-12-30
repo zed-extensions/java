@@ -1,5 +1,5 @@
 name: Language Server Bug
-description: A bug related to the language server, such as a bug with autocomplete.
+description: A bug related to the language server (e.g. autocomplete, diagnostics, hover-docs, go to symbol, initialization options).
 labels: ["bug", "language-server"]
 body:
   - type: checkboxes
@@ -8,7 +8,7 @@ body:
       label: Relevance Confirmation
       description: Have you confirmed by checking Eclipse JDT Language Server first that this is indeed a bug with the Zed Java extension?
       options:
-        - label: I confirmed that this is not an issue with the Eclipse JDT Language Server
+        - label: I confirmed that this is not an issue with the Eclipse JDT Language Server itself
           required: true
   - type: textarea
     id: what-happened

@@ -1,5 +1,5 @@
 name: Grammar Bug
-description: A bug related to the Tree-Sitter grammar, such as a bug with syntax highlighting.
+description: A bug related to the Tree-Sitter grammar (e.g. syntax highlighting, auto-indents, outline, bracket-closing).
 labels: ["bug", "grammar"]
 body:
   - type: checkboxes
@@ -8,7 +8,7 @@ body:
       label: Relevance Confirmation
       description: Have you confirmed by checking the Tree-Sitter Java grammar first that this is indeed a bug with the Zed Java extension?
       options:
-        - label: I confirmed that this is not an issue with the Tree-Sitter Java grammar
+        - label: I confirmed that this is not an issue with the Tree-Sitter Java grammar itself
           required: true
   - type: textarea
     id: what-happened
