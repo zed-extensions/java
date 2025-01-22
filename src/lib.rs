@@ -26,7 +26,7 @@ impl Java {
         // Use cached path if exists
 
         if let Some(path) = &self.cached_binary_path {
-            if fs::metadata(path).map_or(false, |stat| stat.is_file()) {
+            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
                 return Ok(path.clone());
             }
         }
@@ -95,7 +95,7 @@ impl Java {
         let binary_path = format!("{build_path}/bin/{binary_name}");
 
         // If latest version isn't installed,
-        if !fs::metadata(&binary_path).map_or(false, |stat| stat.is_file()) {
+        if !fs::metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
             // then download it...
 
             set_language_server_installation_status(
@@ -142,7 +142,7 @@ impl Java {
         // Use cached path if exists
 
         if let Some(path) = &self.cached_lombok_path {
-            if fs::metadata(path).map_or(false, |stat| stat.is_file()) {
+            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
                 return Ok(path.clone());
             }
         }
@@ -181,7 +181,7 @@ impl Java {
         let jar_path = format!("{prefix}/{jar_name}");
 
         // If latest version isn't installed,
-        if !fs::metadata(&jar_path).map_or(false, |stat| stat.is_file()) {
+        if !fs::metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
             // then download it...
 
             set_language_server_installation_status(
@@ -319,12 +319,12 @@ impl Extension for Java {
                 let property_type = completion.detail.as_ref().and_then(|detail| {
                     detail
                         .split_once(" : ")
-                        .and_then(|(_, property_type)| Some(format!("{property_type} ")))
+                        .map(|(_, property_type)| format!("{property_type} "))
                 })?;
                 let semicolon = ";";
                 let code = format!("{modifiers}{property_type}{}{semicolon}", completion.label);
 
-                return Some(CodeLabel {
+                Some(CodeLabel {
                     spans: vec![
                         CodeLabelSpan::code_range(
                             modifiers.len() + property_type.len()..code.len() - semicolon.len(),
@@ -336,13 +336,13 @@ impl Extension for Java {
                     ],
                     code,
                     filter_range: (0..completion.label.len()).into(),
-                });
+                })
             }
             CompletionKind::Method => {
                 let detail = completion.detail?;
                 let (left, return_type) = detail
                     .split_once(" : ")
-                    .and_then(|(left, return_type)| Some((left, format!("{return_type} "))))
+                    .map(|(left, return_type)| (left, format!("{return_type} ")))
                     .unwrap_or((&detail, "void".to_string()));
                 let parameters = left
                     .find('(')
@@ -363,11 +363,11 @@ impl Extension for Java {
                     spans.push(CodeLabelSpan::literal(detail, None));
                 }
 
-                return Some(CodeLabel {
+                Some(CodeLabel {
                     spans,
                     code,
                     filter_range: (0..completion.label.len()).into(),
-                });
+                })
             }
             CompletionKind::Class | CompletionKind::Interface | CompletionKind::Enum => {
                 let keyword = match kind {
@@ -378,9 +378,9 @@ impl Extension for Java {
                 };
                 let braces = " {}";
                 let code = format!("{keyword}{}{braces}", completion.label);
-                let namespace = completion.detail.and_then(|detail| {
-                    Some(detail[..detail.len() - completion.label.len() - 1].to_string())
-                });
+                let namespace = completion
+                    .detail
+                    .map(|detail| detail[..detail.len() - completion.label.len() - 1].to_string());
                 let mut spans = vec![CodeLabelSpan::code_range(
                     keyword.len()..code.len() - braces.len(),
                 )];
@@ -389,40 +389,36 @@ impl Extension for Java {
                     spans.push(CodeLabelSpan::literal(format!(" ({namespace})"), None));
                 }
 
-                return Some(CodeLabel {
+                Some(CodeLabel {
                     spans,
                     code,
                     filter_range: (0..completion.label.len()).into(),
-                });
+                })
             }
-            CompletionKind::Snippet => {
-                return Some(CodeLabel {
-                    code: String::new(),
-                    spans: vec![CodeLabelSpan::literal(
-                        format!("{} - {}", completion.label, completion.detail?),
-                        None,
-                    )],
-                    filter_range: (0..completion.label.len()).into(),
-                });
-            }
-            CompletionKind::Keyword | CompletionKind::Variable => {
-                return Some(CodeLabel {
-                    spans: vec![CodeLabelSpan::code_range(0..completion.label.len())],
-                    filter_range: (0..completion.label.len()).into(),
-                    code: completion.label,
-                });
-            }
+            CompletionKind::Snippet => Some(CodeLabel {
+                code: String::new(),
+                spans: vec![CodeLabelSpan::literal(
+                    format!("{} - {}", completion.label, completion.detail?),
+                    None,
+                )],
+                filter_range: (0..completion.label.len()).into(),
+            }),
+            CompletionKind::Keyword | CompletionKind::Variable => Some(CodeLabel {
+                spans: vec![CodeLabelSpan::code_range(0..completion.label.len())],
+                filter_range: (0..completion.label.len()).into(),
+                code: completion.label,
+            }),
             CompletionKind::Constructor => {
                 let detail = completion.detail?;
                 let parameters = &detail[detail.find('(')?..];
                 let braces = " {}";
                 let code = format!("{}{parameters}{braces}", completion.label);
 
-                return Some(CodeLabel {
+                Some(CodeLabel {
                     spans: vec![CodeLabelSpan::code_range(0..code.len() - braces.len())],
                     code,
                     filter_range: (0..completion.label.len()).into(),
-                });
+                })
             }
             _ => None,
         })
