@@ -1,4 +1,7 @@
-use std::fs::{self, create_dir};
+use std::{
+    collections::BTreeSet,
+    fs::{self, create_dir},
+};
 
 use zed_extension_api::{
     self as zed, current_platform, download_file,
@@ -50,28 +53,65 @@ impl Java {
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        let tags_response_body = serde_json::from_slice::<Value>(
-            &fetch(
+        // Yeah, this part's all pretty terrible...
+        // Note to self: make it good eventually
+        let downloads_html = String::from_utf8(
+            fetch(
                 &HttpRequest::builder()
                     .method(HttpMethod::Get)
-                    .url("https://api.github.com/repos/eclipse-jdtls/eclipse.jdt.ls/tags")
+                    .url("https://download.eclipse.org/jdtls/milestones/")
                     .build()?,
             )
-            .map_err(|err| format!("failed to fetch GitHub tags: {err}"))?
+            .map_err(|err| format!("failed to get available versions: {err}"))?
             .body,
         )
-        .map_err(|err| format!("failed to deserialize GitHub tags response: {err}"))?;
-        let latest_version = &tags_response_body
-            .as_array()
-            .and_then(|tag| {
-                tag.first().and_then(|latest_tag| {
-                    latest_tag
-                        .get("name")
-                        .and_then(|tag_name| tag_name.as_str())
-                })
-            })
-            // Exclude 'v' at beginning
-            .ok_or("malformed GitHub tags response")?[1..];
+        .map_err(|err| format!("could not get string from downloads page response body: {err}"))?;
+        let mut versions = BTreeSet::new();
+        let mut number_buffer = String::new();
+        let mut version_buffer: (Option<u32>, Option<u32>, Option<u32>) = (None, None, None);
+
+        for char in downloads_html.chars() {
+            if char.is_numeric() {
+                number_buffer.push(char);
+            } else if char == '.' {
+                if version_buffer.0.is_none() && !number_buffer.is_empty() {
+                    version_buffer.0 = Some(
+                        number_buffer
+                            .parse()
+                            .map_err(|err| format!("could not parse number buffer: {err}"))?,
+                    );
+                } else if version_buffer.1.is_none() && !number_buffer.is_empty() {
+                    version_buffer.1 = Some(
+                        number_buffer
+                            .parse()
+                            .map_err(|err| format!("could not parse number buffer: {err}"))?,
+                    );
+                } else {
+                    version_buffer = (None, None, None);
+                }
+
+                number_buffer.clear();
+            } else {
+                if version_buffer.0.is_some()
+                    && version_buffer.1.is_some()
+                    && version_buffer.2.is_none()
+                {
+                    versions.insert((
+                        version_buffer.0.ok_or("no major version number")?,
+                        version_buffer.1.ok_or("no minor version number")?,
+                        number_buffer
+                            .parse::<u32>()
+                            .map_err(|err| format!("could not parse number buffer: {err}"))?,
+                    ));
+                }
+
+                number_buffer.clear();
+                version_buffer = (None, None, None);
+            }
+        }
+
+        let (major, minor, patch) = versions.last().ok_or("no available versions")?;
+        let latest_version = format!("{major}.{minor}.{patch}");
         let latest_version_build = String::from_utf8(
             fetch(
                 &HttpRequest::builder()
