@@ -283,15 +283,6 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<zed::Command> {
-        let classpath = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
-            .settings
-            .and_then(|settings| {
-                settings.get("classpath").and_then(|classpath_value| {
-                    classpath_value
-                        .as_str()
-                        .map(|classpath_str| classpath_str.to_string())
-                })
-            });
         let java_home = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
             .initialization_options
             .and_then(|initialization_options| {
@@ -304,10 +295,6 @@ impl Extension for Java {
                     })
             });
         let mut env = Vec::new();
-
-        if let Some(classpath) = classpath {
-            env.push(("CLASSPATH".to_string(), classpath));
-        }
 
         if let Some(java_home) = java_home {
             env.push(("JAVA_HOME".to_string(), java_home));

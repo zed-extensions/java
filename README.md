@@ -2,28 +2,7 @@
 
 This extension adds support for the Java language.
 
-## Configuration
-
-### Settings
-
-You can optionally configure the class path that [JDTLS] uses in your Zed
-settings.
-
-Below is a configuration example for this extension:
-
-```jsonc
-{
-  "lsp": {
-    "jdtls": {
-      "settings": {
-        "classpath": "/path/to/classes.jar:/path/to/more/classes/"
-      }
-    }
-  }
-}
-```
-
-### Initialization Options
+## Initialization Options
 
 If [Lombok] support is enabled via [JDTLS] initialization option
 (`initialization_options.settings.java.jdt.ls.lombokSupport.enabled`), this
