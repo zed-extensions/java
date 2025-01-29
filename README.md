@@ -51,8 +51,12 @@ for example:
                 "/**/test/**"
               ]
             },
-            "lombokSupport": {
-              "enabled": false // Set this to true to enable lombok support
+            "jdt": {
+              "ls": {
+                "lombokSupport": {
+                  "enabled": false // Set this to true to enable lombok support
+                }
+              }
             },
             "referencesCodeLens": {
               "enabled": false
