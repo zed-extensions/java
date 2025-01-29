@@ -54,7 +54,7 @@ for example:
             "jdt": {
               "ls": {
                 "lombokSupport": {
-                  "enabled": true
+                  "enabled": false // Set this to true to enable lombok support
                 }
               }
             },
