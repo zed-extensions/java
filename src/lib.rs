@@ -4,15 +4,14 @@ use std::{
 };
 
 use zed_extension_api::{
-    self as zed, current_platform, download_file,
-    http_client::{fetch, HttpMethod, HttpRequest},
+    self as zed, CodeLabel, CodeLabelSpan, DownloadedFileType, Extension, LanguageServerId,
+    LanguageServerInstallationStatus, Os, Worktree, current_platform, download_file,
+    http_client::{HttpMethod, HttpRequest, fetch},
     lsp::{Completion, CompletionKind},
     make_file_executable, register_extension,
     serde_json::{self, Value},
     set_language_server_installation_status,
     settings::LspSettings,
-    CodeLabel, CodeLabelSpan, DownloadedFileType, Extension, LanguageServerId,
-    LanguageServerInstallationStatus, Os, Worktree,
 };
 
 struct Java {
@@ -142,9 +141,13 @@ impl Java {
                 language_server_id,
                 &LanguageServerInstallationStatus::Downloading,
             );
-            download_file(&format!(
-                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
-            ), &build_path, DownloadedFileType::GzipTar)?;
+            download_file(
+                &format!(
+                    "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
+                ),
+                &build_path,
+                DownloadedFileType::GzipTar,
+            )?;
             make_file_executable(&binary_path)?;
 
             // ...and delete other versions
@@ -326,6 +329,15 @@ impl Extension for Java {
             args,
             env,
         })
+    }
+
+    fn language_server_initialization_options(
+        &mut self,
+        language_server_id: &LanguageServerId,
+        worktree: &Worktree,
+    ) -> zed::Result<Option<Value>> {
+        LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+            .map(|lsp_settings| lsp_settings.initialization_options)
     }
 
     fn label_for_completion(
