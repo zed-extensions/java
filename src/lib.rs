@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeSet,
     fs::{self, create_dir},
+    path::Path,
 };
 
 use zed_extension_api::{
@@ -222,6 +223,7 @@ impl Java {
         let prefix = "lombok";
         let jar_name = format!("lombok-{latest_version}.jar");
         let jar_path = format!("{prefix}/{jar_name}");
+        let jar_path = Path::new(prefix).join(&jar_name).to_string_lossy().into_owned();
 
         // If latest version isn't installed,
         if !fs::metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
