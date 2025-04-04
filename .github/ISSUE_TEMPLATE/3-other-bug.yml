@@ -17,3 +17,12 @@ body:
       placeholder: I expected to see 1, 2, and 3.
     validations:
       required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        Zed: <!-- v0.181.2 -->
+        Platform: <!-- macOS 15.4, Ubuntu 24.04.2, Windows 11 Version 24H2, etc. -->
+    validations:
+      required: true
