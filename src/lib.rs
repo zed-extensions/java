@@ -222,8 +222,10 @@ impl Java {
             .ok_or("malformed GitHub tags response")?[1..];
         let prefix = "lombok";
         let jar_name = format!("lombok-{latest_version}.jar");
-        let jar_path = format!("{prefix}/{jar_name}");
-        let jar_path = Path::new(prefix).join(&jar_name).to_string_lossy().into_owned();
+        let jar_path = Path::new(prefix)
+            .join(&jar_name)
+            .to_string_lossy()
+            .into_owned();
 
         // If latest version isn't installed,
         if !fs::metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
@@ -288,8 +290,10 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<zed::Command> {
-        let java_home = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
-            .initialization_options
+        let initialization_options =
+            self.language_server_initialization_options(language_server_id, worktree)?;
+        let java_home = initialization_options
+            .as_ref()
             .and_then(|initialization_options| {
                 initialization_options
                     .pointer("/settings/java/home")
@@ -306,16 +310,15 @@ impl Extension for Java {
         }
 
         let mut args = Vec::new();
-
         // Add lombok as javaagent if initialization_options.settings.java.jdt.ls.lombokSupport.enabled is true
-        let lombok_enabled = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?
-            .initialization_options
+        let lombok_enabled = initialization_options
             .and_then(|initialization_options| {
                 initialization_options
                     .pointer("/settings/java/jdt/ls/lombokSupport/enabled")
                     .and_then(|enabled| enabled.as_bool())
             })
             .unwrap_or(false);
+
         if lombok_enabled {
             let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
             let lombok_jar_full_path = std::env::current_dir()
@@ -323,6 +326,7 @@ impl Extension for Java {
                 .join(&lombok_jar_path)
                 .to_string_lossy()
                 .to_string();
+
             args.push(format!("--jvm-arg=-javaagent:{lombok_jar_full_path}"));
         }
 
