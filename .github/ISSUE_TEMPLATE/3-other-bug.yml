@@ -1,6 +1,7 @@
 name: Other Bug
 description: A bug related to something else!
 labels: ["bug"]
+type: "Bug"
 body:
   - type: textarea
     id: what-happened

@@ -1,6 +1,7 @@
 name: Grammar Bug
 description: A bug related to the Tree-Sitter grammar (e.g. syntax highlighting, auto-indents, outline, bracket-closing).
 labels: ["bug", "grammar"]
+type: "Bug"
 body:
   - type: checkboxes
     id: relevance-confirmation
