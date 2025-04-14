@@ -290,19 +290,17 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<zed::Command> {
-        let initialization_options =
-            self.language_server_initialization_options(language_server_id, worktree)?;
-        let java_home = initialization_options
-            .as_ref()
-            .and_then(|initialization_options| {
-                initialization_options
-                    .pointer("/settings/java/home")
-                    .and_then(|java_home_value| {
-                        java_home_value
-                            .as_str()
-                            .map(|java_home_str| java_home_str.to_string())
-                    })
-            });
+        let configuration =
+            self.language_server_workspace_configuration(language_server_id, worktree)?;
+        let java_home = configuration.as_ref().and_then(|configuration| {
+            configuration
+                .pointer("/java/home")
+                .and_then(|java_home_value| {
+                    java_home_value
+                        .as_str()
+                        .map(|java_home_str| java_home_str.to_string())
+                })
+        });
         let mut env = Vec::new();
 
         if let Some(java_home) = java_home {
@@ -310,11 +308,11 @@ impl Extension for Java {
         }
 
         let mut args = Vec::new();
-        // Add lombok as javaagent if initialization_options.settings.java.jdt.ls.lombokSupport.enabled is true
-        let lombok_enabled = initialization_options
-            .and_then(|initialization_options| {
-                initialization_options
-                    .pointer("/settings/java/jdt/ls/lombokSupport/enabled")
+        // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
+        let lombok_enabled = configuration
+            .and_then(|configuration| {
+                configuration
+                    .pointer("/java/jdt/ls/lombokSupport/enabled")
                     .and_then(|enabled| enabled.as_bool())
             })
             .unwrap_or(false);
@@ -344,6 +342,22 @@ impl Extension for Java {
     ) -> zed::Result<Option<Value>> {
         LspSettings::for_worktree(language_server_id.as_ref(), worktree)
             .map(|lsp_settings| lsp_settings.initialization_options)
+    }
+
+    fn language_server_workspace_configuration(
+        &mut self,
+        language_server_id: &LanguageServerId,
+        worktree: &Worktree,
+    ) -> zed::Result<Option<Value>> {
+        LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+            .map(|lsp_settings| lsp_settings.settings)
+            .or(self
+                .language_server_initialization_options(language_server_id, worktree)
+                .map(|initialization_options| {
+                    initialization_options.and_then(|initialization_options| {
+                        initialization_options.get("settings").cloned()
+                    })
+                }))
     }
 
     fn label_for_completion(
