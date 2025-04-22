@@ -349,15 +349,26 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<Option<Value>> {
-        LspSettings::for_worktree(language_server_id.as_ref(), worktree)
-            .map(|lsp_settings| lsp_settings.settings)
-            .or(self
+        // FIXME(Valentine Briese): I don't really like that we have a variable
+        //                          here, there're probably some `Result` and/or
+        //                          `Option` methods that would eliminate the
+        //                          need for this, but at least this is easy to
+        //                          read.
+
+        let mut settings = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+            .map(|lsp_settings| lsp_settings.settings);
+
+        if !matches!(settings, Ok(Some(_))) {
+            settings = self
                 .language_server_initialization_options(language_server_id, worktree)
                 .map(|initialization_options| {
                     initialization_options.and_then(|initialization_options| {
                         initialization_options.get("settings").cloned()
                     })
-                }))
+                })
+        }
+
+        settings
     }
 
     fn label_for_completion(
