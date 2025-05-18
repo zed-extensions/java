@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeSet,
     fs::{self, create_dir},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use zed_extension_api::{
@@ -15,9 +15,11 @@ use zed_extension_api::{
     settings::LspSettings,
 };
 
+const PATH_TO_STR_ERROR: &str = "failed to convert path to string";
+
 struct Java {
-    cached_binary_path: Option<String>,
-    cached_lombok_path: Option<String>,
+    cached_binary_path: Option<PathBuf>,
+    cached_lombok_path: Option<PathBuf>,
 }
 
 impl Java {
@@ -25,7 +27,7 @@ impl Java {
         &mut self,
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
-    ) -> zed::Result<String> {
+    ) -> zed::Result<PathBuf> {
         // Use cached path if exists
 
         if let Some(path) = &self.cached_binary_path {
@@ -43,7 +45,7 @@ impl Java {
         };
 
         if let Some(path_binary) = worktree.which(binary_name) {
-            return Ok(path_binary);
+            return Ok(PathBuf::from(path_binary));
         }
 
         // Check for latest version
@@ -128,11 +130,11 @@ impl Java {
             format!("attempt to get latest version's build resulted in a malformed response: {err}")
         })?;
         let latest_version_build = latest_version_build.trim_end();
-        let prefix = "jdtls";
+        let prefix = PathBuf::from("jdtls");
         // Exclude ".tar.gz"
         let build_directory = &latest_version_build[..latest_version_build.len() - 7];
-        let build_path = format!("{prefix}/{build_directory}");
-        let binary_path = format!("{build_path}/bin/{binary_name}");
+        let build_path = prefix.join(build_directory);
+        let binary_path = build_path.join("bin").join(binary_name);
 
         // If latest version isn't installed,
         if !fs::metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
@@ -146,10 +148,10 @@ impl Java {
                 &format!(
                     "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
                 ),
-                &build_path,
+                build_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
                 DownloadedFileType::GzipTar,
             )?;
-            make_file_executable(&binary_path)?;
+            make_file_executable(binary_path.to_str().ok_or(PATH_TO_STR_ERROR)?)?;
 
             // ...and delete other versions
 
@@ -182,7 +184,7 @@ impl Java {
         Ok(binary_path)
     }
 
-    fn lombok_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<String> {
+    fn lombok_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<PathBuf> {
         // Use cached path if exists
 
         if let Some(path) = &self.cached_lombok_path {
@@ -222,10 +224,7 @@ impl Java {
             .ok_or("malformed GitHub tags response")?[1..];
         let prefix = "lombok";
         let jar_name = format!("lombok-{latest_version}.jar");
-        let jar_path = Path::new(prefix)
-            .join(&jar_name)
-            .to_string_lossy()
-            .into_owned();
+        let jar_path = Path::new(prefix).join(&jar_name);
 
         // If latest version isn't installed,
         if !fs::metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
@@ -238,7 +237,7 @@ impl Java {
             create_dir(prefix).map_err(|err| err.to_string())?;
             download_file(
                 &format!("https://projectlombok.org/downloads/{jar_name}"),
-                &jar_path,
+                jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
                 DownloadedFileType::Uncompressed,
             )?;
 
@@ -319,17 +318,22 @@ impl Extension for Java {
 
         if lombok_enabled {
             let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
-            let lombok_jar_full_path = std::env::current_dir()
+            let canonical_lombok_jar_path = std::env::current_dir()
                 .map_err(|e| format!("could not get current dir: {e}"))?
-                .join(&lombok_jar_path)
-                .to_string_lossy()
+                .join(lombok_jar_path)
+                .to_str()
+                .ok_or(PATH_TO_STR_ERROR)?
                 .to_string();
 
-            args.push(format!("--jvm-arg=-javaagent:{lombok_jar_full_path}"));
+            args.push(format!("--jvm-arg=-javaagent:{canonical_lombok_jar_path}"));
         }
 
         Ok(zed::Command {
-            command: self.language_server_binary_path(language_server_id, worktree)?,
+            command: self
+                .language_server_binary_path(language_server_id, worktree)?
+                .to_str()
+                .ok_or(PATH_TO_STR_ERROR)?
+                .to_string(),
             args,
             env,
         })
