@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeSet,
+    env::current_dir,
     fs::{self, create_dir},
     path::{Path, PathBuf},
 };
@@ -317,14 +318,25 @@ impl Extension for Java {
             .unwrap_or(false);
 
         if lombok_enabled {
+            let current_dir =
+                current_dir().map_err(|e| format!("could not get current dir: {e}"))?;
+
+            println!("Current directory: {current_dir:#?}");
+
             let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
-            let canonical_lombok_jar_path = std::env::current_dir()
-                .map_err(|e| format!("could not get current dir: {e}"))?
-                .join(lombok_jar_path)
+
+            println!("Lombok JAR path: {lombok_jar_path:#?}");
+
+            let canonical_lombok_jar_path = current_dir.join(lombok_jar_path);
+
+            println!("Canonical Lombok JAR path: {canonical_lombok_jar_path:#?}");
+
+            let canonical_lombok_jar_path = canonical_lombok_jar_path
                 .to_str()
                 .ok_or(PATH_TO_STR_ERROR)?
                 .to_string();
 
+            println!("Canonical Lombok JAR path after stringified: {canonical_lombok_jar_path:?}");
             args.push(format!("--jvm-arg=-javaagent:{canonical_lombok_jar_path}"));
         }
 
