@@ -318,25 +318,23 @@ impl Extension for Java {
             .unwrap_or(false);
 
         if lombok_enabled {
-            let current_dir =
-                current_dir().map_err(|e| format!("could not get current dir: {e}"))?;
+            let mut current_dir =
+                current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
 
-            println!("Current directory: {current_dir:#?}");
+            if current_platform().0 == Os::Windows {
+                current_dir = current_dir
+                    .strip_prefix("/")
+                    .map_err(|err| err.to_string())?
+                    .to_path_buf();
+            }
 
             let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
-
-            println!("Lombok JAR path: {lombok_jar_path:#?}");
-
-            let canonical_lombok_jar_path = current_dir.join(lombok_jar_path);
-
-            println!("Canonical Lombok JAR path: {canonical_lombok_jar_path:#?}");
-
-            let canonical_lombok_jar_path = canonical_lombok_jar_path
+            let canonical_lombok_jar_path = current_dir
+                .join(lombok_jar_path)
                 .to_str()
                 .ok_or(PATH_TO_STR_ERROR)?
                 .to_string();
 
-            println!("Canonical Lombok JAR path after stringified: {canonical_lombok_jar_path:?}");
             args.push(format!("--jvm-arg=-javaagent:{canonical_lombok_jar_path}"));
         }
 
