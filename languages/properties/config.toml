@@ -1,0 +1,5 @@
+name = "Properties"
+grammar = "properties"
+path_suffixes = ["properties"]
+line_comments = ["# "]
+brackets = [{ start = "[", end = "]", close = true, newline = true }]
