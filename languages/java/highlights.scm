@@ -73,7 +73,7 @@
   name: (identifier) @type)
 
 (annotation_type_declaration
-  name: (identifier) @type)
+  name: (identifier) @attribute)
 
 (class_declaration
   name: (identifier) @type)
@@ -139,11 +139,11 @@
 
 ; Annotations
 (annotation
-  "@" @attribute
+  "@" @punctuation
   name: (identifier) @attribute)
 
 (marker_annotation
-  "@" @attribute
+  "@" @punctuation
   name: (identifier) @attribute)
 
 ; Literals
@@ -167,7 +167,7 @@
   (false)
 ] @boolean
 
-(null_literal) @type
+(null_literal) @constant.builtin
 
 ; Keywords
 [
@@ -212,7 +212,7 @@
   "yield"
 ] @keyword
 
-"new" @operator
+"new" @keyword.operator
 
 ; Conditionals
 [
@@ -289,7 +289,7 @@
   [
     "\\{"
     "}"
-  ] @string.special.symbol)
+  ] @punctuation) @embedded
 
 ; Exceptions
 [
