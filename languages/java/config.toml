@@ -9,6 +9,10 @@ brackets = [
     { start = "(", end = ")", close = true, newline = false },
     { start = "\"", end = "\"", close = true, newline = false, not_in = ["string_literal"] },
     { start = "'", end = "'", close = true, newline = false, not_in = ["character_literal"] },
+    # TODO: Figure out how the Rust language support is able to handle block comments so well
+    { start = "/*", end = " */", close = true, newline = true, not_in = ["string_literal", "block_comment"] },
 ]
+collapsed_placeholder = " /* ... */ "
+documentation = { start = "/*", end = "*/", prefix = "* ", tab_size = 1 }
 prettier_parser_name = "java"
 prettier_plugins = ["prettier-plugin-java"]
