@@ -7,6 +7,8 @@ brackets = [
     { start = "{", end = "}", close = true, newline = true },
     { start = "[", end = "]", close = true, newline = true },
     { start = "(", end = ")", close = true, newline = false },
+    { start = "\"", end = "\"", close = true, newline = false, not_in = ["string_literal"] },
+    { start = "'", end = "'", close = true, newline = false, not_in = ["character_literal"] },
 ]
 prettier_parser_name = "java"
 prettier_plugins = ["prettier-plugin-java"]
