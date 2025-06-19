@@ -139,11 +139,11 @@
 
 ; Annotations
 (annotation
-  "@" @punctuation
+  "@" @punctuation.special
   name: (identifier) @attribute)
 
 (marker_annotation
-  "@" @punctuation
+  "@" @punctuation.special
   name: (identifier) @attribute)
 
 ; Literals
@@ -289,7 +289,7 @@
   [
     "\\{"
     "}"
-  ] @punctuation) @embedded
+  ] @punctuation.special) @embedded
 
 ; Exceptions
 [
