@@ -184,6 +184,7 @@
   "permits"
   "to"
   "with"
+  "new"
 ] @keyword
 
 [
@@ -211,8 +212,6 @@
   "return"
   "yield"
 ] @keyword
-
-"new" @keyword.operator
 
 ; Conditionals
 [
