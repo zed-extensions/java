@@ -73,7 +73,7 @@
   name: (identifier) @type)
 
 (annotation_type_declaration
-  name: (identifier) @type)
+  name: (identifier) @attribute)
 
 (class_declaration
   name: (identifier) @type)
@@ -139,11 +139,11 @@
 
 ; Annotations
 (annotation
-  "@" @attribute
+  "@" @punctuation.special
   name: (identifier) @attribute)
 
 (marker_annotation
-  "@" @attribute
+  "@" @punctuation.special
   name: (identifier) @attribute)
 
 ; Literals
@@ -167,7 +167,7 @@
   (false)
 ] @boolean
 
-(null_literal) @type
+(null_literal) @constant.builtin
 
 ; Keywords
 [
@@ -184,6 +184,7 @@
   "permits"
   "to"
   "with"
+  "new"
 ] @keyword
 
 [
@@ -211,8 +212,6 @@
   "return"
   "yield"
 ] @keyword
-
-"new" @operator
 
 ; Conditionals
 [
@@ -289,7 +288,7 @@
   [
     "\\{"
     "}"
-  ] @string.special.symbol)
+  ] @punctuation.special) @embedded
 
 ; Exceptions
 [
