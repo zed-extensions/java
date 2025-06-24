@@ -301,10 +301,27 @@ impl Extension for Java {
                         .map(|java_home_str| java_home_str.to_string())
                 })
         });
+        let proxy = configuration.as_ref().and_then(|configuration| {
+            configuration
+                .pointer("/proxy")
+                .and_then(|proxy_value| {
+                    proxy_value
+                        .as_str()
+                        .map(|proxy_str| proxy_str.to_string())
+                })
+        });
+
         let mut env = Vec::new();
 
         if let Some(java_home) = java_home {
             env.push(("JAVA_HOME".to_string(), java_home));
+        }
+        if let Some(proxy) = proxy {
+            if proxy.starts_with("http://") {
+                env.push(("HTTP_PROXY".to_string(), proxy));
+            } else if proxy.starts_with("https://") {
+                env.push(("HTTPS_PROXY".to_string(), proxy));
+            }
         }
 
         let mut args = Vec::new();
