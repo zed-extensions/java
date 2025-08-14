@@ -2,18 +2,19 @@ import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { Transform } from "node:stream";
+import { Buffer } from "node:buffer";
 
-const HEADER_SEPARATOR_BUFFER = Buffer.from("\r\n\r\n");
-const CONTENT_LENGTH_PREFIX_BUFFER = Buffer.from("content-length: ");
-const HEADER_SEPARATOR = "\r\n\r\n";
-const CONTENT_LENGTH_PREFIX = "Content-Length: ";
+const HEADER_SEPARATOR = Buffer.from("\r\n", "ascii");
+const CONTENT_SEPARATOR = Buffer.from("\r\n\r\n", "ascii");
+const NAME_VALUE_SEPARATOR = Buffer.from(": ", "ascii");
+const CONTENT_LENGTH = "Content-Length";
 
 const bin = process.argv[1];
 const args = process.argv.slice(2);
 
 const jdtls = spawn(bin, args);
 
-const proxy = createJsonRpcProxy({ server: jdtls, proxy: process });
+const proxy = createLspProxy({ server: jdtls, proxy: process });
 
 proxy.on("server", (data, passthrough) => {
   passthrough();
@@ -28,10 +29,11 @@ proxy
     command: "vscode.java.startDebugSession",
   })
   .then((res) => {
+    proxy.show(3, "Debug session running on port " + res.result);
     writeFileSync("./port.txt", res.result.toString());
   });
 
-export function createJsonRpcProxy({
+export function createLspProxy({
   server: { stdin: serverStdin, stdout: serverStdout, stderr: serverStderr },
   proxy: { stdin: proxyStdin, stdout: proxyStdout, stderr: proxyStderr },
 }) {
@@ -39,13 +41,13 @@ export function createJsonRpcProxy({
   const queue = new Map();
   const nextid = iterid();
 
-  proxyStdin.pipe(jsonRpcSeparator()).on("data", (data) => {
+  proxyStdin.pipe(lspMessageSeparator()).on("data", (data) => {
     events.emit("client", parse(data.toString()), () =>
       serverStdin.write(data),
     );
   });
 
-  serverStdout.pipe(jsonRpcSeparator()).on("data", (data) => {
+  serverStdout.pipe(lspMessageSeparator()).on("data", (data) => {
     const message = parse(data.toString());
 
     const pending = queue.get(message?.id);
@@ -63,19 +65,26 @@ export function createJsonRpcProxy({
   return Object.assign(events, {
     /**
      *
-     * @param {'error' | 'warning' | 'info' | 'log'} type
+     * @param {1 | 2 | 3 | 4 | 5} type
      * @param {string} message
+     * @returns void
      */
-    log(type, message) {
+    show(type, message) {
       proxyStdout.write(
-        JSON.stringify({
+        stringify({
           jsonrpc: "2.0",
-          method: "window/logMessage",
+          method: "window/showMessage",
           params: { type, message },
         }),
       );
     },
 
+    /**
+     *
+     * @param {string} method
+     * @param {any} params
+     * @returns Promise<any>
+     */
     send(method, params) {
       return new Promise((resolve) => {
         const id = nextid();
@@ -92,67 +101,67 @@ function iterid() {
   return () => "zed-java-proxy-" + acc++;
 }
 
-function jsonRpcSeparator() {
+function lspMessageSeparator() {
   let buffer = Buffer.alloc(0);
   let contentLength = null;
+  let headersLength = null;
 
   return new Transform({
     transform(chunk, encoding, callback) {
       buffer = Buffer.concat([buffer, chunk]);
 
+      // A single chunk may contain multiple messages
       while (true) {
-        const headerEndIndex = buffer.indexOf(HEADER_SEPARATOR_BUFFER);
-        if (headerEndIndex === -1) {
+        // Wait until we get the whole headers block
+        if (buffer.indexOf(CONTENT_SEPARATOR) === -1) {
           break;
         }
 
-        if (contentLength === null) {
-          const headersBuffer = buffer.subarray(0, headerEndIndex);
-          const headers = headersBuffer.toString("utf-8").toLowerCase();
-          const lines = headers.split("\r\n");
-          let newContentLength = 0;
-          let foundLength = false;
+        /**
+         * The base protocol consists of a header and a content part (comparable to HTTP).
+         * The header and content part are separated by a ‘\r\n’.
+         *
+         * The header part consists of header fields.
+         * Each header field is comprised of a name and a value,
+         * separated by ‘: ‘ (a colon and a space).
+         * The structure of header fields conforms to the HTTP semantic.
+         * Each header field is terminated by ‘\r\n’.
+         * Considering the last header field and the overall header
+         * itself are each terminated with ‘\r\n’,
+         * and that at least one header is mandatory,
+         * this means that two ‘\r\n’ sequences always immediately precede
+         * the content part of a message.
+         *
+         * @see {https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart}
+         */
+        if (!headersLength) {
+          const headersEnd = buffer.indexOf(CONTENT_SEPARATOR);
+          const headers = Object.fromEntries(
+            buffer
+              .subarray(0, headersEnd)
+              .toString()
+              .split(HEADER_SEPARATOR)
+              .map((header) => header.split(NAME_VALUE_SEPARATOR))
+              .map(([name, value]) => [name.toLowerCase(), value]),
+          );
 
-          for (const line of lines) {
-            if (line.startsWith(CONTENT_LENGTH_PREFIX_BUFFER.toString())) {
-              const lengthString = line
-                .substring(CONTENT_LENGTH_PREFIX_BUFFER.length)
-                .trim();
-              const parsedLength = parseInt(lengthString, 10);
-
-              if (isNaN(parsedLength) || parsedLength < 0) {
-                this.destroy(
-                  new Error(`Invalid Content-Length header: '${lengthString}'`),
-                );
-                return;
-              }
-
-              newContentLength = parsedLength;
-              foundLength = true;
-              break;
-            }
-          }
-
-          if (!foundLength) {
-            this.destroy(new Error("Missing Content-Length header"));
-            return;
-          }
-
-          contentLength = newContentLength;
+          // A "Content-Length" header must always be present
+          contentLength = parseInt(headers[CONTENT_LENGTH.toLowerCase()], 10);
+          headersLength = headersEnd + CONTENT_SEPARATOR.length;
         }
 
-        const headerLength = headerEndIndex + HEADER_SEPARATOR_BUFFER.length;
-        const totalMessageLength = headerLength + contentLength;
+        const msgLength = headersLength + contentLength;
 
-        if (buffer.length < totalMessageLength) {
+        // Wait until we get the whole content part
+        if (buffer.length < msgLength) {
           break;
         }
 
-        const fullMessage = buffer.subarray(0, totalMessageLength);
+        this.push(buffer.subarray(0, msgLength));
 
-        this.push(fullMessage);
-        buffer = buffer.subarray(totalMessageLength);
+        buffer = buffer.subarray(msgLength);
         contentLength = null;
+        headersLength = null;
       }
 
       callback();
@@ -160,14 +169,31 @@ function jsonRpcSeparator() {
   });
 }
 
-function stringify(request) {
-  const json = JSON.stringify(request);
-  return CONTENT_LENGTH_PREFIX + json.length + HEADER_SEPARATOR + json;
+/**
+ *
+ * @param {any} content
+ * @returns {string}
+ */
+function stringify(content) {
+  const json = JSON.stringify(content);
+  return (
+    CONTENT_LENGTH +
+    NAME_VALUE_SEPARATOR +
+    json.length +
+    CONTENT_SEPARATOR +
+    json
+  );
 }
 
-function parse(response) {
+/**
+ *
+ * @param {string} message
+ * @returns {any | null}
+ */
+function parse(message) {
   try {
-    return JSON.parse(response.split("\n").at(-1));
+    const content = message.slice(message.indexOf(CONTENT_SEPARATOR));
+    return JSON.parse(content);
   } catch (err) {
     return null;
   }
