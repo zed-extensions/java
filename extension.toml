@@ -23,4 +23,3 @@ name = "Eclipse JDT Language Server"
 language = "Java"
 
 [debug_adapters.Java]
-schema_path = "debug_adapter_schemas/Java.json"

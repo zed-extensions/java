@@ -4,6 +4,7 @@ use std::{
     fs::{self, create_dir, read_dir},
     net::Ipv4Addr,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use zed_extension_api::{
@@ -409,7 +410,7 @@ impl Extension for Java {
             ));
         }
 
-        let configuration = config.config.to_string();
+        dbg!(&config);
 
         // We really need to find a better way :)
         let port = worktree
@@ -424,8 +425,12 @@ impl Extension for Java {
             cwd: Some(worktree.root_path()),
             envs: vec![],
             request_args: StartDebuggingRequestArguments {
-                configuration: configuration,
-                request: StartDebuggingRequestArgumentsRequest::Launch,
+                request: self.dap_request_kind(
+                    adapter_name,
+                    Value::from_str(config.config.as_str())
+                        .map_err(|e| format!("Invalid JSON configuration: {e}"))?,
+                )?,
+                configuration: config.config,
             },
             connection: Some(TcpArguments {
                 host: Ipv4Addr::LOCALHOST.to_bits(),
@@ -439,7 +444,7 @@ impl Extension for Java {
         &mut self,
         adapter_name: String,
         config: Value,
-    ) -> Result<zed_extension_api::StartDebuggingRequestArgumentsRequest, String> {
+    ) -> Result<StartDebuggingRequestArgumentsRequest, String> {
         if adapter_name != DEBUG_ADAPTER_NAME {
             return Err(format!(
                 "Cannot create binary for adapter \"{adapter_name}\""
@@ -447,12 +452,8 @@ impl Extension for Java {
         }
 
         match config.get("request") {
-            Some(launch) if launch == "launch" => {
-                Ok(zed_extension_api::StartDebuggingRequestArgumentsRequest::Launch)
-            }
-            Some(attach) if attach == "attach" => {
-                Ok(zed_extension_api::StartDebuggingRequestArgumentsRequest::Attach)
-            }
+            Some(launch) if launch == "launch" => Ok(StartDebuggingRequestArgumentsRequest::Launch),
+            Some(attach) if attach == "attach" => Ok(StartDebuggingRequestArgumentsRequest::Attach),
             Some(value) => Err(format!(
                 "Unexpected value for `request` key in Java debug adapter configuration: {value:?}"
             )),
