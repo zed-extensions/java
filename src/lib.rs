@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeSet,
     env::current_dir,
-    fs::{self, create_dir},
+    fs::{self, create_dir, read_dir},
     net::Ipv4Addr,
     path::{Path, PathBuf},
 };
@@ -280,6 +280,8 @@ impl Java {
     }
 
     fn debugger_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<PathBuf> {
+        let prefix = "debugger";
+
         if let Some(path) = &self.cached_debugger_path {
             if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
                 return Ok(path.clone());
@@ -291,17 +293,53 @@ impl Java {
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        let maven_response_body = serde_json::from_slice::<Value>(
-            &fetch(
-                &HttpRequest::builder()
-                    .method(HttpMethod::Get)
-                    .url("https://search.maven.org/solrsearch/select?q=a:com.microsoft.java.debug.plugin")
-                    .build()?,
-            )
-            .map_err(|err| format!("failed to fetch Maven: {err}"))?
-            .body,
-        )
-        .map_err(|err| format!("failed to deserialize Maven response: {err}"))?;
+        let res = fetch(
+            &HttpRequest::builder()
+                .method(HttpMethod::Get)
+                .url("https://search.maven.org/solrsearch/select?q=a:com.microsoft.java.debug.plugin")
+                .build()?,
+        );
+
+        // Maven loves to be down, trying to resolve it gracefully
+        if let Err(err) = &res {
+            if !fs::metadata(prefix).is_ok_and(|stat| stat.is_dir()) {
+                return Err(err.to_owned());
+            }
+
+            // If it's not a 5xx code, then return an error.
+            if !err.contains("status code 5") {
+                return Err(err.to_owned());
+            }
+
+            let exists = read_dir(&prefix)
+                .ok()
+                .map(|dir| dir.last().map(|v| v.ok()))
+                .flatten()
+                .flatten();
+
+            if let Some(file) = exists {
+                if !file.metadata().is_ok_and(|stat| stat.is_file()) {
+                    return Err(err.to_owned());
+                }
+
+                if !file
+                    .file_name()
+                    .to_str()
+                    .ok_or(PATH_TO_STR_ERROR)?
+                    .ends_with(".jar")
+                {
+                    return Err(err.to_owned());
+                }
+
+                let jar_path = Path::new(prefix).join(file.file_name());
+                self.cached_debugger_path = Some(jar_path.clone());
+
+                return Ok(jar_path);
+            }
+        }
+
+        let maven_response_body = serde_json::from_slice::<Value>(&res?.body)
+            .map_err(|err| format!("failed to deserialize Maven response: {err}"))?;
 
         let latest_version = maven_response_body
             .pointer("/response/docs/0/latestVersion")
@@ -315,7 +353,6 @@ impl Java {
             .flatten()
             .ok_or("Malformed maven response")?;
 
-        let prefix = "debugger";
         let jar_name = format!("{artifact}-{latest_version}.jar");
         let jar_path = Path::new(prefix).join(&jar_name);
 
@@ -388,7 +425,7 @@ impl Extension for Java {
             envs: vec![],
             request_args: StartDebuggingRequestArguments {
                 configuration: configuration,
-                request: StartDebuggingRequestArgumentsRequest::Attach,
+                request: StartDebuggingRequestArgumentsRequest::Launch,
             },
             connection: Some(TcpArguments {
                 host: Ipv4Addr::LOCALHOST.to_bits(),
