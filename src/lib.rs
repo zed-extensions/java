@@ -1,6 +1,8 @@
+mod debugger;
+mod lsp;
 use std::{
     collections::BTreeSet,
-    env::current_dir,
+    env::{self, current_dir},
     fs::{self, create_dir, read_dir},
     net::Ipv4Addr,
     path::{Path, PathBuf},
@@ -15,10 +17,12 @@ use zed_extension_api::{
     http_client::{HttpMethod, HttpRequest, fetch},
     lsp::{Completion, CompletionKind},
     make_file_executable, register_extension,
-    serde_json::{self, Map, Value},
+    serde_json::{self, Map, Value, json},
     set_language_server_installation_status,
     settings::LspSettings,
 };
+
+use crate::{debugger::Debugger, lsp::LspClient};
 
 const PROXY_FILE: &str = include_str!("proxy.mjs");
 const DEBUG_ADAPTER_NAME: &str = "Java";
@@ -27,7 +31,7 @@ const PATH_TO_STR_ERROR: &str = "failed to convert path to string";
 struct Java {
     cached_binary_path: Option<PathBuf>,
     cached_lombok_path: Option<PathBuf>,
-    cached_debugger_path: Option<PathBuf>,
+    debugger: Debugger,
 }
 
 impl Java {
@@ -279,110 +283,6 @@ impl Java {
 
         Ok(jar_path)
     }
-
-    fn debugger_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<PathBuf> {
-        let prefix = "debugger";
-
-        if let Some(path) = &self.cached_debugger_path {
-            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
-                return Ok(path.clone());
-            }
-        }
-
-        set_language_server_installation_status(
-            language_server_id,
-            &LanguageServerInstallationStatus::CheckingForUpdate,
-        );
-
-        let res = fetch(
-            &HttpRequest::builder()
-                .method(HttpMethod::Get)
-                .url("https://search.maven.org/solrsearch/select?q=a:com.microsoft.java.debug.plugin")
-                .build()?,
-        );
-
-        // Maven loves to be down, trying to resolve it gracefully
-        if let Err(err) = &res {
-            if !fs::metadata(prefix).is_ok_and(|stat| stat.is_dir()) {
-                return Err(err.to_owned());
-            }
-
-            // If it's not a 5xx code, then return an error.
-            if !err.contains("status code 5") {
-                return Err(err.to_owned());
-            }
-
-            let exists = read_dir(&prefix)
-                .ok()
-                .map(|dir| dir.last().map(|v| v.ok()))
-                .flatten()
-                .flatten();
-
-            if let Some(file) = exists {
-                if !file.metadata().is_ok_and(|stat| stat.is_file()) {
-                    return Err(err.to_owned());
-                }
-
-                if !file
-                    .file_name()
-                    .to_str()
-                    .ok_or(PATH_TO_STR_ERROR)?
-                    .ends_with(".jar")
-                {
-                    return Err(err.to_owned());
-                }
-
-                let jar_path = Path::new(prefix).join(file.file_name());
-                self.cached_debugger_path = Some(jar_path.clone());
-
-                return Ok(jar_path);
-            }
-        }
-
-        let maven_response_body = serde_json::from_slice::<Value>(&res?.body)
-            .map_err(|err| format!("failed to deserialize Maven response: {err}"))?;
-
-        let latest_version = maven_response_body
-            .pointer("/response/docs/0/latestVersion")
-            .map(|v| v.as_str())
-            .flatten()
-            .ok_or("Malformed maven response")?;
-
-        let artifact = maven_response_body
-            .pointer("/response/docs/0/a")
-            .map(|v| v.as_str())
-            .flatten()
-            .ok_or("Malformed maven response")?;
-
-        let jar_name = format!("{artifact}-{latest_version}.jar");
-        let jar_path = Path::new(prefix).join(&jar_name);
-
-        if !fs::metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
-            if let Err(err) = fs::remove_dir_all(prefix) {
-                println!("failed to remove directory entry: {err}");
-            }
-
-            set_language_server_installation_status(
-                language_server_id,
-                &LanguageServerInstallationStatus::Downloading,
-            );
-            create_dir(prefix).map_err(|err| err.to_string())?;
-
-            let url = format!(
-                "https://repo1.maven.org/maven2/com/microsoft/java/{artifact}/{latest_version}/{jar_name}"
-            );
-
-            download_file(
-                url.as_str(),
-                jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
-                DownloadedFileType::Uncompressed,
-            )
-            .map_err(|err| format!("Failed to download {url} {err}"))?;
-        }
-
-        self.cached_debugger_path = Some(jar_path.clone());
-        Ok(jar_path)
-    }
 }
 
 impl Extension for Java {
@@ -393,7 +293,7 @@ impl Extension for Java {
         Self {
             cached_binary_path: None,
             cached_lombok_path: None,
-            cached_debugger_path: None,
+            debugger: Debugger::new(),
         }
     }
 
@@ -410,15 +310,6 @@ impl Extension for Java {
             ));
         }
 
-        dbg!(&config);
-
-        // We really need to find a better way :)
-        let port = worktree
-            .read_text_file("port.txt")
-            .unwrap()
-            .parse::<u16>()
-            .unwrap();
-
         Ok(DebugAdapterBinary {
             command: None,
             arguments: vec![],
@@ -432,11 +323,7 @@ impl Extension for Java {
                 )?,
                 configuration: config.config,
             },
-            connection: Some(TcpArguments {
-                host: Ipv4Addr::LOCALHOST.to_bits(),
-                port,
-                timeout: Some(60_000),
-            }),
+            connection: Some(self.debugger.start_session(worktree)?),
         })
     }
 
@@ -479,7 +366,7 @@ impl Extension for Java {
         }
 
         // download debugger if not exists
-        self.debugger_jar_path(language_server_id)?;
+        self.debugger.get_or_download(language_server_id)?;
 
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;
@@ -503,6 +390,7 @@ impl Extension for Java {
 
         args.push("-e".to_string());
         args.push(PROXY_FILE.to_string());
+        args.push(current_dir.to_str().ok_or(PATH_TO_STR_ERROR)?.to_string());
 
         args.push(
             current_dir
@@ -544,49 +432,10 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<Option<Value>> {
-        let mut current_dir =
-            current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
+        let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+            .map(|lsp_settings| lsp_settings.initialization_options)?;
 
-        if current_platform().0 == Os::Windows {
-            current_dir = current_dir
-                .strip_prefix("/")
-                .map_err(|err| err.to_string())?
-                .to_path_buf();
-        }
-
-        let settings = LspSettings::for_worktree(language_server_id.as_ref(), worktree)?;
-
-        let mut initialization_options = settings
-            .initialization_options
-            .unwrap_or(Value::Object(Map::new()));
-
-        if let Some(debugger_path) = self.cached_debugger_path.clone() {
-            // ensure bundles field exists
-            let mut bundles = initialization_options
-                .get_mut("bundles")
-                .unwrap_or(&mut Value::Array(vec![]))
-                .take();
-
-            let canonical_path = Value::String(
-                current_dir
-                    .join(debugger_path)
-                    .to_str()
-                    .ok_or(PATH_TO_STR_ERROR)?
-                    .to_string(),
-            );
-
-            let bundles_vec = bundles
-                .as_array_mut()
-                .ok_or("Invalid initialization_options format")?;
-
-            if !bundles_vec.contains(&canonical_path) {
-                bundles_vec.push(canonical_path);
-            }
-
-            initialization_options["bundles"] = bundles;
-        }
-
-        Ok(Some(initialization_options))
+        Ok(Some(self.debugger.inject_plugin_into_options(options)?))
     }
 
     fn language_server_workspace_configuration(

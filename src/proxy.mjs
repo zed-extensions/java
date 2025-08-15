@@ -1,37 +1,77 @@
-import { EventEmitter } from "node:events";
-import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { Transform } from "node:stream";
 import { Buffer } from "node:buffer";
+import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { Transform } from "node:stream";
+import { text } from "node:stream/consumers";
 
+const HTTP_PORT = 0; // 0 - random free one
 const HEADER_SEPARATOR = Buffer.from("\r\n", "ascii");
 const CONTENT_SEPARATOR = Buffer.from("\r\n\r\n", "ascii");
 const NAME_VALUE_SEPARATOR = Buffer.from(": ", "ascii");
-const CONTENT_LENGTH = "Content-Length";
+const LENGTH_HEADER = "Content-Length";
+const TIMEOUT = 5_000;
 
-const bin = process.argv[1];
-const args = process.argv.slice(2);
+const workdir = process.argv[1];
+const bin = process.argv[2];
+const args = process.argv.slice(3);
 
-const jdtls = spawn(bin, args);
+const PROXY_ID = Buffer.from(process.cwd().replace(/\/+$/, "")).toString("hex");
+const PROXY_HTTP_PORT_FILE = join(workdir, "proxy", PROXY_ID);
 
-const proxy = createLspProxy({ server: jdtls, proxy: process });
-
-proxy.on("server", (data, passthrough) => {
-  passthrough();
-});
+const lsp = spawn(bin, args);
+const proxy = createLspProxy({ server: lsp, proxy: process });
 
 proxy.on("client", (data, passthrough) => {
   passthrough();
 });
+proxy.on("server", (data, passthrough) => {
+  passthrough();
+});
 
-proxy
-  .send("workspace/executeCommand", {
-    command: "vscode.java.startDebugSession",
-  })
-  .then((res) => {
-    proxy.show(3, "Debug session running on port " + res.result);
-    writeFileSync("./port.txt", res.result.toString());
-  });
+const server = createServer(async (req, res) => {
+  if (req.method !== "POST") {
+    res.status = 405;
+    res.end("Method not allowed");
+    return;
+  }
+
+  const data = await text(req)
+    .then(safeJsonParse)
+    .catch(() => null);
+
+  if (!data) {
+    res.status = 400;
+    res.end("Bad Request");
+    return;
+  }
+
+  const result = await proxy.request(data.method, data.params);
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/json");
+  res.write(JSON.stringify(result));
+  res.end();
+}).listen(HTTP_PORT, () => {
+  const dir = dirname(PROXY_HTTP_PORT_FILE);
+
+  if (existsSync(dir)) {
+    for (const file of readdirSync(dir)) {
+      unlinkSync(join(dir, file));
+    }
+  }
+
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(PROXY_HTTP_PORT_FILE, server.address().port.toString());
+});
 
 export function createLspProxy({
   server: { stdin: serverStdin, stdout: serverStdout, stderr: serverStderr },
@@ -42,13 +82,11 @@ export function createLspProxy({
   const nextid = iterid();
 
   proxyStdin.pipe(lspMessageSeparator()).on("data", (data) => {
-    events.emit("client", parse(data.toString()), () =>
-      serverStdin.write(data),
-    );
+    events.emit("client", parse(data), () => serverStdin.write(data));
   });
 
   serverStdout.pipe(lspMessageSeparator()).on("data", (data) => {
-    const message = parse(data.toString());
+    const message = parse(data);
 
     const pending = queue.get(message?.id);
     if (pending) {
@@ -65,18 +103,12 @@ export function createLspProxy({
   return Object.assign(events, {
     /**
      *
-     * @param {1 | 2 | 3 | 4 | 5} type
-     * @param {string} message
+     * @param {string} method
+     * @param {any} params
      * @returns void
      */
-    show(type, message) {
-      proxyStdout.write(
-        stringify({
-          jsonrpc: "2.0",
-          method: "window/showMessage",
-          params: { type, message },
-        }),
-      );
+    notification(method, params) {
+      proxyStdout.write(stringify({ jsonrpc: "2.0", method, params }));
     },
 
     /**
@@ -85,22 +117,66 @@ export function createLspProxy({
      * @param {any} params
      * @returns Promise<any>
      */
-    send(method, params) {
-      return new Promise((resolve) => {
+    request(method, params) {
+      return new Promise((resolve, reject) => {
         const id = nextid();
         queue.set(id, resolve);
 
+        setTimeout(() => {
+          if (queue.has(id)) {
+            reject({
+              jsonrpc: "2.0",
+              id,
+              error: {
+                code: -32803,
+                message: "Request to language server timed out after 5000ms.",
+              },
+            });
+            this.cancel(id);
+          }
+        }, TIMEOUT);
+
         serverStdin.write(stringify({ jsonrpc: "2.0", id, method, params }));
       });
+    },
+
+    cancel(id) {
+      queue.delete(id);
+
+      serverStdin.write(
+        stringify({
+          jsonrpc: "2.0",
+          method: "$/cancelRequest",
+          params: { id },
+        }),
+      );
     },
   });
 }
 
 function iterid() {
   let acc = 1;
-  return () => "zed-java-proxy-" + acc++;
+  return () => PROXY_ID + "-" + acc++;
 }
 
+/**
+ * The base protocol consists of a header and a content part (comparable to HTTP).
+ * The header and content part are separated by a ‘\r\n’.
+ *
+ * The header part consists of header fields.
+ * Each header field is comprised of a name and a value,
+ * separated by ‘: ‘ (a colon and a space).
+ * The structure of header fields conforms to the HTTP semantic.
+ * Each header field is terminated by ‘\r\n’.
+ * Considering the last header field and the overall header
+ * itself are each terminated with ‘\r\n’,
+ * and that at least one header is mandatory,
+ * this means that two ‘\r\n’ sequences always immediately precede
+ * the content part of a message.
+ *
+ * @returns {Transform}
+ * @see [language-server-protocol](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart)
+ */
 function lspMessageSeparator() {
   let buffer = Buffer.alloc(0);
   let contentLength = null;
@@ -117,23 +193,6 @@ function lspMessageSeparator() {
           break;
         }
 
-        /**
-         * The base protocol consists of a header and a content part (comparable to HTTP).
-         * The header and content part are separated by a ‘\r\n’.
-         *
-         * The header part consists of header fields.
-         * Each header field is comprised of a name and a value,
-         * separated by ‘: ‘ (a colon and a space).
-         * The structure of header fields conforms to the HTTP semantic.
-         * Each header field is terminated by ‘\r\n’.
-         * Considering the last header field and the overall header
-         * itself are each terminated with ‘\r\n’,
-         * and that at least one header is mandatory,
-         * this means that two ‘\r\n’ sequences always immediately precede
-         * the content part of a message.
-         *
-         * @see {https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart}
-         */
         if (!headersLength) {
           const headersEnd = buffer.indexOf(CONTENT_SEPARATOR);
           const headers = Object.fromEntries(
@@ -146,7 +205,7 @@ function lspMessageSeparator() {
           );
 
           // A "Content-Length" header must always be present
-          contentLength = parseInt(headers[CONTENT_LENGTH.toLowerCase()], 10);
+          contentLength = parseInt(headers[LENGTH_HEADER.toLowerCase()], 10);
           headersLength = headersEnd + CONTENT_SEPARATOR.length;
         }
 
@@ -177,7 +236,7 @@ function lspMessageSeparator() {
 function stringify(content) {
   const json = JSON.stringify(content);
   return (
-    CONTENT_LENGTH +
+    LENGTH_HEADER +
     NAME_VALUE_SEPARATOR +
     json.length +
     CONTENT_SEPARATOR +
@@ -191,9 +250,18 @@ function stringify(content) {
  * @returns {any | null}
  */
 function parse(message) {
+  const content = message.slice(message.indexOf(CONTENT_SEPARATOR));
+  return safeJsonParse(content);
+}
+
+/**
+ *
+ * @param {string} json
+ * @returns {any | null}
+ */
+function safeJsonParse(json) {
   try {
-    const content = message.slice(message.indexOf(CONTENT_SEPARATOR));
-    return JSON.parse(content);
+    return JSON.parse(json);
   } catch (err) {
     return null;
   }
