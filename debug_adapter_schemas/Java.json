@@ -10,56 +10,39 @@
           "enum": ["launch"],
           "description": "The request type for the Java debug adapter, always \"launch\"."
         },
+        "projectName": {
+          "type": "string",
+          "description": "The fully qualified name of the project"
+        },
         "mainClass": {
           "type": "string",
-          "description": "The fully qualified name of the class containing the main method. If not specified, the debugger automatically resolves the possible main class from current project."
+          "description": "The fully qualified name of the class containing the main method. If not specified, the debugger automatically resolves the possible main class from the current project."
         },
         "args": {
           "type": "string",
           "description": "The command line arguments passed to the program."
         },
-        "sourcePaths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "The extra source directories of the program. The debugger looks for source code from project settings by default. This option allows the debugger to look for source code in extra directories."
+        "vmArgs": {
+          "type": "string",
+          "description": "The extra options and system properties for the JVM (e.g., -Xms<size> -Xmx<size> -D<name>=<value>). It accepts a string or an array of strings."
         },
-        "modulePaths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "The modulepaths for launching the JVM. If not specified, the debugger will automatically resolve from current project. If multiple values are specified, the debugger will merge them together."
+        "encoding": {
+          "type": "string",
+          "description": "The file.encoding setting for the JVM. Possible values can be found in the Supported Encodings documentation."
         },
         "classPaths": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "The classpaths for launching the JVM. If not specified, the debugger will automatically resolve from current project. If multiple values are specified, the debugger will merge them together."
+          "description": "The classpaths for launching the JVM. If not specified, the debugger will automatically resolve them from the current project. If multiple values are specified, the debugger will merge them together. Available values for special handling include: '$Auto' - Automatically resolve the classpaths of the current project. '$Runtime' - The classpaths within the 'runtime' scope of the current project. '$Test' - The classpaths within the 'test' scope of the current project."
         },
-        "encoding": {
-          "type": "string",
-          "description": "The file.encoding setting for the JVM. Possible values can be found in https://docs.oracle.com/javase/8/docs/technotes/guides/intl/encoding.doc.html."
-        },
-        "vmArgs": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          ],
-          "description": "The extra options and system properties for the JVM (e.g. -Xms<size> -Xmx<size> -D<name>=<value>), it accepts a string or an array of string."
-        },
-        "projectName": {
-          "type": "string",
-          "description": "The preferred project in which the debugger searches for classes. It is required when the workspace has multiple java projects, otherwise the expression evaluation and conditional breakpoint may not work."
+        "modulePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The modulepaths for launching the JVM. If not specified, the debugger will automatically resolve them from the current project. If multiple values are specified, the debugger will merge them together."
         },
         "cwd": {
           "type": "string",
@@ -72,72 +55,34 @@
             "type": "string"
           }
         },
-        "envFile": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          ],
-          "description": "Absolute path to a file containing environment variable definitions. Multiple files can be specified by providing an array of absolute paths."
-        },
         "stopOnEntry": {
           "type": "boolean",
           "description": "Automatically pause the program after launching."
         },
+        "noDebug": {
+          "type": "boolean",
+          "description": "If set to 'true', disables debugging. The program will be launched without attaching the debugger. Useful for launching a program without debugging, for instance for profiling."
+        },
         "console": {
           "type": "string",
           "enum": ["internalConsole", "integratedTerminal", "externalTerminal"],
-          "description": "The specified console to launch the program. If not specified, use the console specified by the java.debug.settings.console user setting."
+          "description": "The specified console to launch the program. If not specified, use the console specified by the 'java.debug.settings.console' user setting."
         },
         "shortenCommandLine": {
           "type": "string",
           "enum": ["none", "jarmanifest", "argfile", "auto"],
           "description": "Provides multiple approaches to shorten the command line when it exceeds the maximum command line string limitation allowed by the OS."
         },
-        "stepFilters": {
-          "type": "object",
-          "description": "Skip specified classes or methods when stepping.",
-          "properties": {
-            "classNameFilters": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "[Deprecated - replaced by 'skipClasses'] Skip the specified classes when stepping. Class names should be fully qualified. Wildcard is supported."
-            },
-            "skipClasses": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Skip the specified classes when stepping."
-            },
-            "skipSynthetics": {
-              "type": "boolean",
-              "description": "Skip synthetic methods when stepping."
-            },
-            "skipStaticInitializers": {
-              "type": "boolean",
-              "description": "Skip static initializer methods when stepping."
-            },
-            "skipConstructors": {
-              "type": "boolean",
-              "description": "Skip constructor methods when stepping."
-            }
-          }
+        "launcherScript": {
+          "type": "string",
+          "description": "The path to an external launcher script to use instead of the debugger's built-in launcher. This is an advanced option for customizing how the JVM is launched."
         },
         "javaExec": {
           "type": "string",
-          "description": "The path to java executable to use. By default, the project JDK's java executable is used."
+          "description": "The path to the Java executable to use. By default, the project JDK's Java executable is used."
         }
       },
-      "required": ["request", "mainClass"]
+      "required": ["request"]
     },
     {
       "title": "Attach",
@@ -149,62 +94,19 @@
         },
         "hostName": {
           "type": "string",
-          "description": "The host name or IP address of remote debuggee."
+          "description": "The host name or IP address of the remote debuggee."
         },
         "port": {
           "type": "integer",
-          "description": "The debug port of remote debuggee."
+          "description": "The debug port of the remote debuggee."
         },
         "processId": {
           "type": "string",
-          "description": "Use process picker to select a process to attach, or Process ID as integer."
+          "description": "Use a process picker to select a process to attach, or provide a Process ID as an integer. Use '${command:PickJavaProcess}' to prompt the user to select a Java process."
         },
         "timeout": {
           "type": "integer",
           "description": "Timeout value before reconnecting, in milliseconds (default to 30000ms)."
-        },
-        "sourcePaths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "The extra source directories of the program. The debugger looks for source code from project settings by default. This option allows the debugger to look for source code in extra directories."
-        },
-        "projectName": {
-          "type": "string",
-          "description": "The preferred project in which the debugger searches for classes. It is required when the workspace has multiple java projects, otherwise the expression evaluation and conditional breakpoint may not work."
-        },
-        "stepFilters": {
-          "type": "object",
-          "description": "Skip specified classes or methods when stepping.",
-          "properties": {
-            "classNameFilters": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "[Deprecated - replaced by 'skipClasses'] Skip the specified classes when stepping. Class names should be fully qualified. Wildcard is supported."
-            },
-            "skipClasses": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Skip the specified classes when stepping."
-            },
-            "skipSynthetics": {
-              "type": "boolean",
-              "description": "Skip synthetic methods when stepping."
-            },
-            "skipStaticInitializers": {
-              "type": "boolean",
-              "description": "Skip static initializer methods when stepping."
-            },
-            "skipConstructors": {
-              "type": "boolean",
-              "description": "Skip constructor methods when stepping."
-            }
-          }
         }
       },
       "required": ["request"],

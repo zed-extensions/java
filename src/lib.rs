@@ -2,22 +2,22 @@ mod debugger;
 mod lsp;
 use std::{
     collections::BTreeSet,
-    env::{self, current_dir},
-    fs::{self, create_dir, read_dir},
-    net::Ipv4Addr,
+    env::current_dir,
+    fs::{self, create_dir},
     path::{Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
 
 use zed_extension_api::{
     self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition,
     DownloadedFileType, Extension, LanguageServerId, LanguageServerInstallationStatus, Os,
-    StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest, TcpArguments, Worktree,
+    StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest, Worktree,
     current_platform, download_file,
     http_client::{HttpMethod, HttpRequest, fetch},
     lsp::{Completion, CompletionKind},
     make_file_executable, register_extension,
-    serde_json::{self, Map, Value, json},
+    serde_json::{self, Value, json},
     set_language_server_installation_status,
     settings::LspSettings,
 };
@@ -31,15 +31,39 @@ const PATH_TO_STR_ERROR: &str = "failed to convert path to string";
 struct Java {
     cached_binary_path: Option<PathBuf>,
     cached_lombok_path: Option<PathBuf>,
-    debugger: Debugger,
+    integrations: Option<(Arc<LspClient>, Debugger)>,
 }
 
 impl Java {
+    #[allow(dead_code)]
+    fn lsp(&mut self) -> zed::Result<&Arc<LspClient>> {
+        self.integrations
+            .as_ref()
+            .ok_or("Lsp client is not initialized yet".to_owned())
+            .map(|v| &v.0)
+    }
+
+    fn debugger(&mut self) -> zed::Result<&mut Debugger> {
+        self.integrations
+            .as_mut()
+            .ok_or("Lsp client is not initialized yet".to_owned())
+            .map(|v| &mut v.1)
+    }
+
     fn language_server_binary_path(
         &mut self,
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
+        // Initialize lsp client and debugger
+
+        if self.integrations.is_none() {
+            let lsp = Arc::new(LspClient::new(worktree.root_path()));
+            let debugger = Debugger::new(lsp.clone());
+
+            self.integrations = Some((lsp, debugger));
+        }
+
         // Use cached path if exists
 
         if let Some(path) = &self.cached_binary_path {
@@ -293,7 +317,7 @@ impl Extension for Java {
         Self {
             cached_binary_path: None,
             cached_lombok_path: None,
-            debugger: Debugger::new(),
+            integrations: None,
         }
     }
 
@@ -321,9 +345,11 @@ impl Extension for Java {
                     Value::from_str(config.config.as_str())
                         .map_err(|e| format!("Invalid JSON configuration: {e}"))?,
                 )?,
-                configuration: config.config,
+                configuration: self.debugger()?.inject_config(worktree, config.config)?,
             },
-            connection: Some(self.debugger.start_session(worktree)?),
+            connection: Some(zed::resolve_tcp_template(
+                self.debugger()?.start_session()?,
+            )?),
         })
     }
 
@@ -350,6 +376,31 @@ impl Extension for Java {
         }
     }
 
+    fn dap_config_to_scenario(
+        &mut self,
+        config: zed::DebugConfig,
+    ) -> zed::Result<zed::DebugScenario, String> {
+        return match config.request {
+            zed::DebugRequest::Attach(attach) => {
+                return Ok(zed::DebugScenario {
+                    adapter: config.adapter,
+                    build: None,
+                    tcp_connection: Some(self.debugger()?.start_session()?),
+                    label: "Attach to Java process".to_string(),
+                    config: json!({
+                        "request": "attach",
+                        "processId": attach.process_id,
+                        "stopOnEntry": config.stop_on_entry
+                    })
+                    .to_string(),
+                });
+            }
+            zed::DebugRequest::Launch(_launch) => {
+                Err("Java DAP doesn't support launching".to_string())
+            }
+        };
+    }
+
     fn language_server_command(
         &mut self,
         language_server_id: &LanguageServerId,
@@ -364,9 +415,6 @@ impl Extension for Java {
                 .map_err(|err| err.to_string())?
                 .to_path_buf();
         }
-
-        // download debugger if not exists
-        self.debugger.get_or_download(language_server_id)?;
 
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;
@@ -420,6 +468,9 @@ impl Extension for Java {
             args.push(format!("--jvm-arg=-javaagent:{canonical_lombok_jar_path}"));
         }
 
+        // download debugger if not exists
+        self.debugger()?.get_or_download(language_server_id)?;
+
         Ok(zed::Command {
             command: zed::node_binary_path()?,
             args,
@@ -435,7 +486,11 @@ impl Extension for Java {
         let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
             .map(|lsp_settings| lsp_settings.initialization_options)?;
 
-        Ok(Some(self.debugger.inject_plugin_into_options(options)?))
+        if self.integrations.is_some() {
+            return Ok(Some(self.debugger()?.inject_plugin_into_options(options)?));
+        }
+
+        return Ok(options);
     }
 
     fn language_server_workspace_configuration(

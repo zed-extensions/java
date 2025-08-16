@@ -1,8 +1,10 @@
-use std::{env::current_dir, fs, net::Ipv4Addr, path::PathBuf};
+use std::{collections::HashMap, env::current_dir, fs, path::PathBuf, sync::Arc};
 
+use serde::{Deserialize, Serialize};
+use serde_json::Map;
 use zed_extension_api::{
     self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Os,
-    TcpArguments, Worktree, current_platform, download_file,
+    TcpArgumentsTemplate, Worktree, current_platform, download_file,
     http_client::{HttpMethod, HttpRequest, fetch},
     serde_json::{self, Value, json},
     set_language_server_installation_status,
@@ -10,16 +12,64 @@ use zed_extension_api::{
 
 use crate::lsp::LspClient;
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct JavaDebugLaunchConfig {
+    request: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    project_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    main_class: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    args: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vm_args: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    encoding: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    class_paths: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    module_paths: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cwd: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    env: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop_on_entry: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    no_debug: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    console: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shorten_command_line: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    launcher_script: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    java_exec: Option<String>,
+}
+
+const TEST_SCOPE: &str = "$Test";
+const AUTO_SCOPE: &str = "$Auto";
+const RUNTIME_SCOPE: &str = "$Runtime";
+
+const SCOPES: [&str; 3] = [TEST_SCOPE, AUTO_SCOPE, RUNTIME_SCOPE];
+
+const PATH_TO_STR_ERROR: &str = "Failed to convert path to string";
+
 const MAVEN_SEARCH_URL: &str =
     "https://search.maven.org/solrsearch/select?q=a:com.microsoft.java.debug.plugin";
 
 pub struct Debugger {
-    path: Option<PathBuf>,
+    lsp: Arc<LspClient>,
+    plugin_path: Option<PathBuf>,
 }
 
 impl Debugger {
-    pub fn new() -> Debugger {
-        Debugger { path: None }
+    pub fn new(lsp: Arc<LspClient>) -> Debugger {
+        Debugger {
+            plugin_path: None,
+            lsp,
+        }
     }
 
     pub fn get_or_download(
@@ -28,7 +78,7 @@ impl Debugger {
     ) -> zed::Result<PathBuf> {
         let prefix = "debugger";
 
-        if let Some(path) = &self.path {
+        if let Some(path) = &self.plugin_path {
             if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
                 return Ok(path.clone());
             }
@@ -77,7 +127,7 @@ impl Debugger {
                 }
 
                 let jar_path = PathBuf::from(prefix).join(file.file_name());
-                self.path = Some(jar_path.clone());
+                self.plugin_path = Some(jar_path.clone());
 
                 return Ok(jar_path);
             }
@@ -118,36 +168,130 @@ impl Debugger {
 
             download_file(
                 url.as_str(),
-                jar_path
-                    .to_str()
-                    .ok_or("Failed to convert path to string")?,
+                jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
                 DownloadedFileType::Uncompressed,
             )
             .map_err(|err| format!("Failed to download {url} {err}"))?;
         }
 
-        self.path = Some(jar_path.clone());
+        self.plugin_path = Some(jar_path.clone());
         Ok(jar_path)
     }
 
-    pub fn start_session(&self, worktree: &Worktree) -> zed::Result<TcpArguments> {
-        let port = LspClient::request(
-            worktree,
+    pub fn start_session(&self) -> zed::Result<TcpArgumentsTemplate> {
+        let port = self.lsp.request::<u16>(
             "workspace/executeCommand",
-            json!({
-                "command": "vscode.java.startDebugSession"
-            }),
-        )?
-        .get("result")
-        .map(|v| v.as_u64())
-        .flatten()
-        .ok_or("Failed to read lsp proxy debug response")?;
+            json!({ "command": "vscode.java.startDebugSession" }),
+        )?;
 
-        Ok(TcpArguments {
-            host: Ipv4Addr::LOCALHOST.to_bits(),
-            port: port as u16,
-            timeout: Some(60_000),
+        Ok(TcpArgumentsTemplate {
+            host: None,
+            port: Some(port),
+            timeout: None,
         })
+    }
+
+    pub fn inject_config(&self, worktree: &Worktree, config_string: String) -> zed::Result<String> {
+        let config: Value = serde_json::from_str(&config_string)
+            .map_err(|err| format!("Failed to parse debug config {err}"))?;
+
+        if config
+            .get("request")
+            .map(Value::as_str)
+            .flatten()
+            .is_some_and(|req| req != "launch")
+        {
+            return Ok(config_string);
+        }
+
+        let mut config = serde_json::from_value::<JavaDebugLaunchConfig>(config)
+            .map_err(|err| format!("Failed to parse java debug config {err}"))?;
+
+        let workspace_folder = worktree.root_path();
+
+        let (main_class, project_name) = {
+            let arguments = [config.main_class.clone(), config.project_name.clone()]
+                .iter()
+                .flatten()
+                .cloned()
+                .collect::<Vec<String>>();
+
+            let entries = self
+                .lsp
+                .resolve_main_class(arguments)?
+                .into_iter()
+                .filter(|entry| {
+                    config
+                        .main_class
+                        .as_ref()
+                        .map(|class| &entry.main_class == class)
+                        .unwrap_or(true)
+                })
+                .filter(|entry| {
+                    config
+                        .project_name
+                        .as_ref()
+                        .map(|class| &entry.project_name == class)
+                        .unwrap_or(true)
+                })
+                .collect::<Vec<_>>();
+
+            if entries.len() > 1 {
+                return Err("Project have multiple entry points, you must explicitly specify \"mainClass\" or \"projectName\"".to_owned());
+            }
+
+            match entries.get(0) {
+                None => (config.main_class, config.project_name),
+                Some(entry) => (
+                    Some(entry.main_class.to_owned()),
+                    Some(entry.project_name.to_owned()),
+                ),
+            }
+        };
+
+        let mut classpaths = config.class_paths.unwrap_or(vec![AUTO_SCOPE.to_string()]);
+
+        if classpaths
+            .iter()
+            .any(|class| SCOPES.contains(&class.as_str()))
+        {
+            // https://github.com/microsoft/vscode-java-debug/blob/main/src/configurationProvider.ts#L518
+            let scope = {
+                if classpaths.iter().any(|class| class == TEST_SCOPE) {
+                    Some("test".to_string())
+                } else if classpaths.iter().any(|class| class == AUTO_SCOPE) {
+                    None
+                } else if classpaths.iter().any(|class| class == RUNTIME_SCOPE) {
+                    Some("runtime".to_string())
+                } else {
+                    None
+                }
+            };
+
+            let arguments = vec![main_class.clone(), project_name.clone(), scope.clone()];
+
+            let result = self.lsp.resolve_class_path(arguments)?;
+
+            for resolved in result {
+                classpaths.extend(resolved);
+            }
+        }
+
+        classpaths.retain(|class| !SCOPES.contains(&class.as_str()));
+        classpaths.dedup();
+
+        config.class_paths = Some(classpaths);
+
+        config.main_class = main_class;
+        config.project_name = project_name;
+
+        config.cwd = config.cwd.or(Some(workspace_folder.to_string()));
+
+        let config = serde_json::to_string(&config)
+            .map_err(|err| format!("Failed to stringify debug config {err}"))?
+            .replace("${workspaceFolder}", &workspace_folder);
+
+        Ok(config)
     }
 
     pub fn inject_plugin_into_options(
@@ -166,7 +310,11 @@ impl Debugger {
 
         let canonical_path = Value::String(
             current_dir
-                .join(self.path.as_ref().ok_or("Debugger is not loaded yet")?)
+                .join(
+                    self.plugin_path
+                        .as_ref()
+                        .ok_or("Debugger is not loaded yet")?,
+                )
                 .to_string_lossy()
                 .to_string(),
         );
@@ -180,7 +328,6 @@ impl Debugger {
             Some(options) => {
                 let mut options = options.clone();
 
-                // ensure bundles field exists
                 let mut bundles = options
                     .get_mut("bundles")
                     .unwrap_or(&mut Value::Array(vec![]))
