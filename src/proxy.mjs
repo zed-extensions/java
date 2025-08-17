@@ -61,15 +61,7 @@ const server = createServer(async (req, res) => {
   res.write(JSON.stringify(result));
   res.end();
 }).listen(HTTP_PORT, () => {
-  const dir = dirname(PROXY_HTTP_PORT_FILE);
-
-  if (existsSync(dir)) {
-    for (const file of readdirSync(dir)) {
-      unlinkSync(join(dir, file));
-    }
-  }
-
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dirname(PROXY_HTTP_PORT_FILE), { recursive: true });
   writeFileSync(PROXY_HTTP_PORT_FILE, server.address().port.toString());
 });
 

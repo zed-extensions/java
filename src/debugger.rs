@@ -1,7 +1,6 @@
-use std::{collections::HashMap, env::current_dir, fs, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, env::current_dir, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
 use zed_extension_api::{
     self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Os,
     TcpArgumentsTemplate, Worktree, current_platform, download_file,
@@ -10,7 +9,7 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::lsp::LspClient;
+use crate::lsp::LspWrapper;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -60,12 +59,12 @@ const MAVEN_SEARCH_URL: &str =
     "https://search.maven.org/solrsearch/select?q=a:com.microsoft.java.debug.plugin";
 
 pub struct Debugger {
-    lsp: Arc<LspClient>,
+    lsp: LspWrapper,
     plugin_path: Option<PathBuf>,
 }
 
 impl Debugger {
-    pub fn new(lsp: Arc<LspClient>) -> Debugger {
+    pub fn new(lsp: LspWrapper) -> Debugger {
         Debugger {
             plugin_path: None,
             lsp,
@@ -179,7 +178,7 @@ impl Debugger {
     }
 
     pub fn start_session(&self) -> zed::Result<TcpArgumentsTemplate> {
-        let port = self.lsp.request::<u16>(
+        let port = self.lsp.get()?.request::<u16>(
             "workspace/executeCommand",
             json!({ "command": "vscode.java.startDebugSession" }),
         )?;
@@ -218,6 +217,7 @@ impl Debugger {
 
             let entries = self
                 .lsp
+                .get()?
                 .resolve_main_class(arguments)?
                 .into_iter()
                 .filter(|entry| {
@@ -270,7 +270,7 @@ impl Debugger {
 
             let arguments = vec![main_class.clone(), project_name.clone(), scope.clone()];
 
-            let result = self.lsp.resolve_class_path(arguments)?;
+            let result = self.lsp.get()?.resolve_class_path(arguments)?;
 
             for resolved in result {
                 classpaths.extend(resolved);

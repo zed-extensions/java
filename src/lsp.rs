@@ -1,6 +1,7 @@
 use std::{
     fs::{self},
     path::Path,
+    sync::{Arc, RwLock},
 };
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -23,11 +24,33 @@ pub struct LspClient {
     workspace: String,
 }
 
-impl LspClient {
-    pub fn new(workspace: String) -> LspClient {
-        LspClient { workspace }
+#[derive(Clone)]
+pub struct LspWrapper(Arc<RwLock<LspClient>>);
+
+impl LspWrapper {
+    pub fn new(workspace: String) -> Self {
+        LspWrapper(Arc::new(RwLock::new(LspClient { workspace })))
     }
 
+    pub fn get(&self) -> zed::Result<std::sync::RwLockReadGuard<'_, LspClient>> {
+        self.0
+            .read()
+            .map_err(|err| format!("LspClient RwLock poisoned during read {err}"))
+    }
+
+    pub fn switch_workspace(&self, workspace: String) -> zed::Result<()> {
+        let mut lock = self
+            .0
+            .write()
+            .map_err(|err| format!("LspClient RwLock poisoned during read {err}"))?;
+
+        lock.workspace = workspace;
+
+        Ok(())
+    }
+}
+
+impl LspClient {
     pub fn resolve_class_path(&self, args: Vec<Option<String>>) -> zed::Result<Vec<Vec<String>>> {
         self.request::<Vec<Vec<String>>>(
             "workspace/executeCommand",
