@@ -77,10 +77,10 @@ impl Debugger {
     ) -> zed::Result<PathBuf> {
         let prefix = "debugger";
 
-        if let Some(path) = &self.plugin_path {
-            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
-                return Ok(path.clone());
-            }
+        if let Some(path) = &self.plugin_path
+            && fs::metadata(path).is_ok_and(|stat| stat.is_file())
+        {
+            return Ok(path.clone());
         }
 
         set_language_server_installation_status(
@@ -106,10 +106,9 @@ impl Debugger {
                 return Err(err.to_owned());
             }
 
-            let exists = fs::read_dir(&prefix)
+            let exists = fs::read_dir(prefix)
                 .ok()
-                .map(|dir| dir.last().map(|v| v.ok()))
-                .flatten()
+                .and_then(|dir| dir.last().map(|v| v.ok()))
                 .flatten();
 
             if let Some(file) = exists {
@@ -137,14 +136,12 @@ impl Debugger {
 
         let latest_version = maven_response_body
             .pointer("/response/docs/0/latestVersion")
-            .map(|v| v.as_str())
-            .flatten()
+            .and_then(|v| v.as_str())
             .ok_or("Malformed maven response")?;
 
         let artifact = maven_response_body
             .pointer("/response/docs/0/a")
-            .map(|v| v.as_str())
-            .flatten()
+            .and_then(|v| v.as_str())
             .ok_or("Malformed maven response")?;
 
         let jar_name = format!("{artifact}-{latest_version}.jar");
@@ -196,8 +193,7 @@ impl Debugger {
 
         if config
             .get("request")
-            .map(Value::as_str)
-            .flatten()
+            .and_then(Value::as_str)
             .is_some_and(|req| req != "launch")
         {
             return Ok(config_string);
@@ -240,7 +236,7 @@ impl Debugger {
                 return Err("Project have multiple entry points, you must explicitly specify \"mainClass\" or \"projectName\"".to_owned());
             }
 
-            match entries.get(0) {
+            match entries.first() {
                 None => (config.main_class, config.project_name),
                 Some(entry) => (
                     Some(entry.main_class.to_owned()),
@@ -320,11 +316,9 @@ impl Debugger {
         );
 
         match initialization_options {
-            None => {
-                return Ok(json!({
-                    "bundles": [canonical_path]
-                }));
-            }
+            None => Ok(json!({
+                "bundles": [canonical_path]
+            })),
             Some(options) => {
                 let mut options = options.clone();
 
@@ -343,7 +337,7 @@ impl Debugger {
 
                 options["bundles"] = bundles;
 
-                return Ok(options);
+                Ok(options)
             }
         }
     }

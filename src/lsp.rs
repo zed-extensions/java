@@ -108,9 +108,9 @@ impl LspClient {
             .map_err(|e| format!("Failed to parse response from lsp proxy {e}"))?;
 
         match data {
-            LspResponse::Sucess { result } => return Ok(result),
+            LspResponse::Success { result } => Ok(result),
             LspResponse::Error { error } => {
-                return Err(format!("{} {} {}", error.code, error.message, error.data));
+                Err(format!("{} {} {}", error.code, error.message, error.data))
             }
         }
     }
@@ -126,7 +126,7 @@ fn string_to_hex(s: &str) -> String {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum LspResponse<T> {
-    Sucess { result: T },
+    Success { result: T },
     Error { error: LspError },
 }
 

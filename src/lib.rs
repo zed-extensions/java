@@ -65,10 +65,10 @@ impl Java {
 
         // Use cached path if exists
 
-        if let Some(path) = &self.cached_binary_path {
-            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
-                return Ok(path.clone());
-            }
+        if let Some(path) = &self.cached_binary_path
+            && fs::metadata(path).is_ok_and(|stat| stat.is_file())
+        {
+            return Ok(path.clone());
         }
 
         // Use $PATH if binary is in it
@@ -198,10 +198,10 @@ impl Java {
                     for entry in entries {
                         match entry {
                             Ok(entry) => {
-                                if entry.file_name().to_str() != Some(build_directory) {
-                                    if let Err(err) = fs::remove_dir_all(entry.path()) {
-                                        println!("failed to remove directory entry: {err}");
-                                    }
+                                if entry.file_name().to_str() != Some(build_directory)
+                                    && let Err(err) = fs::remove_dir_all(entry.path())
+                                {
+                                    println!("failed to remove directory entry: {err}");
                                 }
                             }
                             Err(err) => println!("failed to load directory entry: {err}"),
@@ -222,10 +222,10 @@ impl Java {
     fn lombok_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<PathBuf> {
         // Use cached path if exists
 
-        if let Some(path) = &self.cached_lombok_path {
-            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
-                return Ok(path.clone());
-            }
+        if let Some(path) = &self.cached_lombok_path
+            && fs::metadata(path).is_ok_and(|stat| stat.is_file())
+        {
+            return Ok(path.clone());
         }
 
         // Check for latest version
@@ -286,10 +286,10 @@ impl Java {
                     for entry in entries {
                         match entry {
                             Ok(entry) => {
-                                if entry.file_name().to_str() != Some(&jar_name) {
-                                    if let Err(err) = fs::remove_dir_all(entry.path()) {
-                                        println!("failed to remove directory entry: {err}");
-                                    }
+                                if entry.file_name().to_str() != Some(&jar_name)
+                                    && let Err(err) = fs::remove_dir_all(entry.path())
+                                {
+                                    println!("failed to remove directory entry: {err}");
                                 }
                             }
                             Err(err) => println!("failed to load directory entry: {err}"),
@@ -383,7 +383,7 @@ impl Extension for Java {
         &mut self,
         config: zed::DebugConfig,
     ) -> zed::Result<zed::DebugScenario, String> {
-        return match config.request {
+        match config.request {
             zed::DebugRequest::Attach(attach) => {
                 let debug_config = if let Some(process_id) = attach.process_id {
                     json!({
@@ -399,19 +399,19 @@ impl Extension for Java {
                     })
                 };
 
-                return Ok(zed::DebugScenario {
+                Ok(zed::DebugScenario {
                     adapter: config.adapter,
                     build: None,
                     tcp_connection: Some(self.debugger()?.start_session()?),
                     label: "Attach to Java process".to_string(),
                     config: debug_config.to_string(),
-                });
+                })
             }
 
             zed::DebugRequest::Launch(_launch) => {
                 Err("Java Extension doesn't support launching".to_string())
             }
-        };
+        }
     }
 
     fn language_server_command(
@@ -447,19 +447,16 @@ impl Extension for Java {
             env.push(("JAVA_HOME".to_string(), java_home));
         }
 
-        let mut args = Vec::new();
-
-        args.push("-e".to_string());
-        args.push(PROXY_FILE.to_string());
-        args.push(current_dir.to_str().ok_or(PATH_TO_STR_ERROR)?.to_string());
-
-        args.push(
+        let mut args = vec![
+            "-e".to_string(),
+            PROXY_FILE.to_string(),
+            current_dir.to_str().ok_or(PATH_TO_STR_ERROR)?.to_string(),
             current_dir
                 .join(self.language_server_binary_path(language_server_id, worktree)?)
                 .to_str()
                 .ok_or(PATH_TO_STR_ERROR)?
                 .to_string(),
-        );
+        ];
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_enabled = configuration
@@ -508,7 +505,7 @@ impl Extension for Java {
             return Ok(Some(self.debugger()?.inject_plugin_into_options(options)?));
         }
 
-        return Ok(options);
+        Ok(options)
     }
 
     fn language_server_workspace_configuration(
