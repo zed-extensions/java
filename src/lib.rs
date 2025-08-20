@@ -448,6 +448,7 @@ impl Extension for Java {
         }
 
         let mut args = vec![
+            "--input-type=module".to_string(),
             "-e".to_string(),
             PROXY_FILE.to_string(),
             current_dir.to_str().ok_or(PATH_TO_STR_ERROR)?.to_string(),
