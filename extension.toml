@@ -21,3 +21,5 @@ commit = "579b62f5ad8d96c2bb331f07d1408c92767531d9"
 [language_servers.jdtls]
 name = "Eclipse JDT Language Server"
 language = "Java"
+
+[debug_adapters.Java]

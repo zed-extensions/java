@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "oneOf": [
+    {
+      "title": "Launch",
+      "properties": {
+        "request": {
+          "type": "string",
+          "enum": ["launch"],
+          "description": "The request type for the Java debug adapter, always \"launch\"."
+        },
+        "projectName": {
+          "type": "string",
+          "description": "The fully qualified name of the project"
+        },
+        "mainClass": {
+          "type": "string",
+          "description": "The fully qualified name of the class containing the main method. If not specified, the debugger automatically resolves the possible main class from the current project."
+        },
+        "args": {
+          "type": "string",
+          "description": "The command line arguments passed to the program."
+        },
+        "vmArgs": {
+          "type": "string",
+          "description": "The extra options and system properties for the JVM (e.g., -Xms<size> -Xmx<size> -D<name>=<value>)."
+        },
+        "encoding": {
+          "type": "string",
+          "description": "The file.encoding setting for the JVM. Possible values can be found in the Supported Encodings documentation."
+        },
+        "classPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The classpaths for launching the JVM. If not specified, the debugger will automatically resolve them from the current project. If multiple values are specified, the debugger will merge them together. Available values for special handling include: '$Auto' - Automatically resolve the classpaths of the current project. '$Runtime' - The classpaths within the 'runtime' scope of the current project. '$Test' - The classpaths within the 'test' scope of the current project."
+        },
+        "modulePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The modulepaths for launching the JVM. If not specified, the debugger will automatically resolve them from the current project."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "The working directory of the program. Defaults to '${workspaceFolder}'."
+        },
+        "env": {
+          "type": "object",
+          "description": "The extra environment variables for the program.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "stopOnEntry": {
+          "type": "boolean",
+          "description": "Automatically pause the program after launching."
+        },
+        "noDebug": {
+          "type": "boolean",
+          "description": "If set to 'true', disables debugging. The program will be launched without attaching the debugger. Useful for launching a program without debugging, for instance for profiling."
+        },
+        "console": {
+          "type": "string",
+          "enum": ["internalConsole", "integratedTerminal", "externalTerminal"],
+          "description": "The specified console to launch the program."
+        },
+        "shortenCommandLine": {
+          "type": "string",
+          "enum": ["none", "jarmanifest", "argfile"],
+          "description": "Provides multiple approaches to shorten the command line when it exceeds the maximum command line string limitation allowed by the OS."
+        },
+        "launcherScript": {
+          "type": "string",
+          "description": "The path to an external launcher script to use instead of the debugger's built-in launcher. This is an advanced option for customizing how the JVM is launched."
+        },
+        "javaExec": {
+          "type": "string",
+          "description": "The path to the Java executable to use. By default, the project JDK's Java executable is used."
+        }
+      },
+      "required": ["request"]
+    },
+    {
+      "title": "Attach",
+      "properties": {
+        "request": {
+          "type": "string",
+          "enum": ["attach"],
+          "description": "The request type for the Java debug adapter, always \"attach\"."
+        },
+        "hostName": {
+          "type": "string",
+          "description": "The host name or IP address of the remote debuggee."
+        },
+        "port": {
+          "type": "integer",
+          "description": "The debug port of the remote debuggee."
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Timeout value before reconnecting, in milliseconds (default to 30000ms)."
+        },
+        "projectName": {
+          "type": "string",
+          "description": "The fully qualified name of the project"
+        },
+        "sourcePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The source paths for the debugger. If not specified, the debugger will automatically resolve the source paths from the current project."
+        },
+        "stepFilters": {
+          "type": "object",
+          "properties": {
+            "allowClasses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Restricts the events generated by the request to those whose location is in a class whose name matches this restricted regular expression. Regular expressions are limited to exact matches and patterns that begin with '*' or end with '*'; for example, \"*.Foo\" or \"java.*\"."
+            },
+            "skipClasses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Restricts the events generated by the request to those whose location is in a class whose name does not match this restricted regular expression, e.g. \"java.*\" or \"*.Foo\"."
+            },
+            "skipSynthetics": {
+              "type": "boolean",
+              "description": "If true, skips synthetic methods."
+            },
+            "skipStaticInitializers": {
+              "type": "boolean",
+              "description": "If true, skips static initializers."
+            },
+            "skipConstructors": {
+              "type": "boolean",
+              "description": "If true, skips constructors."
+            }
+          }
+        }
+      },
+      "required": ["request", "hostName", "port"]
+    }
+  ]
+}

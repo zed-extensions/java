@@ -1,40 +1,74 @@
+mod debugger;
+mod lsp;
 use std::{
     collections::BTreeSet,
     env::current_dir,
     fs::{self, create_dir},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use zed_extension_api::{
-    self as zed, CodeLabel, CodeLabelSpan, DownloadedFileType, Extension, LanguageServerId,
-    LanguageServerInstallationStatus, Os, Worktree, current_platform, download_file,
+    self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition,
+    DownloadedFileType, Extension, LanguageServerId, LanguageServerInstallationStatus, Os,
+    StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest, Worktree,
+    current_platform, download_file,
     http_client::{HttpMethod, HttpRequest, fetch},
     lsp::{Completion, CompletionKind},
     make_file_executable, register_extension,
-    serde_json::{self, Value},
+    serde_json::{self, Value, json},
     set_language_server_installation_status,
     settings::LspSettings,
 };
 
+use crate::{debugger::Debugger, lsp::LspWrapper};
+
+const PROXY_FILE: &str = include_str!("proxy.mjs");
+const DEBUG_ADAPTER_NAME: &str = "Java";
 const PATH_TO_STR_ERROR: &str = "failed to convert path to string";
 
 struct Java {
     cached_binary_path: Option<PathBuf>,
     cached_lombok_path: Option<PathBuf>,
+    integrations: Option<(LspWrapper, Debugger)>,
 }
 
 impl Java {
+    #[allow(dead_code)]
+    fn lsp(&mut self) -> zed::Result<&LspWrapper> {
+        self.integrations
+            .as_ref()
+            .ok_or("Lsp client is not initialized yet".to_owned())
+            .map(|v| &v.0)
+    }
+
+    fn debugger(&mut self) -> zed::Result<&mut Debugger> {
+        self.integrations
+            .as_mut()
+            .ok_or("Lsp client is not initialized yet".to_owned())
+            .map(|v| &mut v.1)
+    }
+
     fn language_server_binary_path(
         &mut self,
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
+        // Initialize lsp client and debugger
+
+        if self.integrations.is_none() {
+            let lsp = LspWrapper::new(worktree.root_path());
+            let debugger = Debugger::new(lsp.clone());
+
+            self.integrations = Some((lsp, debugger));
+        }
+
         // Use cached path if exists
 
-        if let Some(path) = &self.cached_binary_path {
-            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
-                return Ok(path.clone());
-            }
+        if let Some(path) = &self.cached_binary_path
+            && fs::metadata(path).is_ok_and(|stat| stat.is_file())
+        {
+            return Ok(path.clone());
         }
 
         // Use $PATH if binary is in it
@@ -164,10 +198,10 @@ impl Java {
                     for entry in entries {
                         match entry {
                             Ok(entry) => {
-                                if entry.file_name().to_str() != Some(build_directory) {
-                                    if let Err(err) = fs::remove_dir_all(entry.path()) {
-                                        println!("failed to remove directory entry: {err}");
-                                    }
+                                if entry.file_name().to_str() != Some(build_directory)
+                                    && let Err(err) = fs::remove_dir_all(entry.path())
+                                {
+                                    println!("failed to remove directory entry: {err}");
                                 }
                             }
                             Err(err) => println!("failed to load directory entry: {err}"),
@@ -188,10 +222,10 @@ impl Java {
     fn lombok_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<PathBuf> {
         // Use cached path if exists
 
-        if let Some(path) = &self.cached_lombok_path {
-            if fs::metadata(path).is_ok_and(|stat| stat.is_file()) {
-                return Ok(path.clone());
-            }
+        if let Some(path) = &self.cached_lombok_path
+            && fs::metadata(path).is_ok_and(|stat| stat.is_file())
+        {
+            return Ok(path.clone());
         }
 
         // Check for latest version
@@ -252,10 +286,10 @@ impl Java {
                     for entry in entries {
                         match entry {
                             Ok(entry) => {
-                                if entry.file_name().to_str() != Some(&jar_name) {
-                                    if let Err(err) = fs::remove_dir_all(entry.path()) {
-                                        println!("failed to remove directory entry: {err}");
-                                    }
+                                if entry.file_name().to_str() != Some(&jar_name)
+                                    && let Err(err) = fs::remove_dir_all(entry.path())
+                                {
+                                    println!("failed to remove directory entry: {err}");
                                 }
                             }
                             Err(err) => println!("failed to load directory entry: {err}"),
@@ -282,6 +316,101 @@ impl Extension for Java {
         Self {
             cached_binary_path: None,
             cached_lombok_path: None,
+            integrations: None,
+        }
+    }
+
+    fn get_dap_binary(
+        &mut self,
+        adapter_name: String,
+        config: DebugTaskDefinition,
+        _user_provided_debug_adapter_path: Option<String>,
+        worktree: &Worktree,
+    ) -> zed_extension_api::Result<DebugAdapterBinary, String> {
+        if adapter_name != DEBUG_ADAPTER_NAME {
+            return Err(format!(
+                "Cannot create binary for adapter \"{adapter_name}\""
+            ));
+        }
+
+        if self.integrations.is_some() {
+            self.lsp()?.switch_workspace(worktree.root_path())?;
+        }
+
+        Ok(DebugAdapterBinary {
+            command: None,
+            arguments: vec![],
+            cwd: Some(worktree.root_path()),
+            envs: vec![],
+            request_args: StartDebuggingRequestArguments {
+                request: self.dap_request_kind(
+                    adapter_name,
+                    Value::from_str(config.config.as_str())
+                        .map_err(|e| format!("Invalid JSON configuration: {e}"))?,
+                )?,
+                configuration: self.debugger()?.inject_config(worktree, config.config)?,
+            },
+            connection: Some(zed::resolve_tcp_template(
+                self.debugger()?.start_session()?,
+            )?),
+        })
+    }
+
+    fn dap_request_kind(
+        &mut self,
+        adapter_name: String,
+        config: Value,
+    ) -> Result<StartDebuggingRequestArgumentsRequest, String> {
+        if adapter_name != DEBUG_ADAPTER_NAME {
+            return Err(format!(
+                "Cannot create binary for adapter \"{adapter_name}\""
+            ));
+        }
+
+        match config.get("request") {
+            Some(launch) if launch == "launch" => Ok(StartDebuggingRequestArgumentsRequest::Launch),
+            Some(attach) if attach == "attach" => Ok(StartDebuggingRequestArgumentsRequest::Attach),
+            Some(value) => Err(format!(
+                "Unexpected value for `request` key in Java debug adapter configuration: {value:?}"
+            )),
+            None => {
+                Err("Missing required `request` field in Java debug adapter configuration".into())
+            }
+        }
+    }
+
+    fn dap_config_to_scenario(
+        &mut self,
+        config: zed::DebugConfig,
+    ) -> zed::Result<zed::DebugScenario, String> {
+        match config.request {
+            zed::DebugRequest::Attach(attach) => {
+                let debug_config = if let Some(process_id) = attach.process_id {
+                    json!({
+                        "request": "attach",
+                        "processId": process_id,
+                        "stopOnEntry": config.stop_on_entry
+                    })
+                } else {
+                    json!({
+                        "request": "attach",
+                        "hostName": "localhost",
+                        "port": 5005,
+                    })
+                };
+
+                Ok(zed::DebugScenario {
+                    adapter: config.adapter,
+                    build: None,
+                    tcp_connection: Some(self.debugger()?.start_session()?),
+                    label: "Attach to Java process".to_string(),
+                    config: debug_config.to_string(),
+                })
+            }
+
+            zed::DebugRequest::Launch(_launch) => {
+                Err("Java Extension doesn't support launching".to_string())
+            }
         }
     }
 
@@ -290,6 +419,16 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<zed::Command> {
+        let mut current_dir =
+            current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
+
+        if current_platform().0 == Os::Windows {
+            current_dir = current_dir
+                .strip_prefix("/")
+                .map_err(|err| err.to_string())?
+                .to_path_buf();
+        }
+
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;
         let java_home = configuration.as_ref().and_then(|configuration| {
@@ -301,13 +440,25 @@ impl Extension for Java {
                         .map(|java_home_str| java_home_str.to_string())
                 })
         });
+
         let mut env = Vec::new();
 
         if let Some(java_home) = java_home {
             env.push(("JAVA_HOME".to_string(), java_home));
         }
 
-        let mut args = Vec::new();
+        let mut args = vec![
+            "--input-type=module".to_string(),
+            "-e".to_string(),
+            PROXY_FILE.to_string(),
+            current_dir.to_str().ok_or(PATH_TO_STR_ERROR)?.to_string(),
+            current_dir
+                .join(self.language_server_binary_path(language_server_id, worktree)?)
+                .to_str()
+                .ok_or(PATH_TO_STR_ERROR)?
+                .to_string(),
+        ];
+
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_enabled = configuration
             .and_then(|configuration| {
@@ -318,16 +469,6 @@ impl Extension for Java {
             .unwrap_or(false);
 
         if lombok_enabled {
-            let mut current_dir =
-                current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
-
-            if current_platform().0 == Os::Windows {
-                current_dir = current_dir
-                    .strip_prefix("/")
-                    .map_err(|err| err.to_string())?
-                    .to_path_buf();
-            }
-
             let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
             let canonical_lombok_jar_path = current_dir
                 .join(lombok_jar_path)
@@ -338,12 +479,12 @@ impl Extension for Java {
             args.push(format!("--jvm-arg=-javaagent:{canonical_lombok_jar_path}"));
         }
 
+        // download debugger if not exists
+        self.debugger()?.get_or_download(language_server_id)?;
+        self.lsp()?.switch_workspace(worktree.root_path())?;
+
         Ok(zed::Command {
-            command: self
-                .language_server_binary_path(language_server_id, worktree)?
-                .to_str()
-                .ok_or(PATH_TO_STR_ERROR)?
-                .to_string(),
+            command: zed::node_binary_path()?,
             args,
             env,
         })
@@ -354,8 +495,18 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<Option<Value>> {
-        LspSettings::for_worktree(language_server_id.as_ref(), worktree)
-            .map(|lsp_settings| lsp_settings.initialization_options)
+        if self.integrations.is_some() {
+            self.lsp()?.switch_workspace(worktree.root_path())?;
+        }
+
+        let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+            .map(|lsp_settings| lsp_settings.initialization_options)?;
+
+        if self.integrations.is_some() {
+            return Ok(Some(self.debugger()?.inject_plugin_into_options(options)?));
+        }
+
+        Ok(options)
     }
 
     fn language_server_workspace_configuration(
