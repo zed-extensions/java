@@ -327,6 +327,10 @@ impl Extension for Java {
         _user_provided_debug_adapter_path: Option<String>,
         worktree: &Worktree,
     ) -> zed_extension_api::Result<DebugAdapterBinary, String> {
+        if !self.debugger().is_ok_and(|v| v.loaded()) {
+            return Err(format!("Debugger plugin is not loaded"));
+        }
+
         if adapter_name != DEBUG_ADAPTER_NAME {
             return Err(format!(
                 "Cannot create binary for adapter \"{adapter_name}\""
@@ -383,6 +387,10 @@ impl Extension for Java {
         &mut self,
         config: zed::DebugConfig,
     ) -> zed::Result<zed::DebugScenario, String> {
+        if !self.debugger().is_ok_and(|v| v.loaded()) {
+            return Err(format!("Debugger plugin is not loaded"));
+        }
+
         match config.request {
             zed::DebugRequest::Attach(attach) => {
                 let debug_config = if let Some(process_id) = attach.process_id {
@@ -480,7 +488,10 @@ impl Extension for Java {
         }
 
         // download debugger if not exists
-        self.debugger()?.get_or_download(language_server_id)?;
+        if let Err(err) = self.debugger()?.get_or_download(language_server_id) {
+            println!("Failed to download debugger: {err}");
+        };
+
         self.lsp()?.switch_workspace(worktree.root_path())?;
 
         Ok(zed::Command {
@@ -502,7 +513,7 @@ impl Extension for Java {
         let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
             .map(|lsp_settings| lsp_settings.initialization_options)?;
 
-        if self.integrations.is_some() {
+        if self.debugger().is_ok_and(|v| v.loaded()) {
             return Ok(Some(self.debugger()?.inject_plugin_into_options(options)?));
         }
 

@@ -71,6 +71,10 @@ impl Debugger {
         }
     }
 
+    pub fn loaded(&self) -> bool {
+        self.plugin_path.is_some()
+    }
+
     pub fn get_or_download(
         &mut self,
         language_server_id: &LanguageServerId,
