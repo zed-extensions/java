@@ -328,7 +328,7 @@ impl Extension for Java {
         worktree: &Worktree,
     ) -> zed_extension_api::Result<DebugAdapterBinary, String> {
         if !self.debugger().is_ok_and(|v| v.loaded()) {
-            return Err(format!("Debugger plugin is not loaded"));
+            return Err("Debugger plugin is not loaded".to_string());
         }
 
         if adapter_name != DEBUG_ADAPTER_NAME {
@@ -388,7 +388,7 @@ impl Extension for Java {
         config: zed::DebugConfig,
     ) -> zed::Result<zed::DebugScenario, String> {
         if !self.debugger().is_ok_and(|v| v.loaded()) {
-            return Err(format!("Debugger plugin is not loaded"));
+            return Err("Debugger plugin is not loaded".to_string());
         }
 
         match config.request {
