@@ -1,6 +1,6 @@
 [package]
 name = "java"
-version = "6.3.0"
+version = "6.4.0"
 edition = "2024"
 
 [lib]
