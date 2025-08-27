@@ -55,8 +55,7 @@ const SCOPES: [&str; 3] = [TEST_SCOPE, AUTO_SCOPE, RUNTIME_SCOPE];
 
 const PATH_TO_STR_ERROR: &str = "Failed to convert path to string";
 
-const MAVEN_SEARCH_URL: &str =
-    "https://search.maven.org/solrsearch/select?q=a:com.microsoft.java.debug.plugin";
+const MAVEN_METADATA_URL: &str = "https://repo1.maven.org/maven2/com/microsoft/java/com.microsoft.java.debug.plugin/maven-metadata.xml";
 
 pub struct Debugger {
     lsp: LspWrapper,
@@ -69,6 +68,10 @@ impl Debugger {
             plugin_path: None,
             lsp,
         }
+    }
+
+    pub fn loaded(&self) -> bool {
+        self.plugin_path.is_some()
     }
 
     pub fn get_or_download(
@@ -91,7 +94,7 @@ impl Debugger {
         let res = fetch(
             &HttpRequest::builder()
                 .method(HttpMethod::Get)
-                .url(MAVEN_SEARCH_URL)
+                .url(MAVEN_METADATA_URL)
                 .build()?,
         );
 
@@ -131,18 +134,20 @@ impl Debugger {
             }
         }
 
-        let maven_response_body = serde_json::from_slice::<Value>(&res?.body)
-            .map_err(|err| format!("failed to deserialize Maven response: {err}"))?;
+        let xml = String::from_utf8(res?.body).map_err(|err| {
+            format!("could not get string from maven metadata response body: {err}")
+        })?;
 
-        let latest_version = maven_response_body
-            .pointer("/response/docs/0/latestVersion")
-            .and_then(|v| v.as_str())
-            .ok_or("Malformed maven response")?;
+        let start_tag = "<latest>";
+        let end_tag = "</latest>";
 
-        let artifact = maven_response_body
-            .pointer("/response/docs/0/a")
-            .and_then(|v| v.as_str())
-            .ok_or("Malformed maven response")?;
+        let latest_version = xml
+            .split_once(start_tag)
+            .and_then(|(_, rest)| rest.split_once(end_tag))
+            .map(|(content, _)| content.trim())
+            .ok_or(format!("Failed to parse maven-metadata.xml response {xml}"))?;
+
+        let artifact = "com.microsoft.java.debug.plugin";
 
         let jar_name = format!("{artifact}-{latest_version}.jar");
         let jar_path = PathBuf::from(prefix).join(&jar_name);
