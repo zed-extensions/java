@@ -1,0 +1,13 @@
+[
+  {
+    "label": "Run $ZED_CUSTOM_java_package_name.$ZED_CUSTOM_java_class_name",
+    "command": "mvn",
+    "args": [
+      "exec:java",
+      "-Dexec.mainClass=\"$ZED_CUSTOM_java_package_name.$ZED_CUSTOM_java_class_name\""
+    ],
+    "use_new_terminal": true,
+    "reveal": "always",
+    "tags": ["java-main"]
+  }
+]
