@@ -4,11 +4,16 @@
         (scoped_identifier) @java_package_name
     )
     (class_declaration
+        (modifiers) @class-modifier
+        (#match? @class-modifier "public")
         name: (identifier) @java_class_name
         body: (class_body
             (method_declaration
+                (modifiers) @modifier
                 name: (identifier) @run
                 (#eq? @run "main")
+                (#match? @modifier "public")
+                (#match? @modifier "static")
             )
         )
     ) @_
@@ -21,11 +26,16 @@
         (scoped_identifier) @java_package_name
     )
     (class_declaration
+        (modifiers) @class-modifier
+        (#match? @class-modifier "public")
         name: (identifier) @java_class_name @run
         body: (class_body
             (method_declaration
+                (modifiers) @modifier
                 name: (identifier) @method_name
                 (#eq? @method_name "main")
+                (#match? @modifier "public")
+                (#match? @modifier "static")
             )
         )
     ) @_
