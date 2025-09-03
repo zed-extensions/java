@@ -15,6 +15,23 @@
     (#set! tag java-main)
 )
 
+; Run the main function
+(
+    (package_declaration
+        (scoped_identifier) @java_package_name
+    )
+    (class_declaration
+        name: (identifier) @java_class_name @run
+        body: (class_body
+            (method_declaration
+                name: (identifier) @method_name
+                (#eq? @method_name "main")
+            )
+        )
+    ) @_
+    (#set! tag java-main)
+)
+
 ; Run the test function
 (
     (package_declaration
