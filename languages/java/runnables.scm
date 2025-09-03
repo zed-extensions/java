@@ -20,7 +20,7 @@
     (#set! tag java-main)
 )
 
-; Run the main function
+; Run the main class
 (
     (package_declaration
         (scoped_identifier) @java_package_name
@@ -42,7 +42,7 @@
     (#set! tag java-main)
 )
 
-; Run the test function
+; Run test function
 (
     (package_declaration
         (scoped_identifier) @java_package_name
@@ -64,7 +64,7 @@
     (#set! tag java-test-method)
 )
 
-; Run the test function
+; Run test class
 (
     (package_declaration
         (scoped_identifier) @java_package_name
