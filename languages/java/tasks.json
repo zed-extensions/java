@@ -1,0 +1,29 @@
+[
+  {
+    "label": "Run $ZED_CUSTOM_java_class_name",
+    "command": "c=\"$ZED_CUSTOM_java_package_name.$ZED_CUSTOM_java_class_name\"; if [ -f pom.xml ]; then mvn clean compile exec:java -Dexec.mainClass=$c; elif [ -f gradlew ]; then ./gradlew run -PmainClass=$c; else >&2 echo 'No build system found'; exit 1; fi;",
+    "use_new_terminal": false,
+    "reveal": "always",
+    "tags": ["java-main"]
+  },
+  {
+    "label": "Test $ZED_CUSTOM_java_class_name.$ZED_CUSTOM_java_method_name",
+    "command": "c=\"$ZED_CUSTOM_java_package_name.$ZED_CUSTOM_java_class_name\"; m=\"$ZED_CUSTOM_java_method_name\"; if [ -f pom.xml ]; then mvn clean test -Dtest=\"$c#$m\"; elif [ -f gradlew ]; then ./gradlew test --tests $c.$m; else >&2 echo 'No build system found'; exit 1; fi;",
+    "use_new_terminal": false,
+    "reveal": "always",
+    "tags": ["java-test-method"]
+  },
+  {
+    "label": "Test class $ZED_CUSTOM_java_class_name",
+    "command": "c=\"$ZED_CUSTOM_java_package_name.$ZED_CUSTOM_java_class_name\"; if [ -f pom.xml ]; then mvn clean test -Dtest=\"$c\"; elif [ -f gradlew ]; then ./gradlew test --tests $c; else >&2 echo 'No build system found'; exit 1; fi;",
+    "use_new_terminal": false,
+    "reveal": "always",
+    "tags": ["java-test-class"]
+  },
+  {
+    "label": "Run tests",
+    "command": "if [ -f pom.xml ]; then mvn clean test; elif [ -f gradlew ]; then ./gradlew test; else >&2 echo 'No build system found'; exit 1; fi;",
+    "use_new_terminal": false,
+    "reveal": "always"
+  }
+]
