@@ -19,5 +19,11 @@
     "use_new_terminal": false,
     "reveal": "always",
     "tags": ["java-test-class"]
+  },
+  {
+    "label": "Run tests",
+    "command": "if [ -f pom.xml ]; then mvn clean test; elif [ -f gradlew ]; then ./gradlew test; else >&2 echo 'No build system found'; exit 1; fi;",
+    "use_new_terminal": false,
+    "reveal": "always"
   }
 ]
