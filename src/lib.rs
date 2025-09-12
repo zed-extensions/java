@@ -430,13 +430,6 @@ impl Extension for Java {
         let mut current_dir =
             current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
 
-        if current_platform().0 == Os::Windows {
-            current_dir = current_dir
-                .strip_prefix("/")
-                .map_err(|err| err.to_string())?
-                .to_path_buf();
-        }
-
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;
         let java_home = configuration.as_ref().and_then(|configuration| {
