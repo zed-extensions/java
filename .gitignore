@@ -1,5 +1,4 @@
 grammars/
 target/
-Cargo.lock
 extension.wasm
 .DS_Store
