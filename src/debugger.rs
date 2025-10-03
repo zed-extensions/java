@@ -2,8 +2,8 @@ use std::{collections::HashMap, env, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use zed_extension_api::{
-    self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Os,
-    TcpArgumentsTemplate, Worktree, current_platform, download_file,
+    self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus,
+    TcpArgumentsTemplate, Worktree, download_file,
     http_client::{HttpMethod, HttpRequest, fetch},
     serde_json::{self, Value, json},
     set_language_server_installation_status,
