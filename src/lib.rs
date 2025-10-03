@@ -2,7 +2,7 @@ mod debugger;
 mod lsp;
 use std::{
     collections::BTreeSet,
-    env::current_dir,
+    env,
     fs::{self, create_dir},
     path::{Path, PathBuf},
     str::FromStr,
@@ -427,8 +427,8 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<zed::Command> {
-        let mut current_dir =
-            current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
+        let current_dir =
+            env::current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
 
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env::current_dir, fs, path::PathBuf};
+use std::{collections::HashMap, env, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use zed_extension_api::{
@@ -299,15 +299,8 @@ impl Debugger {
         &self,
         initialization_options: Option<Value>,
     ) -> zed::Result<Value> {
-        let mut current_dir =
-            current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
-
-        if current_platform().0 == Os::Windows {
-            current_dir = current_dir
-                .strip_prefix("/")
-                .map_err(|err| err.to_string())?
-                .to_path_buf();
-        }
+        let current_dir =
+            env::current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
 
         let canonical_path = Value::String(
             current_dir
