@@ -26,6 +26,8 @@ use crate::{debugger::Debugger, lsp::LspWrapper};
 const PROXY_FILE: &str = include_str!("proxy.mjs");
 const DEBUG_ADAPTER_NAME: &str = "Java";
 const PATH_TO_STR_ERROR: &str = "failed to convert path to string";
+const JDTLS_INSTALL_PATH: &str = "jdtls";
+const LOMBOK_INSTALL_PATH: &str = "lombok";
 
 struct Java {
     cached_binary_path: Option<PathBuf>,
@@ -90,222 +92,296 @@ impl Java {
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        // Yeah, this part's all pretty terrible...
-        // Note to self: make it good eventually
-        let downloads_html = String::from_utf8(
-            fetch(
-                &HttpRequest::builder()
-                    .method(HttpMethod::Get)
-                    .url("https://download.eclipse.org/jdtls/milestones/")
-                    .build()?,
-            )
-            .map_err(|err| format!("failed to get available versions: {err}"))?
-            .body,
-        )
-        .map_err(|err| format!("could not get string from downloads page response body: {err}"))?;
-        let mut versions = BTreeSet::new();
-        let mut number_buffer = String::new();
-        let mut version_buffer: (Option<u32>, Option<u32>, Option<u32>) = (None, None, None);
-
-        for char in downloads_html.chars() {
-            if char.is_numeric() {
-                number_buffer.push(char);
-            } else if char == '.' {
-                if version_buffer.0.is_none() && !number_buffer.is_empty() {
-                    version_buffer.0 = Some(
-                        number_buffer
-                            .parse()
-                            .map_err(|err| format!("could not parse number buffer: {err}"))?,
-                    );
-                } else if version_buffer.1.is_none() && !number_buffer.is_empty() {
-                    version_buffer.1 = Some(
-                        number_buffer
-                            .parse()
-                            .map_err(|err| format!("could not parse number buffer: {err}"))?,
-                    );
+        match try_to_fetch_and_install_latest_jdtls(binary_name, language_server_id) {
+            Ok(path) => {
+                self.cached_binary_path = Some(path.clone());
+                Ok(path)
+            }
+            Err(e) => {
+                if let Some(local_version) = find_latest_local_jdtls(binary_name) {
+                    self.cached_binary_path = Some(local_version.clone());
+                    Ok(local_version)
                 } else {
-                    version_buffer = (None, None, None);
+                    Err(e)
                 }
-
-                number_buffer.clear();
-            } else {
-                if version_buffer.0.is_some()
-                    && version_buffer.1.is_some()
-                    && version_buffer.2.is_none()
-                {
-                    versions.insert((
-                        version_buffer.0.ok_or("no major version number")?,
-                        version_buffer.1.ok_or("no minor version number")?,
-                        number_buffer
-                            .parse::<u32>()
-                            .map_err(|err| format!("could not parse number buffer: {err}"))?,
-                    ));
-                }
-
-                number_buffer.clear();
-                version_buffer = (None, None, None);
             }
         }
-
-        let (major, minor, patch) = versions.last().ok_or("no available versions")?;
-        let latest_version = format!("{major}.{minor}.{patch}");
-        let latest_version_build = String::from_utf8(
-            fetch(
-                &HttpRequest::builder()
-                    .method(HttpMethod::Get)
-                    .url(format!(
-                        "https://download.eclipse.org/jdtls/milestones/{latest_version}/latest.txt"
-                    ))
-                    .build()?,
-            )
-            .map_err(|err| format!("failed to get latest version's build: {err}"))?
-            .body,
-        )
-        .map_err(|err| {
-            format!("attempt to get latest version's build resulted in a malformed response: {err}")
-        })?;
-        let latest_version_build = latest_version_build.trim_end();
-        let prefix = PathBuf::from("jdtls");
-        // Exclude ".tar.gz"
-        let build_directory = &latest_version_build[..latest_version_build.len() - 7];
-        let build_path = prefix.join(build_directory);
-        let binary_path = build_path.join("bin").join(binary_name);
-
-        // If latest version isn't installed,
-        if !fs::metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
-            // then download it...
-
-            set_language_server_installation_status(
-                language_server_id,
-                &LanguageServerInstallationStatus::Downloading,
-            );
-            download_file(
-                &format!(
-                    "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
-                ),
-                build_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
-                DownloadedFileType::GzipTar,
-            )?;
-            make_file_executable(binary_path.to_str().ok_or(PATH_TO_STR_ERROR)?)?;
-
-            // ...and delete other versions
-
-            // This step is expected to fail sometimes, and since we don't know
-            // how to fix it yet, we just carry on so the user doesn't have to
-            // restart the language server.
-            match fs::read_dir(prefix) {
-                Ok(entries) => {
-                    for entry in entries {
-                        match entry {
-                            Ok(entry) => {
-                                if entry.file_name().to_str() != Some(build_directory)
-                                    && let Err(err) = fs::remove_dir_all(entry.path())
-                                {
-                                    println!("failed to remove directory entry: {err}");
-                                }
-                            }
-                            Err(err) => println!("failed to load directory entry: {err}"),
-                        }
-                    }
-                }
-                Err(err) => println!("failed to list prefix directory: {err}"),
-            }
-        }
-
-        // else use it
-
-        self.cached_binary_path = Some(binary_path.clone());
-
-        Ok(binary_path)
     }
 
     fn lombok_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<PathBuf> {
-        // Use cached path if exists
-
         if let Some(path) = &self.cached_lombok_path
             && fs::metadata(path).is_ok_and(|stat| stat.is_file())
         {
             return Ok(path.clone());
         }
 
-        // Check for latest version
+        match try_to_fetch_and_install_latest_lombok(language_server_id) {
+            Ok(path) => {
+                self.cached_lombok_path = Some(path.clone());
+                return Ok(path);
+            }
+            Err(e) => {
+                if let Some(local_version) = find_latest_local_lombok() {
+                    self.cached_lombok_path = Some(local_version.clone());
+                    Ok(local_version)
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+}
+
+fn try_to_fetch_and_install_latest_jdtls(
+    binary_name: &str,
+    language_server_id: &LanguageServerId,
+) -> zed::Result<PathBuf> {
+    // Yeah, this part's all pretty terrible...
+    // Note to self: make it good eventually
+    let downloads_html = String::from_utf8(
+        fetch(
+            &HttpRequest::builder()
+                .method(HttpMethod::Get)
+                .url("https://download.eclipse.org/jdtls/milestones/")
+                .build()?,
+        )
+        .map_err(|err| format!("failed to get available versions: {err}"))?
+        .body,
+    )
+    .map_err(|err| format!("could not get string from downloads page response body: {err}"))?;
+    let mut versions = BTreeSet::new();
+    let mut number_buffer = String::new();
+    let mut version_buffer: (Option<u32>, Option<u32>, Option<u32>) = (None, None, None);
+
+    for char in downloads_html.chars() {
+        if char.is_numeric() {
+            number_buffer.push(char);
+        } else if char == '.' {
+            if version_buffer.0.is_none() && !number_buffer.is_empty() {
+                version_buffer.0 = Some(
+                    number_buffer
+                        .parse()
+                        .map_err(|err| format!("could not parse number buffer: {err}"))?,
+                );
+            } else if version_buffer.1.is_none() && !number_buffer.is_empty() {
+                version_buffer.1 = Some(
+                    number_buffer
+                        .parse()
+                        .map_err(|err| format!("could not parse number buffer: {err}"))?,
+                );
+            } else {
+                version_buffer = (None, None, None);
+            }
+
+            number_buffer.clear();
+        } else {
+            if version_buffer.0.is_some()
+                && version_buffer.1.is_some()
+                && version_buffer.2.is_none()
+            {
+                versions.insert((
+                    version_buffer.0.ok_or("no major version number")?,
+                    version_buffer.1.ok_or("no minor version number")?,
+                    number_buffer
+                        .parse::<u32>()
+                        .map_err(|err| format!("could not parse number buffer: {err}"))?,
+                ));
+            }
+
+            number_buffer.clear();
+            version_buffer = (None, None, None);
+        }
+    }
+
+    let (major, minor, patch) = versions.last().ok_or("no available versions")?;
+    let latest_version = format!("{major}.{minor}.{patch}");
+    let latest_version_build = String::from_utf8(
+        fetch(
+            &HttpRequest::builder()
+                .method(HttpMethod::Get)
+                .url(format!(
+                    "https://download.eclipse.org/jdtls/milestones/{latest_version}/latest.txt"
+                ))
+                .build()?,
+        )
+        .map_err(|err| format!("failed to get latest version's build: {err}"))?
+        .body,
+    )
+    .map_err(|err| {
+        format!("attempt to get latest version's build resulted in a malformed response: {err}")
+    })?;
+    let latest_version_build = latest_version_build.trim_end();
+    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
+    // Exclude ".tar.gz"
+    let build_directory = &latest_version_build[..latest_version_build.len() - 7];
+    let build_path = prefix.join(build_directory);
+    let binary_path = build_path.join("bin").join(binary_name);
+
+    // If latest version isn't installed,
+    if !fs::metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
+        // then download it...
 
         set_language_server_installation_status(
             language_server_id,
-            &LanguageServerInstallationStatus::CheckingForUpdate,
+            &LanguageServerInstallationStatus::Downloading,
         );
+        download_file(
+            &format!(
+                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
+            ),
+            build_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+            DownloadedFileType::GzipTar,
+        )?;
+        make_file_executable(binary_path.to_str().ok_or(PATH_TO_STR_ERROR)?)?;
 
-        let tags_response_body = serde_json::from_slice::<Value>(
-            &fetch(
-                &HttpRequest::builder()
-                    .method(HttpMethod::Get)
-                    .url("https://api.github.com/repos/projectlombok/lombok/tags")
-                    .build()?,
-            )
-            .map_err(|err| format!("failed to fetch GitHub tags: {err}"))?
-            .body,
-        )
-        .map_err(|err| format!("failed to deserialize GitHub tags response: {err}"))?;
-        let latest_version = &tags_response_body
-            .as_array()
-            .and_then(|tag| {
-                tag.first().and_then(|latest_tag| {
-                    latest_tag
-                        .get("name")
-                        .and_then(|tag_name| tag_name.as_str())
-                })
-            })
-            // Exclude 'v' at beginning
-            .ok_or("malformed GitHub tags response")?[1..];
-        let prefix = "lombok";
-        let jar_name = format!("lombok-{latest_version}.jar");
-        let jar_path = Path::new(prefix).join(&jar_name);
+        // ...and delete other versions
 
-        // If latest version isn't installed,
-        if !fs::metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
-            // then download it...
-
-            set_language_server_installation_status(
-                language_server_id,
-                &LanguageServerInstallationStatus::Downloading,
-            );
-            create_dir(prefix).map_err(|err| err.to_string())?;
-            download_file(
-                &format!("https://projectlombok.org/downloads/{jar_name}"),
-                jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
-                DownloadedFileType::Uncompressed,
-            )?;
-
-            // ...and delete other versions
-
-            // This step is expected to fail sometimes, and since we don't know
-            // how to fix it yet, we just carry on so the user doesn't have to
-            // restart the language server.
-            match fs::read_dir(prefix) {
-                Ok(entries) => {
-                    for entry in entries {
-                        match entry {
-                            Ok(entry) => {
-                                if entry.file_name().to_str() != Some(&jar_name)
-                                    && let Err(err) = fs::remove_dir_all(entry.path())
-                                {
-                                    println!("failed to remove directory entry: {err}");
-                                }
+        // This step is expected to fail sometimes, and since we don't know
+        // how to fix it yet, we just carry on so the user doesn't have to
+        // restart the language server.
+        match fs::read_dir(prefix) {
+            Ok(entries) => {
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => {
+                            if entry.file_name().to_str() != Some(build_directory)
+                                && let Err(err) = fs::remove_dir_all(entry.path())
+                            {
+                                println!("failed to remove directory entry: {err}");
                             }
-                            Err(err) => println!("failed to load directory entry: {err}"),
                         }
+                        Err(err) => println!("failed to load directory entry: {err}"),
                     }
                 }
-                Err(err) => println!("failed to list prefix directory: {err}"),
             }
+            Err(err) => println!("failed to list prefix directory: {err}"),
         }
-
-        // else use it
-
-        self.cached_lombok_path = Some(jar_path.clone());
-
-        Ok(jar_path)
     }
+
+    // else use it
+    Ok(binary_path)
+}
+
+fn find_latest_local_jdtls(binary_name: &str) -> Option<PathBuf> {
+    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
+    // walk the dir where we install jdtls
+    fs::read_dir(&prefix)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| path.is_dir())
+                // get the most recently created subdirectory
+                .filter_map(|path| {
+                    let created_time = fs::metadata(&path).and_then(|meta| meta.created()).ok()?;
+                    Some((path, created_time))
+                })
+                .max_by_key(|&(_, time)| time)
+                // point at where the binary should be
+                .map(|(path, _)| path.join("bin").join(binary_name))
+        })
+        .ok()
+        .flatten()
+}
+
+fn try_to_fetch_and_install_latest_lombok(
+    language_server_id: &LanguageServerId,
+) -> zed::Result<PathBuf> {
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::CheckingForUpdate,
+    );
+
+    let tags_response_body = serde_json::from_slice::<Value>(
+        &fetch(
+            &HttpRequest::builder()
+                .method(HttpMethod::Get)
+                .url("https://api.github.com/repos/projectlombok/lombok/tags")
+                .build()?,
+        )
+        .map_err(|err| format!("failed to fetch GitHub tags: {err}"))?
+        .body,
+    )
+    .map_err(|err| format!("failed to deserialize GitHub tags response: {err}"))?;
+    let latest_version = &tags_response_body
+        .as_array()
+        .and_then(|tag| {
+            tag.first().and_then(|latest_tag| {
+                latest_tag
+                    .get("name")
+                    .and_then(|tag_name| tag_name.as_str())
+            })
+        })
+        // Exclude 'v' at beginning
+        .ok_or("malformed GitHub tags response")?[1..];
+    let prefix = LOMBOK_INSTALL_PATH;
+    let jar_name = format!("lombok-{latest_version}.jar");
+    let jar_path = Path::new(prefix).join(&jar_name);
+
+    // If latest version isn't installed,
+    if !fs::metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
+        // then download it...
+
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::Downloading,
+        );
+        create_dir(prefix).map_err(|err| err.to_string())?;
+        download_file(
+            &format!("https://projectlombok.org/downloads/{jar_name}"),
+            jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+            DownloadedFileType::Uncompressed,
+        )?;
+
+        // ...and delete other versions
+
+        // This step is expected to fail sometimes, and since we don't know
+        // how to fix it yet, we just carry on so the user doesn't have to
+        // restart the language server.
+        match fs::read_dir(prefix) {
+            Ok(entries) => {
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => {
+                            if entry.file_name().to_str() != Some(&jar_name)
+                                && let Err(err) = fs::remove_dir_all(entry.path())
+                            {
+                                println!("failed to remove directory entry: {err}");
+                            }
+                        }
+                        Err(err) => println!("failed to load directory entry: {err}"),
+                    }
+                }
+            }
+            Err(err) => println!("failed to list prefix directory: {err}"),
+        }
+    }
+
+    // else use it
+    Ok(jar_path)
+}
+
+fn find_latest_local_lombok() -> Option<PathBuf> {
+    let prefix = PathBuf::from(LOMBOK_INSTALL_PATH);
+    // walk the dir where we install lombok
+    fs::read_dir(&prefix)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                // get the most recently created jar file
+                .filter(|path| {
+                    path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
+                })
+                .filter_map(|path| {
+                    let created_time = fs::metadata(&path).and_then(|meta| meta.created()).ok()?;
+                    Some((path, created_time))
+                })
+                .max_by_key(|&(_, time)| time)
+                .map(|(path, _)| path)
+        })
+        .ok()
+        .flatten()
 }
 
 impl Extension for Java {
@@ -518,26 +594,16 @@ impl Extension for Java {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<Option<Value>> {
-        // FIXME(Valentine Briese): I don't really like that we have a variable
-        //                          here, there're probably some `Result` and/or
-        //                          `Option` methods that would eliminate the
-        //                          need for this, but at least this is easy to
-        //                          read.
-
-        let mut settings = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
-            .map(|lsp_settings| lsp_settings.settings);
-
-        if !matches!(settings, Ok(Some(_))) {
-            settings = self
-                .language_server_initialization_options(language_server_id, worktree)
-                .map(|initialization_options| {
-                    initialization_options.and_then(|initialization_options| {
-                        initialization_options.get("settings").cloned()
-                    })
+        if let Ok(Some(settings)) = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+            .map(|lsp_settings| lsp_settings.settings)
+        {
+            Ok(Some(settings))
+        } else {
+            self.language_server_initialization_options(language_server_id, worktree)
+                .map(|init_options| {
+                    init_options.and_then(|init_options| init_options.get("settings").cloned())
                 })
         }
-
-        settings
     }
 
     fn label_for_completion(
