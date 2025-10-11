@@ -104,10 +104,10 @@ impl Debugger {
                 return Err(err.to_owned());
             }
 
-            // If it's not a 5xx code, then return an error.
-            if !err.contains("status code 5") {
-                return Err(err.to_owned());
-            }
+            println!(
+                "Could not fetch debugger: {}\nFalling back to local version.",
+                err
+            );
 
             let exists = fs::read_dir(prefix)
                 .ok()
