@@ -76,10 +76,7 @@ impl Java {
             return Ok(path.clone());
         }
 
-        // Use $PATH if binary is in it
-
-        let (platform, _) = current_platform();
-        let binary_name = match platform {
+        let binary_name = match current_platform().0 {
             Os::Windows => "jdtls.bat",
             _ => "jdtls",
         };
@@ -257,8 +254,8 @@ fn try_to_fetch_and_install_latest_jdtls(
         }
     }
 
-    // else use it
-    Ok(binary_path)
+    // else return jdtls base path
+    Ok(build_path)
 }
 
 fn find_latest_local_jdtls(binary_name: &str) -> Option<PathBuf> {
@@ -276,8 +273,8 @@ fn find_latest_local_jdtls(binary_name: &str) -> Option<PathBuf> {
                     Some((path, created_time))
                 })
                 .max_by_key(|&(_, time)| time)
-                // point at where the binary should be
-                .map(|(path, _)| path.join("bin").join(binary_name))
+                // and return it
+                .map(|(path, _)| path)
         })
         .ok()
         .flatten()
@@ -510,7 +507,7 @@ impl Extension for Java {
 
         let mut env = Vec::new();
 
-        if let Some(java_home) = get_java_home(&configuration) {
+        if let Some(java_home) = get_java_home(&configuration, worktree) {
             env.push(("JAVA_HOME".to_string(), java_home));
         }
 
@@ -556,7 +553,7 @@ impl Extension for Java {
                 &configuration,
                 language_server_id,
                 worktree,
-                lombok_jvm_arg.into_iter().collect(), // TODO additional jvm-args from config?
+                lombok_jvm_arg.into_iter().collect(),
             )?);
         }
 
@@ -749,21 +746,13 @@ impl Java {
         let java_executable = get_java_executable(configuration, worktree)?;
         let java_major_version = get_java_major_version(&java_executable)?;
         if java_major_version < 21 {
-            // TODO this error message could be more helpful
-            return Err("JDTLS requires at least Java 21".to_string());
+            return Err("JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings".to_string());
         }
 
         let extension_workdir = env::current_dir().map_err(|_e| "Could not get current dir")?;
 
-        let jdtls_launch_script_path =
+        let jdtls_base_path =
             extension_workdir.join(self.language_server_binary_path(language_server_id, worktree)?);
-
-        // TODO we might as well return the base path directly
-        let jdtls_base_path = jdtls_launch_script_path
-            .parent()
-            .and_then(Path::parent)
-            .map(Path::to_path_buf)
-            .ok_or_else(|| "Could not get JDTLS base path".to_string())?;
 
         let shared_config_path = get_shared_config_path(&jdtls_base_path);
         let jar_path = find_equinox_launcher(&jdtls_base_path)?;
@@ -864,7 +853,7 @@ fn get_java_executable(configuration: &Option<Value>, worktree: &Worktree) -> ze
     };
 
     // Get executable from $JAVA_HOME
-    if let Some(java_home) = get_java_home(configuration) {
+    if let Some(java_home) = get_java_home(configuration, worktree) {
         let java_executable = PathBuf::from(java_home)
             .join("bin")
             .join(java_executable_filename);
@@ -879,7 +868,7 @@ fn get_java_executable(configuration: &Option<Value>, worktree: &Worktree) -> ze
         .ok_or_else(|| "Could not find Java executable in JAVA_HOME or on PATH".to_string())
 }
 
-fn get_java_home(configuration: &Option<Value>) -> Option<String> {
+fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
     // try to read the value from settings
     if let Some(configuration) = configuration {
         if let Some(java_home) = configuration
@@ -890,9 +879,13 @@ fn get_java_home(configuration: &Option<Value>) -> Option<String> {
         }
     }
 
-    // try to read the value from env (TODO I think we don't actually have access to the user env in here)
-    match env::var("JAVA_HOME") {
-        Ok(java_home) if !java_home.is_empty() => Some(java_home),
+    // try to read the value from env
+    match worktree
+        .shell_env()
+        .into_iter()
+        .find(|(k, _)| k == "JAVA_HOME")
+    {
+        Some((_, value)) if !value.is_empty() => Some(value),
         _ => None,
     }
 }
@@ -946,7 +939,8 @@ fn find_equinox_launcher(jdtls_base_directory: &PathBuf) -> Result<PathBuf, Stri
 }
 
 fn get_shared_config_path(jdtls_base_directory: &PathBuf) -> PathBuf {
-    // TODO find out whether it makes sense to use config_linux_arm and config_mac_arm as well
+    // Note: JDTLS also provides config_linux_arm and config_mac_arm (and others),
+    // but does not use them in their own launch script. It may be worth investigating if we should use them when appropriate.
     let config_to_use = match current_platform().0 {
         Os::Linux => "config_linux",
         Os::Mac => "config_mac",
