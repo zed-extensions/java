@@ -810,14 +810,33 @@ fn path_to_string(path: PathBuf) -> zed::Result<String> {
 }
 
 fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
-    // Note: the script uses OS-wide cache dirs. We have to stick inside our extension dir, which is probably for the best
+    // Note: the JDTLS data path is where JDTLS stores its own caches.
+    // In the unlikely event we can't find the canonical OS-Level cache-path,
+    // we fall back to the the extension's workdir, which may never get cleaned up.
+    // In future we may want to deliberately manage caches to be able to force-clean them.
 
-    let cwd_name = worktree.root_path();
+    let mut env_iter = worktree.shell_env().into_iter();
+    let base_cachedir = match current_platform().0 {
+        Os::Mac => env_iter
+            .find(|(k, _)| k == "HOME")
+            .map(|(_, v)| PathBuf::from(v).join("Library").join("Caches")),
+        Os::Linux => env_iter
+            .find(|(k, _)| k == "HOME")
+            .map(|(_, v)| PathBuf::from(v).join(".cache")),
+        Os::Windows => env_iter
+            .find(|(k, _)| k == "APPDATA")
+            .map(|(_, v)| PathBuf::from(v)),
+    }
+    .unwrap_or_else(|| {
+        env::current_dir()
+            .expect("should be able to get extension workdir")
+            .join("caches")
+    });
 
-    let plugin_workdir = env::current_dir().map_err(|_e| "Could not get extension workdir")?;
-    let base_cachedir = plugin_workdir.join("caches");
+    // caches are unique per worktree-root-path
+    let cache_key = worktree.root_path();
 
-    let hex_digest = get_sha1_hex(&cwd_name);
+    let hex_digest = get_sha1_hex(&cache_key);
     let unique_dir_name = format!("jdtls-{}", hex_digest);
     Ok(base_cachedir.join(unique_dir_name))
 }
