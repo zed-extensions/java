@@ -521,21 +521,10 @@ impl Extension for Java {
             PROXY_FILE.to_string(),
             path_to_string(current_dir.clone())?,
         ];
-        if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
-            // if the user has `jdtls(.bat)` on their PATH, we use that
-            args.push(launcher);
-        } else {
-            // otherwise we launch ourselves
-            args.extend(self.build_jdtls_launch_args(
-                &configuration,
-                language_server_id,
-                worktree,
-                vec![], // TODO additional jvm-args from config?
-            )?);
-        }
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_enabled = configuration
+            .as_ref()
             .and_then(|configuration| {
                 configuration
                     .pointer("/java/jdt/ls/lombokSupport/enabled")
@@ -543,15 +532,32 @@ impl Extension for Java {
             })
             .unwrap_or(false);
 
-        if lombok_enabled {
+        let lombok_jvm_arg = if lombok_enabled {
             let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
             let canonical_lombok_jar_path = current_dir
                 .join(lombok_jar_path)
                 .to_str()
                 .ok_or(PATH_TO_STR_ERROR)?
                 .to_string();
+            Some(format!("-javaagent:{canonical_lombok_jar_path}"))
+        } else {
+            None
+        };
 
-            args.push(format!("--jvm-arg=-javaagent:{canonical_lombok_jar_path}"));
+        if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
+            // if the user has `jdtls(.bat)` on their PATH, we use that
+            args.push(launcher);
+            if let Some(lombok_jvm_arg) = lombok_jvm_arg {
+                args.push(format!("--jvm-arg={lombok_jvm_arg}"));
+            }
+        } else {
+            // otherwise we launch ourselves
+            args.extend(self.build_jdtls_launch_args(
+                &configuration,
+                language_server_id,
+                worktree,
+                lombok_jvm_arg.into_iter().collect(), // TODO additional jvm-args from config?
+            )?);
         }
 
         // download debugger if not exists
