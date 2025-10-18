@@ -55,6 +55,8 @@ const SCOPES: [&str; 3] = [TEST_SCOPE, AUTO_SCOPE, RUNTIME_SCOPE];
 
 const PATH_TO_STR_ERROR: &str = "Failed to convert path to string";
 
+const JAVA_DEBUG_PLUGIN_FORK_URL: &str = "https://github.com/playdohface/java-debug/releases/download/0.53.2/com.microsoft.java.debug.plugin-0.53.2.jar";
+
 const MAVEN_METADATA_URL: &str = "https://repo1.maven.org/maven2/com/microsoft/java/com.microsoft.java.debug.plugin/maven-metadata.xml";
 
 pub struct Debugger {
@@ -75,6 +77,50 @@ impl Debugger {
     }
 
     pub fn get_or_download(
+        &mut self,
+        language_server_id: &LanguageServerId,
+    ) -> zed::Result<PathBuf> {
+        // when the fix to https://github.com/microsoft/java-debug/issues/605 becomes part of an official release
+        // switch back to this:
+        // return self.get_or_download_latest_official(language_server_id);
+        self.get_or_download_fork(language_server_id)
+    }
+
+    fn get_or_download_fork(
+        &mut self,
+        _language_server_id: &LanguageServerId,
+    ) -> zed::Result<PathBuf> {
+        let prefix = "debugger";
+        let artifact = "com.microsoft.java.debug.plugin";
+        let latest_version = "0.53.2";
+        let jar_name = format!("{artifact}-{latest_version}.jar");
+        let jar_path = PathBuf::from(prefix).join(&jar_name);
+
+        if let Some(path) = &self.plugin_path
+            && fs::metadata(path).is_ok_and(|stat| stat.is_file())
+            && path.ends_with(jar_name)
+        {
+            return Ok(path.clone());
+        }
+
+        download_file(
+            JAVA_DEBUG_PLUGIN_FORK_URL,
+            jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+            DownloadedFileType::Uncompressed,
+        )
+        .map_err(|err| {
+            format!(
+                "Failed to download java-debug fork from {}: {err}",
+                JAVA_DEBUG_PLUGIN_FORK_URL
+            )
+        })?;
+
+        self.plugin_path = Some(jar_path.clone());
+        Ok(jar_path)
+    }
+
+    #[allow(unused)]
+    fn get_or_download_latest_official(
         &mut self,
         language_server_id: &LanguageServerId,
     ) -> zed::Result<PathBuf> {
