@@ -94,7 +94,7 @@ impl Java {
                 Ok(path)
             }
             Err(e) => {
-                if let Some(local_version) = find_latest_local_jdtls(binary_name) {
+                if let Some(local_version) = find_latest_local_jdtls() {
                     self.cached_binary_path = Some(local_version.clone());
                     Ok(local_version)
                 } else {
@@ -258,7 +258,7 @@ fn try_to_fetch_and_install_latest_jdtls(
     Ok(build_path)
 }
 
-fn find_latest_local_jdtls(binary_name: &str) -> Option<PathBuf> {
+fn find_latest_local_jdtls() -> Option<PathBuf> {
     let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
     // walk the dir where we install jdtls
     fs::read_dir(&prefix)
