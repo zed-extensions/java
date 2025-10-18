@@ -8,6 +8,8 @@ use std::{
     str::FromStr,
 };
 
+use regex::Regex;
+use sha1::{Digest, Sha1};
 use zed_extension_api::{
     self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition,
     DownloadedFileType, Extension, LanguageServerId, LanguageServerInstallationStatus, Os,
@@ -15,7 +17,9 @@ use zed_extension_api::{
     current_platform, download_file,
     http_client::{HttpMethod, HttpRequest, fetch},
     lsp::{Completion, CompletionKind},
-    make_file_executable, register_extension,
+    make_file_executable,
+    process::Command,
+    register_extension,
     serde_json::{self, Value, json},
     set_language_server_installation_status,
     settings::LspSettings,
@@ -36,7 +40,6 @@ struct Java {
 }
 
 impl Java {
-    #[allow(dead_code)]
     fn lsp(&mut self) -> zed::Result<&LspWrapper> {
         self.integrations
             .as_ref()
@@ -73,17 +76,10 @@ impl Java {
             return Ok(path.clone());
         }
 
-        // Use $PATH if binary is in it
-
-        let (platform, _) = current_platform();
-        let binary_name = match platform {
+        let binary_name = match current_platform().0 {
             Os::Windows => "jdtls.bat",
             _ => "jdtls",
         };
-
-        if let Some(path_binary) = worktree.which(binary_name) {
-            return Ok(PathBuf::from(path_binary));
-        }
 
         // Check for latest version
 
@@ -98,7 +94,7 @@ impl Java {
                 Ok(path)
             }
             Err(e) => {
-                if let Some(local_version) = find_latest_local_jdtls(binary_name) {
+                if let Some(local_version) = find_latest_local_jdtls() {
                     self.cached_binary_path = Some(local_version.clone());
                     Ok(local_version)
                 } else {
@@ -258,11 +254,11 @@ fn try_to_fetch_and_install_latest_jdtls(
         }
     }
 
-    // else use it
-    Ok(binary_path)
+    // else return jdtls base path
+    Ok(build_path)
 }
 
-fn find_latest_local_jdtls(binary_name: &str) -> Option<PathBuf> {
+fn find_latest_local_jdtls() -> Option<PathBuf> {
     let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
     // walk the dir where we install jdtls
     fs::read_dir(&prefix)
@@ -277,8 +273,8 @@ fn find_latest_local_jdtls(binary_name: &str) -> Option<PathBuf> {
                     Some((path, created_time))
                 })
                 .max_by_key(|&(_, time)| time)
-                // point at where the binary should be
-                .map(|(path, _)| path.join("bin").join(binary_name))
+                // and return it
+                .map(|(path, _)| path)
         })
         .ok()
         .flatten()
@@ -508,36 +504,24 @@ impl Extension for Java {
 
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;
-        let java_home = configuration.as_ref().and_then(|configuration| {
-            configuration
-                .pointer("/java/home")
-                .and_then(|java_home_value| {
-                    java_home_value
-                        .as_str()
-                        .map(|java_home_str| java_home_str.to_string())
-                })
-        });
 
         let mut env = Vec::new();
 
-        if let Some(java_home) = java_home {
+        if let Some(java_home) = get_java_home(&configuration, worktree) {
             env.push(("JAVA_HOME".to_string(), java_home));
         }
 
+        // our proxy takes workdir, bin, argv
         let mut args = vec![
             "--input-type=module".to_string(),
             "-e".to_string(),
             PROXY_FILE.to_string(),
-            current_dir.to_str().ok_or(PATH_TO_STR_ERROR)?.to_string(),
-            current_dir
-                .join(self.language_server_binary_path(language_server_id, worktree)?)
-                .to_str()
-                .ok_or(PATH_TO_STR_ERROR)?
-                .to_string(),
+            path_to_string(current_dir.clone())?,
         ];
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_enabled = configuration
+            .as_ref()
             .and_then(|configuration| {
                 configuration
                     .pointer("/java/jdt/ls/lombokSupport/enabled")
@@ -545,15 +529,32 @@ impl Extension for Java {
             })
             .unwrap_or(false);
 
-        if lombok_enabled {
+        let lombok_jvm_arg = if lombok_enabled {
             let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
             let canonical_lombok_jar_path = current_dir
                 .join(lombok_jar_path)
                 .to_str()
                 .ok_or(PATH_TO_STR_ERROR)?
                 .to_string();
+            Some(format!("-javaagent:{canonical_lombok_jar_path}"))
+        } else {
+            None
+        };
 
-            args.push(format!("--jvm-arg=-javaagent:{canonical_lombok_jar_path}"));
+        if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
+            // if the user has `jdtls(.bat)` on their PATH, we use that
+            args.push(launcher);
+            if let Some(lombok_jvm_arg) = lombok_jvm_arg {
+                args.push(format!("--jvm-arg={lombok_jvm_arg}"));
+            }
+        } else {
+            // otherwise we launch ourselves
+            args.extend(self.build_jdtls_launch_args(
+                &configuration,
+                language_server_id,
+                worktree,
+                lombok_jvm_arg.into_iter().collect(),
+            )?);
         }
 
         // download debugger if not exists
@@ -728,6 +729,224 @@ impl Extension for Java {
             _ => None,
         })
     }
+}
+
+impl Java {
+    fn build_jdtls_launch_args(
+        &mut self,
+        configuration: &Option<Value>,
+        language_server_id: &LanguageServerId,
+        worktree: &Worktree,
+        jvm_args: Vec<String>,
+    ) -> zed::Result<Vec<String>> {
+        if let Some(jdtls_launcher) = get_jdtls_launcher_from_path(worktree) {
+            return Ok(vec![jdtls_launcher]);
+        }
+
+        let java_executable = get_java_executable(configuration, worktree)?;
+        let java_major_version = get_java_major_version(&java_executable)?;
+        if java_major_version < 21 {
+            return Err("JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings".to_string());
+        }
+
+        let extension_workdir = env::current_dir().map_err(|_e| "Could not get current dir")?;
+
+        let jdtls_base_path =
+            extension_workdir.join(self.language_server_binary_path(language_server_id, worktree)?);
+
+        let shared_config_path = get_shared_config_path(&jdtls_base_path);
+        let jar_path = find_equinox_launcher(&jdtls_base_path)?;
+        let jdtls_data_path = get_jdtls_data_path(worktree)?;
+
+        let mut args = vec![
+            get_java_executable(configuration, worktree).and_then(path_to_string)?,
+            "-Declipse.application=org.eclipse.jdt.ls.core.id1".to_string(),
+            "-Dosgi.bundles.defaultStartLevel=4".to_string(),
+            "-Declipse.product=org.eclipse.jdt.ls.core.product".to_string(),
+            "-Dosgi.checkConfiguration=true".to_string(),
+            format!(
+                "-Dosgi.sharedConfiguration.area={}",
+                path_to_string(shared_config_path)?
+            ),
+            "-Dosgi.sharedConfiguration.area.readOnly=true".to_string(),
+            "-Dosgi.configuration.cascaded=true".to_string(),
+            "-Xms1G".to_string(),
+            "--add-modules=ALL-SYSTEM".to_string(),
+            "--add-opens".to_string(),
+            "java.base/java.util=ALL-UNNAMED".to_string(),
+            "--add-opens".to_string(),
+            "java.base/java.lang=ALL-UNNAMED".to_string(),
+        ];
+        args.extend(jvm_args);
+        args.extend(vec![
+            "-jar".to_string(),
+            path_to_string(jar_path)?,
+            "-data".to_string(),
+            path_to_string(jdtls_data_path)?,
+        ]);
+        if java_major_version >= 24 {
+            args.push("-Djdk.xml.maxGeneralEntitySizeLimit=0".to_string());
+            args.push("-Djdk.xml.totalEntitySizeLimit=0".to_string());
+        }
+        Ok(args)
+    }
+}
+
+fn path_to_string(path: PathBuf) -> zed::Result<String> {
+    path.into_os_string()
+        .into_string()
+        .map_err(|_| PATH_TO_STR_ERROR.to_string())
+}
+
+fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
+    // Note: the JDTLS data path is where JDTLS stores its own caches.
+    // In the unlikely event we can't find the canonical OS-Level cache-path,
+    // we fall back to the the extension's workdir, which may never get cleaned up.
+    // In future we may want to deliberately manage caches to be able to force-clean them.
+
+    let mut env_iter = worktree.shell_env().into_iter();
+    let base_cachedir = match current_platform().0 {
+        Os::Mac => env_iter
+            .find(|(k, _)| k == "HOME")
+            .map(|(_, v)| PathBuf::from(v).join("Library").join("Caches")),
+        Os::Linux => env_iter
+            .find(|(k, _)| k == "HOME")
+            .map(|(_, v)| PathBuf::from(v).join(".cache")),
+        Os::Windows => env_iter
+            .find(|(k, _)| k == "APPDATA")
+            .map(|(_, v)| PathBuf::from(v)),
+    }
+    .unwrap_or_else(|| {
+        env::current_dir()
+            .expect("should be able to get extension workdir")
+            .join("caches")
+    });
+
+    // caches are unique per worktree-root-path
+    let cache_key = worktree.root_path();
+
+    let hex_digest = get_sha1_hex(&cache_key);
+    let unique_dir_name = format!("jdtls-{}", hex_digest);
+    Ok(base_cachedir.join(unique_dir_name))
+}
+
+fn get_sha1_hex(input: &str) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(input.as_bytes());
+    let result = hasher.finalize();
+    hex::encode(result)
+}
+
+fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
+    let jdtls_executable_filename = match current_platform().0 {
+        Os::Windows => "jdtls.bat",
+        _ => "jdtls",
+    };
+
+    worktree.which(jdtls_executable_filename)
+}
+
+fn get_java_executable(configuration: &Option<Value>, worktree: &Worktree) -> zed::Result<PathBuf> {
+    let java_executable_filename = match current_platform().0 {
+        Os::Windows => "java.exe",
+        _ => "java",
+    };
+
+    // Get executable from $JAVA_HOME
+    if let Some(java_home) = get_java_home(configuration, worktree) {
+        let java_executable = PathBuf::from(java_home)
+            .join("bin")
+            .join(java_executable_filename);
+        if fs::metadata(&java_executable).is_ok_and(|stat| stat.is_file()) {
+            return Ok(java_executable);
+        }
+    }
+    // If we can't, try to get it from $PATH
+    worktree
+        .which(java_executable_filename)
+        .map(PathBuf::from)
+        .ok_or_else(|| "Could not find Java executable in JAVA_HOME or on PATH".to_string())
+}
+
+fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    // try to read the value from settings
+    if let Some(configuration) = configuration {
+        if let Some(java_home) = configuration
+            .pointer("/java/home")
+            .and_then(|java_home_value| java_home_value.as_str())
+        {
+            return Some(java_home.to_string());
+        }
+    }
+
+    // try to read the value from env
+    match worktree
+        .shell_env()
+        .into_iter()
+        .find(|(k, _)| k == "JAVA_HOME")
+    {
+        Some((_, value)) if !value.is_empty() => Some(value),
+        _ => None,
+    }
+}
+
+fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
+    let program = java_executable
+        .to_str()
+        .ok_or_else(|| "Could not convert Java executable path to string".to_string())?;
+    let output_bytes = Command::new(program).arg("-version").output()?.stderr;
+    let output = String::from_utf8(output_bytes).map_err(|e| e.to_string())?;
+
+    let major_version_regex =
+        Regex::new(r#"version\s"(?P<major>\d+)(\.\d+\.\d+(_\d+)?)?"#).map_err(|e| e.to_string())?;
+    let major_version = major_version_regex
+        .captures_iter(&output)
+        .find_map(|c| c.name("major").and_then(|m| m.as_str().parse::<u32>().ok()));
+
+    if let Some(major_version) = major_version {
+        Ok(major_version)
+    } else {
+        Err("Could not determine Java major version".to_string())
+    }
+}
+
+fn find_equinox_launcher(jdtls_base_directory: &PathBuf) -> Result<PathBuf, String> {
+    let plugins_dir = jdtls_base_directory.join("plugins");
+
+    // if we have `org.eclipse.equinox.launcher.jar` use that
+    let specific_launcher = plugins_dir.join("org.eclipse.equinox.launcher.jar");
+    if specific_launcher.is_file() {
+        return Ok(specific_launcher);
+    }
+
+    // else get the first file that matches the glob 'org.eclipse.equinox.launcher_*.jar'
+    let entries = fs::read_dir(&plugins_dir)
+        .map_err(|e| format!("Failed to read plugins directory: {}", e))?;
+
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map_or(false, |s| {
+                        s.starts_with("org.eclipse.equinox.launcher_") && s.ends_with(".jar")
+                    })
+        })
+        .ok_or_else(|| "Cannot find equinox launcher".to_string())
+}
+
+fn get_shared_config_path(jdtls_base_directory: &PathBuf) -> PathBuf {
+    // Note: JDTLS also provides config_linux_arm and config_mac_arm (and others),
+    // but does not use them in their own launch script. It may be worth investigating if we should use them when appropriate.
+    let config_to_use = match current_platform().0 {
+        Os::Linux => "config_linux",
+        Os::Mac => "config_mac",
+        Os::Windows => "config_win",
+    };
+    jdtls_base_directory.join(config_to_use)
 }
 
 register_extension!(Java);

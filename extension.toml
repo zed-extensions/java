@@ -23,3 +23,8 @@ name = "Eclipse JDT Language Server"
 language = "Java"
 
 [debug_adapters.Java]
+
+[[capabilities]]
+kind = "process:exec"
+command = "*"
+args = ["-version"]
