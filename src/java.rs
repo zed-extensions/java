@@ -857,9 +857,7 @@ fn get_java_executable(configuration: &Option<Value>, worktree: &Worktree) -> ze
         let java_executable = PathBuf::from(java_home)
             .join("bin")
             .join(java_executable_filename);
-        if fs::metadata(&java_executable).is_ok_and(|stat| stat.is_file()) {
-            return Ok(java_executable);
-        }
+        return Ok(java_executable);
     }
     // If we can't, try to get it from $PATH
     worktree
