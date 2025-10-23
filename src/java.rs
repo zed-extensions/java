@@ -505,20 +505,6 @@ impl Extension for Java {
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;
 
-        let mut env = Vec::new();
-
-        if let Some(java_home) = get_java_home(&configuration, worktree) {
-            env.push(("JAVA_HOME".to_string(), java_home));
-        }
-
-        // our proxy takes workdir, bin, argv
-        let mut args = vec![
-            "--input-type=module".to_string(),
-            "-e".to_string(),
-            PROXY_FILE.to_string(),
-            path_to_string(current_dir.clone())?,
-        ];
-
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_enabled = configuration
             .as_ref()
@@ -541,21 +527,45 @@ impl Extension for Java {
             None
         };
 
-        if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
+        let java_home_opt = get_java_home(&configuration, worktree);
+
+        let command = if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
             // if the user has `jdtls(.bat)` on their PATH, we use that
-            args.push(launcher);
+            // our proxy takes workdir, bin, argv
+            let mut args = vec![
+                "--input-type=module".to_string(),
+                "-e".to_string(),
+                PROXY_FILE.to_string(),
+                path_to_string(current_dir.clone())?,
+                launcher
+            ];
             if let Some(lombok_jvm_arg) = lombok_jvm_arg {
                 args.push(format!("--jvm-arg={lombok_jvm_arg}"));
             }
+
+            let mut env = Vec::new();
+            if let Some(java_home) = java_home_opt {
+                env.push(("JAVA_HOME".to_string(), java_home));
+            }
+            zed::Command {
+                command: zed::node_binary_path()?,
+                args,
+                env,
+            }
         } else {
             // otherwise we launch ourselves
-            args.extend(self.build_jdtls_launch_args(
-                &configuration,
+            let (java_binary, launcher_args) = self.build_jdtls_launch_args(
+                &java_home_opt,
                 language_server_id,
                 worktree,
                 lombok_jvm_arg.into_iter().collect(),
-            )?);
-        }
+            )?;
+            zed::Command {
+                command: java_binary,
+                args: launcher_args,
+                env: Default::default(),
+            }
+        };
 
         // download debugger if not exists
         if let Err(err) = self.debugger()?.get_or_download(language_server_id) {
@@ -564,11 +574,7 @@ impl Extension for Java {
 
         self.lsp()?.switch_workspace(worktree.root_path())?;
 
-        Ok(zed::Command {
-            command: zed::node_binary_path()?,
-            args,
-            env,
-        })
+        Ok(command)
     }
 
     fn language_server_initialization_options(
@@ -734,16 +740,12 @@ impl Extension for Java {
 impl Java {
     fn build_jdtls_launch_args(
         &mut self,
-        configuration: &Option<Value>,
+        java_home_opt: &Option<String>,
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
         jvm_args: Vec<String>,
-    ) -> zed::Result<Vec<String>> {
-        if let Some(jdtls_launcher) = get_jdtls_launcher_from_path(worktree) {
-            return Ok(vec![jdtls_launcher]);
-        }
-
-        let java_executable = get_java_executable(configuration, worktree)?;
+    ) -> zed::Result<(String, Vec<String>)> {
+        let java_executable = get_java_executable(java_home_opt, worktree)?;
         let java_major_version = get_java_major_version(&java_executable)?;
         if java_major_version < 21 {
             return Err("JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings".to_string());
@@ -759,7 +761,6 @@ impl Java {
         let jdtls_data_path = get_jdtls_data_path(worktree)?;
 
         let mut args = vec![
-            get_java_executable(configuration, worktree).and_then(path_to_string)?,
             "-Declipse.application=org.eclipse.jdt.ls.core.id1".to_string(),
             "-Dosgi.bundles.defaultStartLevel=4".to_string(),
             "-Declipse.product=org.eclipse.jdt.ls.core.product".to_string(),
@@ -788,7 +789,7 @@ impl Java {
             args.push("-Djdk.xml.maxGeneralEntitySizeLimit=0".to_string());
             args.push("-Djdk.xml.totalEntitySizeLimit=0".to_string());
         }
-        Ok(args)
+        Ok((path_to_string(java_executable)?, args))
     }
 }
 
@@ -846,14 +847,14 @@ fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
     worktree.which(jdtls_executable_filename)
 }
 
-fn get_java_executable(configuration: &Option<Value>, worktree: &Worktree) -> zed::Result<PathBuf> {
+fn get_java_executable(java_home_opt: &Option<String>, worktree: &Worktree) -> zed::Result<PathBuf> {
     let java_executable_filename = match current_platform().0 {
         Os::Windows => "java.exe",
         _ => "java",
     };
 
     // Get executable from $JAVA_HOME
-    if let Some(java_home) = get_java_home(configuration, worktree) {
+    if let Some(java_home) = java_home_opt {
         let java_executable = PathBuf::from(java_home)
             .join("bin")
             .join(java_executable_filename);
