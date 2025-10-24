@@ -27,8 +27,9 @@ const args = process.argv.slice(3);
 
 const PROXY_ID = Buffer.from(process.cwd().replace(/\/+$/, "")).toString("hex");
 const PROXY_HTTP_PORT_FILE = join(workdir, "proxy", PROXY_ID);
+const command = process.platform === "win32" ? `"${bin}"` : bin;
 
-const lsp = spawn(bin, args, { shell: process.platform === 'win32' });
+const lsp = spawn(command, args, { shell: process.platform === "win32" });
 const proxy = createLspProxy({ server: lsp, proxy: process });
 
 proxy.on("client", (data, passthrough) => {
