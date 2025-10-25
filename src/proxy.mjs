@@ -32,7 +32,22 @@ const command = process.platform === "win32" ? `"${bin}"` : bin;
 const lsp = spawn(command, args, { shell: process.platform === "win32" });
 const proxy = createLspProxy({ server: lsp, proxy: process });
 
-proxy.on("client", (data, passthrough) => {
+proxy.on("client", (message, passthrough) => {
+  if (message?.method === "initialize") {
+    const completionList =
+      message.params?.capabilities?.textDocument?.completion?.completionList;
+
+    if (completionList?.itemDefaults) {
+      delete completionList.itemDefaults;
+      if (Object.keys(completionList).length === 0) {
+        delete message.params.capabilities.textDocument.completion
+          .completionList;
+      }
+      lsp.stdin.write(stringify(message));
+      return;
+    }
+  }
+
   passthrough();
 });
 proxy.on("server", (data, passthrough) => {
