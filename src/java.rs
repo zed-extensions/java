@@ -3,7 +3,7 @@ mod lsp;
 use std::{
     collections::BTreeSet,
     env,
-    fs::{self, create_dir},
+    fs::{self, create_dir, create_dir_all},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -30,6 +30,7 @@ use crate::{debugger::Debugger, lsp::LspWrapper};
 const PROXY_FILE: &str = include_str!("proxy.mjs");
 const DEBUG_ADAPTER_NAME: &str = "Java";
 const PATH_TO_STR_ERROR: &str = "failed to convert path to string";
+const EXPAND_ERROR: &str = "failed to expand ~";
 const JDTLS_INSTALL_PATH: &str = "jdtls";
 const LOMBOK_INSTALL_PATH: &str = "lombok";
 
@@ -88,7 +89,7 @@ impl Java {
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        match try_to_fetch_and_install_latest_jdtls(binary_name, language_server_id) {
+        match try_to_fetch_and_install_forked_jdtls(binary_name, language_server_id) {
             Ok(path) => {
                 self.cached_binary_path = Some(path.clone());
                 Ok(path)
@@ -128,6 +129,84 @@ impl Java {
     }
 }
 
+/// Fetch and install forked version of jdtls.
+///
+/// Leverage GitHub functions to always retrieve latest version
+fn try_to_fetch_and_install_forked_jdtls(
+    binary_name: &str,
+    language_server_id: &LanguageServerId,
+) -> zed::Result<PathBuf> {
+    let release = zed::latest_github_release(
+        "tartarughina/eclipse.jdt.ls",
+        zed_extension_api::GithubReleaseOptions {
+            require_assets: true,
+            pre_release: false,
+        },
+    )
+    .map_err(|err| format!("Could not retrieve latest release: {err}"))?;
+
+    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
+    let build_directory = &release.version;
+    let build_path = prefix.join(build_directory);
+    let binary_path = build_path.join("bin").join(binary_name);
+
+    // If latest version isn't installed,
+    if !fs::metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
+        // then download it...
+
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::Downloading,
+        );
+
+        let download_url = &release
+            .assets
+            .iter()
+            .find(|asset| asset.name.contains("jdt-language-server"))
+            .ok_or(format!("Language server asset not found"))?
+            .download_url;
+
+        create_dir_all(&build_path).map_err(|err| err.to_string())?;
+
+        download_file(
+            &download_url,
+            build_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+            DownloadedFileType::GzipTar,
+        )
+        .map_err(|err| format!("Failed to download asset from {}: {err}", download_url))?;
+
+        make_file_executable(binary_path.to_str().ok_or(PATH_TO_STR_ERROR)?)
+            .map_err(|err| format!("Failed to make jdtls executable: {err}"))?;
+
+        // ...and delete other versions
+
+        // This step is expected to fail sometimes, and since we don't know
+        // how to fix it yet, we just carry on so the user doesn't have to
+        // restart the language server.
+        match fs::read_dir(prefix) {
+            Ok(entries) => {
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => {
+                            if entry.file_name().to_str() != Some(&release.version)
+                                && let Err(err) = fs::remove_dir_all(entry.path())
+                            {
+                                println!("failed to remove directory entry: {err}");
+                            }
+                        }
+                        Err(err) => println!("failed to load directory entry: {err}"),
+                    }
+                }
+            }
+            Err(err) => println!("failed to list prefix directory: {err}"),
+        }
+    }
+
+    // else return jdtls base path
+    Ok(build_path)
+}
+
+#[allow(unused)]
 fn try_to_fetch_and_install_latest_jdtls(
     binary_name: &str,
     language_server_id: &LanguageServerId,
@@ -743,7 +822,10 @@ impl Java {
             return Ok(vec![jdtls_launcher]);
         }
 
-        let java_executable = get_java_executable(configuration, worktree)?;
+        // Obtain java exec and expand ~ if present for better UX
+        let java_executable = get_java_executable(configuration, worktree)
+            .and_then(|java_exec| path_to_string(java_exec))
+            .and_then(|java_exec| expand_home_path(worktree, java_exec))?;
         let java_major_version = get_java_major_version(&java_executable)?;
         if java_major_version < 21 {
             return Err("JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings".to_string());
@@ -759,7 +841,7 @@ impl Java {
         let jdtls_data_path = get_jdtls_data_path(worktree)?;
 
         let mut args = vec![
-            get_java_executable(configuration, worktree).and_then(path_to_string)?,
+            java_executable,
             "-Declipse.application=org.eclipse.jdt.ls.core.id1".to_string(),
             "-Dosgi.bundles.defaultStartLevel=4".to_string(),
             "-Declipse.product=org.eclipse.jdt.ls.core.product".to_string(),
@@ -789,6 +871,20 @@ impl Java {
             args.push("-Djdk.xml.totalEntitySizeLimit=0".to_string());
         }
         Ok(args)
+    }
+}
+
+fn expand_home_path(worktree: &Worktree, path: String) -> zed::Result<String> {
+    match zed::current_platform() {
+        (Os::Windows, _) => Ok(path),
+        (_, _) => worktree
+            .shell_env()
+            .iter()
+            .find(|&(key, _)| key == "HOME")
+            .map_or_else(
+                || Err(EXPAND_ERROR.to_string()),
+                |(_, value)| Ok(path.replace("~", value)),
+            ),
     }
 }
 
@@ -888,11 +984,11 @@ fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Option<S
     }
 }
 
-fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
-    let program = java_executable
-        .to_str()
-        .ok_or_else(|| "Could not convert Java executable path to string".to_string())?;
-    let output_bytes = Command::new(program).arg("-version").output()?.stderr;
+fn get_java_major_version(java_executable: &String) -> zed::Result<u32> {
+    let output_bytes = Command::new(java_executable)
+        .arg("-version")
+        .output()?
+        .stderr;
     let output = String::from_utf8(output_bytes).map_err(|e| e.to_string())?;
 
     let major_version_regex =
