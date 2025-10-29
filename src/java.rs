@@ -31,6 +31,7 @@ const PROXY_FILE: &str = include_str!("proxy.mjs");
 const DEBUG_ADAPTER_NAME: &str = "Java";
 const PATH_TO_STR_ERROR: &str = "failed to convert path to string";
 const EXPAND_ERROR: &str = "failed to expand ~";
+const JDTLS_REPO: &str = "tartarughina/eclipse.jdt.ls";
 const JDTLS_INSTALL_PATH: &str = "jdtls";
 const LOMBOK_INSTALL_PATH: &str = "lombok";
 
@@ -137,7 +138,7 @@ fn try_to_fetch_and_install_forked_jdtls(
     language_server_id: &LanguageServerId,
 ) -> zed::Result<PathBuf> {
     let release = zed::latest_github_release(
-        "tartarughina/eclipse.jdt.ls",
+        JDTLS_REPO,
         zed_extension_api::GithubReleaseOptions {
             require_assets: true,
             pre_release: false,
