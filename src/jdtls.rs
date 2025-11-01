@@ -16,11 +16,16 @@ use zed_extension_api::{
 };
 
 use crate::util::{
-    get_java_executable, get_java_major_version, path_to_string, remove_all_files_except,
+    get_curr_dir, get_java_executable, get_java_major_version, path_to_string,
+    remove_all_files_except,
 };
 
 const JDTLS_INSTALL_PATH: &str = "jdtls";
 const LOMBOK_INSTALL_PATH: &str = "lombok";
+
+// Errors
+
+const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings";
 
 pub fn build_jdtls_launch_args(
     jdtls_path: &PathBuf,
@@ -35,10 +40,10 @@ pub fn build_jdtls_launch_args(
     let java_executable = get_java_executable(configuration, worktree)?;
     let java_major_version = get_java_major_version(&java_executable)?;
     if java_major_version < 21 {
-        return Err("JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings".to_string());
+        return Err(JAVA_VERSION_ERROR.to_string());
     }
 
-    let extension_workdir = current_dir().map_err(|_e| "Could not get current dir")?;
+    let extension_workdir = get_curr_dir()?;
 
     let jdtls_base_path = extension_workdir.join(jdtls_path);
 
@@ -79,11 +84,58 @@ pub fn build_jdtls_launch_args(
     Ok(args)
 }
 
-fn get_binary_name() -> &'static str {
-    match current_platform().0 {
+pub fn find_latest_local_jdtls() -> Option<PathBuf> {
+    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
+    // walk the dir where we install jdtls
+    read_dir(&prefix)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| path.is_dir())
+                // get the most recently created subdirectory
+                .filter_map(|path| {
+                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
+                    Some((path, created_time))
+                })
+                .max_by_key(|&(_, time)| time)
+                // and return it
+                .map(|(path, _)| path)
+        })
+        .ok()
+        .flatten()
+}
+
+pub fn find_latest_local_lombok() -> Option<PathBuf> {
+    let prefix = PathBuf::from(LOMBOK_INSTALL_PATH);
+    // walk the dir where we install lombok
+    read_dir(&prefix)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                // get the most recently created jar file
+                .filter(|path| {
+                    path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
+                })
+                .filter_map(|path| {
+                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
+                    Some((path, created_time))
+                })
+                .max_by_key(|&(_, time)| time)
+                .map(|(path, _)| path)
+        })
+        .ok()
+        .flatten()
+}
+
+pub fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
+    let jdtls_executable_filename = match current_platform().0 {
         Os::Windows => "jdtls.bat",
         _ => "jdtls",
-    }
+    };
+
+    worktree.which(jdtls_executable_filename)
 }
 
 pub fn try_to_fetch_and_install_latest_jdtls(
@@ -195,28 +247,6 @@ pub fn try_to_fetch_and_install_latest_jdtls(
     Ok(build_path)
 }
 
-pub fn find_latest_local_jdtls() -> Option<PathBuf> {
-    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
-    // walk the dir where we install jdtls
-    read_dir(&prefix)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| entry.path())
-                .filter(|path| path.is_dir())
-                // get the most recently created subdirectory
-                .filter_map(|path| {
-                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
-                    Some((path, created_time))
-                })
-                .max_by_key(|&(_, time)| time)
-                // and return it
-                .map(|(path, _)| path)
-        })
-        .ok()
-        .flatten()
-}
-
 pub fn try_to_fetch_and_install_latest_lombok(
     language_server_id: &LanguageServerId,
 ) -> zed::Result<PathBuf> {
@@ -275,30 +305,35 @@ pub fn try_to_fetch_and_install_latest_lombok(
     Ok(jar_path)
 }
 
-pub fn find_latest_local_lombok() -> Option<PathBuf> {
-    let prefix = PathBuf::from(LOMBOK_INSTALL_PATH);
-    // walk the dir where we install lombok
-    read_dir(&prefix)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| entry.path())
-                // get the most recently created jar file
-                .filter(|path| {
-                    path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
-                })
-                .filter_map(|path| {
-                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
-                    Some((path, created_time))
-                })
-                .max_by_key(|&(_, time)| time)
-                .map(|(path, _)| path)
+fn find_equinox_launcher(jdtls_base_directory: &PathBuf) -> Result<PathBuf, String> {
+    let plugins_dir = jdtls_base_directory.join("plugins");
+
+    // if we have `org.eclipse.equinox.launcher.jar` use that
+    let specific_launcher = plugins_dir.join("org.eclipse.equinox.launcher.jar");
+    if specific_launcher.is_file() {
+        return Ok(specific_launcher);
+    }
+
+    // else get the first file that matches the glob 'org.eclipse.equinox.launcher_*.jar'
+    let entries =
+        read_dir(&plugins_dir).map_err(|e| format!("Failed to read plugins directory: {}", e))?;
+
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map_or(false, |s| {
+                        s.starts_with("org.eclipse.equinox.launcher_") && s.ends_with(".jar")
+                    })
         })
-        .ok()
-        .flatten()
+        .ok_or_else(|| "Cannot find equinox launcher".to_string())
 }
 
-pub fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
+fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
     // Note: the JDTLS data path is where JDTLS stores its own caches.
     // In the unlikely event we can't find the canonical OS-Level cache-path,
     // we fall back to the the extension's workdir, which may never get cleaned up.
@@ -330,6 +365,13 @@ pub fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
     Ok(base_cachedir.join(unique_dir_name))
 }
 
+fn get_binary_name() -> &'static str {
+    match current_platform().0 {
+        Os::Windows => "jdtls.bat",
+        _ => "jdtls",
+    }
+}
+
 fn get_sha1_hex(input: &str) -> String {
     let mut hasher = Sha1::new();
     hasher.update(input.as_bytes());
@@ -337,44 +379,7 @@ fn get_sha1_hex(input: &str) -> String {
     hex::encode(result)
 }
 
-pub fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
-    let jdtls_executable_filename = match current_platform().0 {
-        Os::Windows => "jdtls.bat",
-        _ => "jdtls",
-    };
-
-    worktree.which(jdtls_executable_filename)
-}
-
-pub fn find_equinox_launcher(jdtls_base_directory: &PathBuf) -> Result<PathBuf, String> {
-    let plugins_dir = jdtls_base_directory.join("plugins");
-
-    // if we have `org.eclipse.equinox.launcher.jar` use that
-    let specific_launcher = plugins_dir.join("org.eclipse.equinox.launcher.jar");
-    if specific_launcher.is_file() {
-        return Ok(specific_launcher);
-    }
-
-    // else get the first file that matches the glob 'org.eclipse.equinox.launcher_*.jar'
-    let entries =
-        read_dir(&plugins_dir).map_err(|e| format!("Failed to read plugins directory: {}", e))?;
-
-    entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .find(|path| {
-            path.is_file()
-                && path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map_or(false, |s| {
-                        s.starts_with("org.eclipse.equinox.launcher_") && s.ends_with(".jar")
-                    })
-        })
-        .ok_or_else(|| "Cannot find equinox launcher".to_string())
-}
-
-pub fn get_shared_config_path(jdtls_base_directory: &PathBuf) -> PathBuf {
+fn get_shared_config_path(jdtls_base_directory: &PathBuf) -> PathBuf {
     // Note: JDTLS also provides config_linux_arm and config_mac_arm (and others),
     // but does not use them in their own launch script. It may be worth investigating if we should use them when appropriate.
     let config_to_use = match current_platform().0 {

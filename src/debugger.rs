@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use zed_extension_api::{
@@ -9,7 +9,10 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::{lsp::LspWrapper, util::path_to_string};
+use crate::{
+    lsp::LspWrapper,
+    util::{get_curr_dir, path_to_string},
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -105,7 +108,7 @@ impl Debugger {
 
         download_file(
             JAVA_DEBUG_PLUGIN_FORK_URL,
-            jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+            &path_to_string(jar_path.clone())?,
             DownloadedFileType::Uncompressed,
         )
         .map_err(|err| {
@@ -345,8 +348,7 @@ impl Debugger {
         &self,
         initialization_options: Option<Value>,
     ) -> zed::Result<Value> {
-        let current_dir =
-            env::current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
+        let current_dir = get_curr_dir()?;
 
         let canonical_path = Value::String(
             current_dir

@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::{
+    env::current_dir,
     fs,
     path::{Path, PathBuf},
 };
@@ -9,6 +10,7 @@ use crate::config::get_java_home;
 
 // Errors
 const EXPAND_ERROR: &str = "Failed to expand ~";
+const CURR_DIR_ERROR: &str = "Could not get current dir";
 const DIR_ENTRY_LOAD_ERROR: &str = "Failed to load directory entry";
 const DIR_ENTRY_RM_ERROR: &str = "Failed to remove directory entry";
 const DIR_ENTRY_LS_ERROR: &str = "Failed to list prefix directory";
@@ -43,39 +45,17 @@ pub fn expand_home_path(worktree: &Worktree, path: String) -> zed::Result<String
     }
 }
 
-/// Remove all files or directories that aren't equal to [`filename`].
-///
-/// This function scans the directory given by [`prefix`] and removes any
-/// file or directory whose name does not exactly match [`filename`].
-///
-/// # Arguments
-///
-/// * [`prefix`] - The path to the directory to clean. See [`AsRef<Path>`] for supported types.
-/// * [`filename`] - The name of the file to keep.
+/// Get the extension current directory
 ///
 /// # Returns
 ///
-/// Returns `Ok(())` on success, even if some removals fail (errors are printed to stdout).
-pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed::Result<()> {
-    match fs::read_dir(prefix) {
-        Ok(entries) => {
-            for entry in entries {
-                match entry {
-                    Ok(entry) => {
-                        if entry.file_name().to_str() != Some(filename)
-                            && let Err(err) = fs::remove_dir_all(entry.path())
-                        {
-                            println!("{msg}: {err}", msg = DIR_ENTRY_RM_ERROR, err = err);
-                        }
-                    }
-                    Err(err) => println!("{msg}: {err}", msg = DIR_ENTRY_LOAD_ERROR, err = err),
-                }
-            }
-        }
-        Err(err) => println!("{msg}: {err}", msg = DIR_ENTRY_LS_ERROR, err = err),
-    }
-
-    Ok(())
+/// The [`PathBuf`] of the extension directory
+///
+/// # Errors
+///
+/// This functoin will return an error if it was not possible to retrieve the current directory
+pub fn get_curr_dir() -> zed::Result<PathBuf> {
+    current_dir().map_err(|_| CURR_DIR_ERROR.to_string())
 }
 
 /// Retrieve the path to a java exec either:
@@ -119,27 +99,6 @@ pub fn get_java_executable(
         .ok_or_else(|| JAVA_EXEC_NOT_FOUND_ERROR.to_string())
 }
 
-/// Convert [`path`] into [`String`]
-///
-/// # Arguments
-///
-/// * [`path`] the path of type [`AsRef<Path>`] to convert
-///
-/// # Returns
-///
-/// Returns a String representing [`path`]
-///
-/// # Errors
-///
-/// This function will return an error when the string conversion fails
-pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
-    path.as_ref()
-        .to_path_buf()
-        .into_os_string()
-        .into_string()
-        .map_err(|_| PATH_TO_STR_ERROR.to_string())
-}
-
 /// Retrieve the java major version accessible by the extension
 ///
 /// # Arguments
@@ -172,4 +131,60 @@ pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
     } else {
         Err(JAVA_VERSION_ERROR.to_string())
     }
+}
+
+/// Convert [`path`] into [`String`]
+///
+/// # Arguments
+///
+/// * [`path`] the path of type [`AsRef<Path>`] to convert
+///
+/// # Returns
+///
+/// Returns a String representing [`path`]
+///
+/// # Errors
+///
+/// This function will return an error when the string conversion fails
+pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
+    path.as_ref()
+        .to_path_buf()
+        .into_os_string()
+        .into_string()
+        .map_err(|_| PATH_TO_STR_ERROR.to_string())
+}
+
+/// Remove all files or directories that aren't equal to [`filename`].
+///
+/// This function scans the directory given by [`prefix`] and removes any
+/// file or directory whose name does not exactly match [`filename`].
+///
+/// # Arguments
+///
+/// * [`prefix`] - The path to the directory to clean. See [`AsRef<Path>`] for supported types.
+/// * [`filename`] - The name of the file to keep.
+///
+/// # Returns
+///
+/// Returns `Ok(())` on success, even if some removals fail (errors are printed to stdout).
+pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed::Result<()> {
+    match fs::read_dir(prefix) {
+        Ok(entries) => {
+            for entry in entries {
+                match entry {
+                    Ok(entry) => {
+                        if entry.file_name().to_str() != Some(filename)
+                            && let Err(err) = fs::remove_dir_all(entry.path())
+                        {
+                            println!("{msg}: {err}", msg = DIR_ENTRY_RM_ERROR, err = err);
+                        }
+                    }
+                    Err(err) => println!("{msg}: {err}", msg = DIR_ENTRY_LOAD_ERROR, err = err),
+                }
+            }
+        }
+        Err(err) => println!("{msg}: {err}", msg = DIR_ENTRY_LS_ERROR, err = err),
+    }
+
+    Ok(())
 }
