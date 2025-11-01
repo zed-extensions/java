@@ -9,7 +9,7 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::lsp::LspWrapper;
+use crate::{lsp::LspWrapper, util::path_to_string};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -215,7 +215,7 @@ impl Debugger {
 
             download_file(
                 url.as_str(),
-                jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+                &path_to_string(&jar_path)?,
                 DownloadedFileType::Uncompressed,
             )
             .map_err(|err| format!("Failed to download {url} {err}"))?;
