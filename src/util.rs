@@ -119,6 +119,19 @@ pub fn get_java_executable(
         .ok_or_else(|| JAVA_EXEC_NOT_FOUND_ERROR.to_string())
 }
 
+/// Convert [`path`] into [`String`]
+///
+/// # Arguments
+///
+/// * [`path`] the path of type [`AsRef<Path>`] to convert
+///
+/// # Returns
+///
+/// Returns a String representing [`path`]
+///
+/// # Errors
+///
+/// This function will return an error when the string conversion fails
 pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
     path.as_ref()
         .to_path_buf()
@@ -127,6 +140,22 @@ pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
         .map_err(|_| PATH_TO_STR_ERROR.to_string())
 }
 
+/// Retrieve the java major version accessible by the extension
+///
+/// # Arguments
+///
+/// * [`java_executable`] the path to a java exec file
+///
+/// # Returns
+///
+/// Returns the java major version
+///
+/// # Errors
+///
+/// This function will return an error if:
+///
+/// * [`java_executable`] can't be converted into a String
+/// * No major version can be determined
 pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
     let program = path_to_string(java_executable).map_err(|_| JAVA_EXEC_ERROR.to_string())?;
     let output_bytes = Command::new(program).arg("-version").output()?.stderr;
