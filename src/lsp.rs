@@ -12,14 +12,14 @@ use zed_extension_api::{
     serde_json::{self, Map, Value},
 };
 
-/**
- * `proxy.mjs` starts an HTTP server and writes its port to
- * `${workdir}/proxy/${hex(project_root)}`.
- *
- * This allows us to send LSP requests directly from the Java extension.
- * It’s  a temporary workaround until `zed_extension_api`
- * provides the ability to send LSP requests directly.
-*/
+///
+/// `proxy.mjs` starts an HTTP server and writes its port to
+/// `${workdir}/proxy/${hex(project_root)}`.
+///
+/// This allows us to send LSP requests directly from the Java extension.
+/// It’s  a temporary workaround until `zed_extension_api`
+/// provides the ability to send LSP requests directly.
+///
 pub struct LspClient {
     workspace: String,
 }
