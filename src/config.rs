@@ -38,5 +38,5 @@ pub fn is_lombok_enabled(configuration: &Option<Value>) -> bool {
                 .or_else(|| configuration.pointer("/java/jdt/ls/lombokSupport/enabled")) // legacy support
                 .and_then(|enabled| enabled.as_bool())
         })
-        .unwrap_or(false)
+        .unwrap_or(true)
 }
