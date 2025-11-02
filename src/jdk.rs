@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use zed_extension_api::{
     self as zed, Architecture, DownloadedFileType, LanguageServerId,
@@ -16,7 +16,7 @@ const CORRETTO_REPO: &str = "corretto/corretto-25";
 const CORRETTO_UNIX_URL_TEMPLATE: &str = "https://corretto.aws/downloads/resources/{version}/amazon-corretto-{version}-{platform}-{arch}.tar.gz";
 const CORRETTO_WINDOWS_URL_TEMPLATE: &str = "https://corretto.aws/downloads/resources/{version}/amazon-corretto-{version}-{platform}-{arch}-jdk.zip";
 
-fn build_corretto_url(version: &String, platform: &String, arch: &String) -> String {
+fn build_corretto_url(version: &str, platform: &str, arch: &str) -> String {
     let template = match zed::current_platform().0 {
         Os::Windows => CORRETTO_WINDOWS_URL_TEMPLATE,
         _ => CORRETTO_UNIX_URL_TEMPLATE,
@@ -104,7 +104,7 @@ pub fn try_to_fetch_and_install_latest_jdk(
         }))
 }
 
-fn get_extracted_dir(path: &PathBuf) -> zed::Result<String> {
+fn get_extracted_dir(path: &Path) -> zed::Result<String> {
     let Ok(mut entries) = path.read_dir() else {
         return Err(JDK_DIR_ERROR.to_string());
     };

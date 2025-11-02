@@ -103,7 +103,7 @@ pub fn get_java_executable(
 
     // If the user has set the option, retrieve the latest version of Corretto (OpenJDK)
     if is_java_autodownload(configuration) {
-        return Ok(try_to_fetch_and_install_latest_jdk(&language_server_id)?
+        return Ok(try_to_fetch_and_install_latest_jdk(language_server_id)?
             .join(java_executable_filename));
     }
 
