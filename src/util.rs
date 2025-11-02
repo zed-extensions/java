@@ -4,9 +4,14 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use zed_extension_api::{self as zed, Command, Os, Worktree, current_platform, serde_json::Value};
+use zed_extension_api::{
+    self as zed, Command, LanguageServerId, Os, Worktree, current_platform, serde_json::Value,
+};
 
-use crate::config::get_java_home;
+use crate::{
+    config::{get_java_home, is_java_autodownload},
+    jdk::try_to_fetch_and_install_latest_jdk,
+};
 
 // Errors
 const EXPAND_ERROR: &str = "Failed to expand ~";
@@ -59,9 +64,10 @@ pub fn get_curr_dir() -> zed::Result<PathBuf> {
 }
 
 /// Retrieve the path to a java exec either:
-/// - defined by the user in `settings.json`
+/// - defined by the user in `settings.json` under option `java_home`
 /// - from PATH
 /// - from JAVA_HOME
+/// - from the bundled OpenJDK if option `jdk_auto_download` is true
 ///
 /// # Arguments
 ///
@@ -79,11 +85,9 @@ pub fn get_curr_dir() -> zed::Result<PathBuf> {
 pub fn get_java_executable(
     configuration: &Option<Value>,
     worktree: &Worktree,
+    language_server_id: &LanguageServerId,
 ) -> zed::Result<PathBuf> {
-    let java_executable_filename = match current_platform().0 {
-        Os::Windows => "java.exe",
-        _ => "java",
-    };
+    let java_executable_filename = get_java_exec_name();
 
     // Get executable from $JAVA_HOME
     if let Some(java_home) = get_java_home(configuration, worktree) {
@@ -93,10 +97,28 @@ pub fn get_java_executable(
         return Ok(java_executable);
     }
     // If we can't, try to get it from $PATH
-    worktree
-        .which(java_executable_filename)
-        .map(PathBuf::from)
-        .ok_or_else(|| JAVA_EXEC_NOT_FOUND_ERROR.to_string())
+    if let Some(java_home) = worktree.which(java_executable_filename.as_str()) {
+        return Ok(PathBuf::from(java_home));
+    }
+
+    // If the user has set the option, retrieve the latest version of Corretto (OpenJDK)
+    if is_java_autodownload(configuration) {
+        try_to_fetch_and_install_latest_jdk(&language_server_id)?;
+    }
+
+    Err(JAVA_EXEC_NOT_FOUND_ERROR.to_string())
+}
+
+/// Retrieve the executable for Java on this platform
+///
+/// # Returns
+///
+/// Returns the executable java name
+pub fn get_java_exec_name() -> String {
+    match current_platform().0 {
+        Os::Windows => "java.exe".to_string(),
+        _ => "java".to_string(),
+    }
 }
 
 /// Retrieve the java major version accessible by the extension

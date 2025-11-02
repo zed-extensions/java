@@ -29,6 +29,17 @@ pub fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Opti
     }
 }
 
+pub fn is_java_autodownload(configuration: &Option<Value>) -> bool {
+    configuration
+        .as_ref()
+        .and_then(|configuration| {
+            configuration
+                .pointer("jdk_auto_download")
+                .and_then(|enabled| enabled.as_bool())
+        })
+        .unwrap_or(false)
+}
+
 pub fn is_lombok_enabled(configuration: &Option<Value>) -> bool {
     configuration
         .as_ref()

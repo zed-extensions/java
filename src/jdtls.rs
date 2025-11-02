@@ -32,12 +32,13 @@ pub fn build_jdtls_launch_args(
     configuration: &Option<Value>,
     worktree: &Worktree,
     jvm_args: Vec<String>,
+    language_server_id: &LanguageServerId,
 ) -> zed::Result<Vec<String>> {
     if let Some(jdtls_launcher) = get_jdtls_launcher_from_path(worktree) {
         return Ok(vec![jdtls_launcher]);
     }
 
-    let java_executable = get_java_executable(configuration, worktree)?;
+    let java_executable = get_java_executable(configuration, worktree, language_server_id)?;
     let java_major_version = get_java_major_version(&java_executable)?;
     if java_major_version < 21 {
         return Err(JAVA_VERSION_ERROR.to_string());
