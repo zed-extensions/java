@@ -168,13 +168,13 @@ pub fn try_to_fetch_and_install_latest_jdtls(
     )
     .map_err(|err| {
         format!("attempt to get latest version's build resulted in a malformed response: {err}")
-    })?;
+    })?
+    .trim_end()
+    .to_string();
 
     let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
-    let build_directory = latest_version_build
-        .replace("tar.gz", "")
-        .trim()
-        .to_string();
+
+    let build_directory = latest_version_build.replace(".tar.gz", "");
     let build_path = prefix.join(&build_directory);
     let binary_path = build_path.join("bin").join(get_binary_name());
 
@@ -188,7 +188,7 @@ pub fn try_to_fetch_and_install_latest_jdtls(
         );
         download_file(
             &format!(
-                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}",
+                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
             ),
             path_to_string(build_path.clone())?.as_str(),
             DownloadedFileType::GzipTar,
