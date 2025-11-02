@@ -15,9 +15,13 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::util::{
-    get_curr_dir, get_java_executable, get_java_major_version, path_to_string,
-    remove_all_files_except,
+use crate::{
+    config::is_java_autodownload,
+    jdk::try_to_fetch_and_install_latest_jdk,
+    util::{
+        get_curr_dir, get_java_exec_name, get_java_executable, get_java_major_version,
+        path_to_string, remove_all_files_except,
+    },
 };
 
 const JDTLS_INSTALL_PATH: &str = "jdtls";
@@ -38,10 +42,15 @@ pub fn build_jdtls_launch_args(
         return Ok(vec![jdtls_launcher]);
     }
 
-    let java_executable = get_java_executable(configuration, worktree, language_server_id)?;
+    let mut java_executable = get_java_executable(configuration, worktree, language_server_id)?;
     let java_major_version = get_java_major_version(&java_executable)?;
     if java_major_version < 21 {
-        return Err(JAVA_VERSION_ERROR.to_string());
+        if is_java_autodownload(configuration) {
+            java_executable =
+                try_to_fetch_and_install_latest_jdk(language_server_id)?.join(get_java_exec_name());
+        } else {
+            return Err(JAVA_VERSION_ERROR.to_string());
+        }
     }
 
     let extension_workdir = get_curr_dir()?;
