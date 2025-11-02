@@ -68,8 +68,6 @@ pub fn try_to_fetch_and_install_latest_jdk(
         &LanguageServerInstallationStatus::CheckingForUpdate,
     );
 
-    // windows and linux have bin as soon as extracted
-    // macos instead is under Contents/Home/bin
     if !install_path.exists() {
         set_language_server_installation_status(
             language_server_id,
@@ -92,7 +90,7 @@ pub fn try_to_fetch_and_install_latest_jdk(
         let _ = remove_all_files_except(jdk_path, version.as_str());
     }
 
-    // Depending on the platform the name of the extract dir might differ
+    // Depending on the platform the name of the extracted dir might differ
     // Rather than hard coding, extract it dynamically
     let extracted_dir = get_extracted_dir(&install_path)?;
 
