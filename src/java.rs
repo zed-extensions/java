@@ -113,7 +113,7 @@ impl Java {
         match try_to_fetch_and_install_latest_lombok(language_server_id) {
             Ok(path) => {
                 self.cached_lombok_path = Some(path.clone());
-                return Ok(path);
+                Ok(path)
             }
             Err(e) => {
                 if let Some(local_version) = find_latest_local_lombok() {

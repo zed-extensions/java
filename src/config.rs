@@ -4,8 +4,8 @@ use crate::util::expand_home_path;
 
 pub fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
     // try to read the value from settings
-    if let Some(configuration) = configuration {
-        if let Some(java_home) = configuration.pointer("/java/home").and_then(|x| x.as_str()) {
+    if let Some(configuration) = configuration
+        && let Some(java_home) = configuration.pointer("/java/home").and_then(|x| x.as_str()) {
             match expand_home_path(worktree, java_home.to_string()) {
                 Ok(home_path) => return Some(home_path),
                 Err(err) => {
@@ -13,7 +13,6 @@ pub fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Opti
                 }
             };
         }
-    }
 
     // try to read the value from env
     match worktree

@@ -305,7 +305,7 @@ pub fn try_to_fetch_and_install_latest_lombok(
     Ok(jar_path)
 }
 
-fn find_equinox_launcher(jdtls_base_directory: &PathBuf) -> Result<PathBuf, String> {
+fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String> {
     let plugins_dir = jdtls_base_directory.join("plugins");
 
     // if we have `org.eclipse.equinox.launcher.jar` use that
@@ -323,12 +323,9 @@ fn find_equinox_launcher(jdtls_base_directory: &PathBuf) -> Result<PathBuf, Stri
         .map(|entry| entry.path())
         .find(|path| {
             path.is_file()
-                && path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map_or(false, |s| {
-                        s.starts_with("org.eclipse.equinox.launcher_") && s.ends_with(".jar")
-                    })
+                && path.file_name().and_then(|s| s.to_str()).is_some_and(|s| {
+                    s.starts_with("org.eclipse.equinox.launcher_") && s.ends_with(".jar")
+                })
         })
         .ok_or_else(|| "Cannot find equinox launcher".to_string())
 }
@@ -379,7 +376,7 @@ fn get_sha1_hex(input: &str) -> String {
     hex::encode(result)
 }
 
-fn get_shared_config_path(jdtls_base_directory: &PathBuf) -> PathBuf {
+fn get_shared_config_path(jdtls_base_directory: &Path) -> PathBuf {
     // Note: JDTLS also provides config_linux_arm and config_mac_arm (and others),
     // but does not use them in their own launch script. It may be worth investigating if we should use them when appropriate.
     let config_to_use = match current_platform().0 {
