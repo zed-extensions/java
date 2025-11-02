@@ -90,31 +90,33 @@ pub fn get_java_executable(
     let java_executable_filename = get_java_exec_name();
 
     // Get executable from $JAVA_HOME
-    if let Some(java_home) = get_java_home(configuration, worktree) {
-        let java_executable = PathBuf::from(java_home)
-            .join("bin")
-            .join(java_executable_filename);
-        return Ok(java_executable);
-    }
-    // If we can't, try to get it from $PATH
-    if let Some(java_home) = worktree.which(java_executable_filename.as_str()) {
-        return Ok(PathBuf::from(java_home));
-    }
+    // if let Some(java_home) = get_java_home(configuration, worktree) {
+    //     let java_executable = PathBuf::from(java_home)
+    //         .join("bin")
+    //         .join(java_executable_filename);
+    //     return Ok(java_executable);
+    // }
+    // // If we can't, try to get it from $PATH
+    // if let Some(java_home) = worktree.which(java_executable_filename.as_str()) {
+    //     return Ok(PathBuf::from(java_home));
+    // }
 
     // If the user has set the option, retrieve the latest version of Corretto (OpenJDK)
     if is_java_autodownload(configuration) {
-        try_to_fetch_and_install_latest_jdk(&language_server_id)?;
+        println!("We're in");
+        return Ok(try_to_fetch_and_install_latest_jdk(&language_server_id)?
+            .join(java_executable_filename));
     }
 
     Err(JAVA_EXEC_NOT_FOUND_ERROR.to_string())
 }
 
-/// Retrieve the executable for Java on this platform
+/// Retrieve the executable name for Java on this platform
 ///
 /// # Returns
 ///
 /// Returns the executable java name
-pub fn get_java_exec_name() -> String {
+fn get_java_exec_name() -> String {
     match current_platform().0 {
         Os::Windows => "java.exe".to_string(),
         _ => "java".to_string(),

@@ -6,31 +6,31 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::{
-    jdk,
-    util::{get_curr_dir, get_java_exec_name, path_to_string, remove_all_files_except},
-};
+use crate::util::{get_curr_dir, path_to_string, remove_all_files_except};
+
+// Errors
+const JDK_DIR_ERROR: &str = "Failed to read into JDK install directory";
+const NO_JDK_DIR_ERROR: &str = "No match for jdk or corretto in the extracted directory";
 
 const CORRETTO_REPO: &str = "corretto/corretto-25";
 const CORRETTO_UNIX_URL_TEMPLATE: &str = "https://corretto.aws/downloads/resources/{version}/amazon-corretto-{version}-{platform}-{arch}.tar.gz";
 const CORRETTO_WINDOWS_URL_TEMPLATE: &str = "https://corretto.aws/downloads/resources/{version}/amazon-corretto-{version}-{platform}-{arch}-jdk.zip";
 
 fn build_corretto_url(version: &String, platform: &String, arch: &String) -> String {
-    match zed::current_platform().0 {
-        Os::Windows => CORRETTO_WINDOWS_URL_TEMPLATE
-            .replace("{version}", version)
-            .replace("{platform}", platform)
-            .replace("{arch}", arch),
-        _ => CORRETTO_UNIX_URL_TEMPLATE
-            .replace("{version}", version)
-            .replace("{platform}", platform)
-            .replace("{arch}", arch),
-    }
+    let template = match zed::current_platform().0 {
+        Os::Windows => CORRETTO_WINDOWS_URL_TEMPLATE,
+        _ => CORRETTO_UNIX_URL_TEMPLATE,
+    };
+
+    template
+        .replace("{version}", version)
+        .replace("{platform}", platform)
+        .replace("{arch}", arch)
 }
 
 // For now keep in this file as they are not used anywhere else
 // otherwise move to util
-pub fn get_architecture() -> zed::Result<String> {
+fn get_architecture() -> zed::Result<String> {
     match zed::current_platform() {
         (_, Architecture::Aarch64) => Ok("aarch64".to_string()),
         (_, Architecture::X86) => Ok("x86".to_string()),
@@ -38,7 +38,7 @@ pub fn get_architecture() -> zed::Result<String> {
     }
 }
 
-pub fn get_platform() -> zed::Result<String> {
+fn get_platform() -> zed::Result<String> {
     match zed::current_platform() {
         (Os::Mac, _) => Ok("macosx".to_string()),
         (Os::Linux, _) => Ok("linux".to_string()),
@@ -92,10 +92,35 @@ pub fn try_to_fetch_and_install_latest_jdk(
         let _ = remove_all_files_except(jdk_path, version.as_str());
     }
 
-    let exec_path = match current_platform().0 {
-        Os::Mac => install_path.join("Contents/Home/bin"),
-        _ => install_path.join("bin"),
+    // Depending on the platform the name of the extract dir might differ
+    // Rather than hard coding, extract it dynamically
+    let extracted_dir = get_extracted_dir(&install_path)?;
+
+    Ok(install_path
+        .join(extracted_dir)
+        .join(match current_platform().0 {
+            Os::Mac => "Contents/Home/bin",
+            _ => "bin",
+        }))
+}
+
+fn get_extracted_dir(path: &PathBuf) -> zed::Result<String> {
+    let Ok(mut entries) = path.read_dir() else {
+        return Err(JDK_DIR_ERROR.to_string());
     };
 
-    return Ok(exec_path.join(get_java_exec_name()));
+    match entries.find_map(|entry| {
+        let entry = entry.ok()?;
+        let file_name = entry.file_name();
+        let name_str = file_name.to_string_lossy().to_string();
+
+        if name_str.contains("jdk") || name_str.contains("corretto") {
+            Some(name_str)
+        } else {
+            None
+        }
+    }) {
+        Some(dir_path) => Ok(dir_path),
+        None => Err(NO_JDK_DIR_ERROR.to_string()),
+    }
 }

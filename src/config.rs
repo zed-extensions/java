@@ -34,7 +34,7 @@ pub fn is_java_autodownload(configuration: &Option<Value>) -> bool {
         .as_ref()
         .and_then(|configuration| {
             configuration
-                .pointer("jdk_auto_download")
+                .pointer("/jdk_auto_download")
                 .and_then(|enabled| enabled.as_bool())
         })
         .unwrap_or(false)
