@@ -24,9 +24,9 @@ use crate::{
 };
 
 const JDTLS_INSTALL_PATH: &str = "jdtls";
-const JDTLS_REPO: &str = "";
+const JDTLS_REPO: &str = "eclipse-jdtls/eclipse.jdt.ls";
 const LOMBOK_INSTALL_PATH: &str = "lombok";
-const LOMBOK_REPO: &str = "";
+const LOMBOK_REPO: &str = "projectlombok/lombok";
 
 // Errors
 
