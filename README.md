@@ -14,6 +14,8 @@ Install the extension via Zeds extension manager. It should work out of the box 
 
 - To support [Lombok](https://projectlombok.org/), the lombok-jar must be downloaded and registered as a Java-Agent when launching JDTLS. By default the extension automatically takes care of that, but in case you don't want that you can set the `lombok_support` configuration-option to `false`.
 
+- The option to let the extension automatically download a version of OpenJDK can be enabled by setting `jdk_auto_download` to `true`. When enabled, the extension will only download a JDK if no valid java_home is provided or if the specified one does not meet the minimum version requirement. User-provided JDKs **always** take precedence.
+
 Here is a common `settings.json` including the above mentioned configurations:
 
 ```jsonc
@@ -22,6 +24,7 @@ Here is a common `settings.json` including the above mentioned configurations:
     "settings": {
       "java_home": "/path/to/your/JDK21+",
       "lombok_support": true,
+      "jdk_auto_download": false
     }
   }
 }
