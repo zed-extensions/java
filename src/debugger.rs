@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use zed_extension_api::{
@@ -9,7 +9,10 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::lsp::LspWrapper;
+use crate::{
+    lsp::LspWrapper,
+    util::{get_curr_dir, path_to_string},
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -52,8 +55,6 @@ const AUTO_SCOPE: &str = "$Auto";
 const RUNTIME_SCOPE: &str = "$Runtime";
 
 const SCOPES: [&str; 3] = [TEST_SCOPE, AUTO_SCOPE, RUNTIME_SCOPE];
-
-const PATH_TO_STR_ERROR: &str = "Failed to convert path to string";
 
 const JAVA_DEBUG_PLUGIN_FORK_URL: &str = "https://github.com/zed-industries/java-debug/releases/download/0.53.2/com.microsoft.java.debug.plugin-0.53.2.jar";
 
@@ -105,7 +106,7 @@ impl Debugger {
 
         download_file(
             JAVA_DEBUG_PLUGIN_FORK_URL,
-            jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+            &path_to_string(jar_path.clone())?,
             DownloadedFileType::Uncompressed,
         )
         .map_err(|err| {
@@ -215,7 +216,7 @@ impl Debugger {
 
             download_file(
                 url.as_str(),
-                jar_path.to_str().ok_or(PATH_TO_STR_ERROR)?,
+                &path_to_string(&jar_path)?,
                 DownloadedFileType::Uncompressed,
             )
             .map_err(|err| format!("Failed to download {url} {err}"))?;
@@ -345,8 +346,7 @@ impl Debugger {
         &self,
         initialization_options: Option<Value>,
     ) -> zed::Result<Value> {
-        let current_dir =
-            env::current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
+        let current_dir = get_curr_dir()?;
 
         let canonical_path = Value::String(
             current_dir
