@@ -1,5 +1,6 @@
 mod config;
 mod debugger;
+mod jdk;
 mod jdtls;
 mod lsp;
 mod util;
@@ -289,6 +290,7 @@ impl Extension for Java {
                 &configuration,
                 worktree,
                 lombok_jvm_arg.into_iter().collect(),
+                language_server_id,
             )?);
         }
 
