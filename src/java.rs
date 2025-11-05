@@ -60,11 +60,7 @@ impl Java {
             .map(|v| &mut v.1)
     }
 
-    fn language_server_binary_path(
-        &mut self,
-        language_server_id: &LanguageServerId,
-        worktree: &Worktree,
-    ) -> zed::Result<PathBuf> {
+    fn init(&mut self, worktree: &Worktree) {
         // Initialize lsp client and debugger
 
         if self.integrations.is_none() {
@@ -73,7 +69,12 @@ impl Java {
 
             self.integrations = Some((lsp, debugger));
         }
+    }
 
+    fn language_server_binary_path(
+        &mut self,
+        language_server_id: &LanguageServerId,
+    ) -> zed::Result<PathBuf> {
         // Use cached path if exists
 
         if let Some(path) = &self.cached_binary_path
@@ -277,6 +278,8 @@ impl Extension for Java {
             None
         };
 
+        self.init(worktree);
+
         if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
             // if the user has `jdtls(.bat)` on their PATH, we use that
             args.push(launcher);
@@ -286,7 +289,7 @@ impl Extension for Java {
         } else {
             // otherwise we launch ourselves
             args.extend(build_jdtls_launch_args(
-                &self.language_server_binary_path(language_server_id, worktree)?,
+                &self.language_server_binary_path(language_server_id)?,
                 &configuration,
                 worktree,
                 lombok_jvm_arg.into_iter().collect(),
