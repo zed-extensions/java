@@ -19,11 +19,8 @@ use crate::{
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
         get_curr_dir, get_java_exec_name, get_java_executable, get_java_major_version,
-        path_to_string, remove_all_files_except,
+        get_latest_versions_from_tag, path_to_string, remove_all_files_except,
     },
-use crate::util::{
-    get_curr_dir, get_java_executable, get_java_major_version, get_latest_versions_from_tag,
-    path_to_string, remove_all_files_except,
 };
 
 const JDTLS_INSTALL_PATH: &str = "jdtls";
@@ -33,7 +30,7 @@ const LOMBOK_REPO: &str = "projectlombok/lombok";
 
 // Errors
 
-const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings";
+const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java version 21 to run. You can either specify a different JDK to use by configuring lsp.jdtls.settings.java_home to point to a different JDK, or set lsp.jdtls.settings.jdk_auto_download to true to let the extension automatically download one for you.";
 const JDTLS_VERION_ERROR: &str = "No version to fallback to";
 
 pub fn build_jdtls_launch_args(
