@@ -21,6 +21,9 @@ use crate::{
         get_curr_dir, get_java_exec_name, get_java_executable, get_java_major_version,
         path_to_string, remove_all_files_except,
     },
+use crate::util::{
+    get_curr_dir, get_java_executable, get_java_major_version, get_latest_versions_from_tag,
+    path_to_string, remove_all_files_except,
 };
 
 const JDTLS_INSTALL_PATH: &str = "jdtls";
@@ -30,7 +33,8 @@ const LOMBOK_REPO: &str = "projectlombok/lombok";
 
 // Errors
 
-const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java version 21 to run. You can either specify a different JDK to use by configuring lsp.jdtls.settings.java_home to point to a different JDK, or set lsp.jdtls.settings.jdk_auto_download to true to let the extension automatically download one for you.";
+const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java 21. If you need to run a JVM < 21, you can specify a different one for JDTLS to use by specifying lsp.jdtls.settings.java.home in the settings";
+const JDTLS_VERION_ERROR: &str = "No version to fallback to";
 
 pub fn build_jdtls_launch_args(
     jdtls_path: &PathBuf,
@@ -152,25 +156,19 @@ pub fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
 pub fn try_to_fetch_and_install_latest_jdtls(
     language_server_id: &LanguageServerId,
 ) -> zed::Result<PathBuf> {
-    let latest_version = get_latest_version_from_tag(JDTLS_REPO)?;
+    let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
 
-    let latest_version_build = String::from_utf8(
-        fetch(
-            &HttpRequest::builder()
-                .method(HttpMethod::Get)
-                .url(format!(
-                    "https://download.eclipse.org/jdtls/milestones/{latest_version}/latest.txt"
-                ))
-                .build()?,
-        )
-        .map_err(|err| format!("failed to get latest version's build: {err}"))?
-        .body,
-    )
-    .map_err(|err| {
-        format!("attempt to get latest version's build resulted in a malformed response: {err}")
-    })?
-    .trim_end()
-    .to_string();
+    let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
+        .map_or_else(
+            |_| {
+                second_last
+                    .as_ref()
+                    .ok_or(JDTLS_VERION_ERROR.to_string())
+                    .and_then(|fallback| download_jdtls_milestone(fallback))
+                    .map(|milestone| (second_last.unwrap(), milestone.trim_end().to_string()))
+            },
+            |milestone| Ok((last, milestone.trim_end().to_string())),
+        )?;
 
     let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
 
@@ -211,7 +209,7 @@ pub fn try_to_fetch_and_install_latest_lombok(
         &LanguageServerInstallationStatus::CheckingForUpdate,
     );
 
-    let latest_version = get_latest_version_from_tag(LOMBOK_REPO)?;
+    let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)?;
     let prefix = LOMBOK_INSTALL_PATH;
     let jar_name = format!("lombok-{latest_version}.jar");
     let jar_path = Path::new(prefix).join(&jar_name);
@@ -238,6 +236,24 @@ pub fn try_to_fetch_and_install_latest_lombok(
 
     // else use it
     Ok(jar_path)
+}
+
+fn download_jdtls_milestone(version: &str) -> zed::Result<String> {
+    String::from_utf8(
+        fetch(
+            &HttpRequest::builder()
+                .method(HttpMethod::Get)
+                .url(format!(
+                    "https://download.eclipse.org/jdtls/milestones/{version}/latest.txt"
+                ))
+                .build()?,
+        )
+        .map_err(|err| format!("failed to get latest version's build: {err}"))?
+        .body,
+    )
+    .map_err(|err| {
+        format!("attempt to get latest version's build resulted in a malformed response: {err}")
+    })
 }
 
 fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String> {

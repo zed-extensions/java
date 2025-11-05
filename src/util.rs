@@ -161,15 +161,15 @@ pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
     }
 }
 
-/// Retrieve the latest version from the repo tags
+/// Retrieve the latest and second latest versions from the repo tags
 ///
 /// # Arguments
 ///
-/// [`repo`] the Github repository where to retrieve the tags
+/// * [`repo`] The GitHub repository from which to retrieve the tags
 ///
 /// # Returns
 ///
-/// Returns the latest version of the repository as per the most recent tag
+/// A tuple containing the latest version, and optionally, the second latest version if available
 ///
 /// # Errors
 ///
@@ -177,7 +177,7 @@ pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
 /// * Could not fetch tags from Github
 /// * Failed to deserialize response
 /// * Unexpected Github response format
-pub fn get_latest_version_from_tag(repo: &str) -> zed::Result<String> {
+pub fn get_latest_versions_from_tag(repo: &str) -> zed::Result<(String, Option<String>)> {
     let tags_response_body = serde_json::from_slice::<Value>(
         &fetch(
             &HttpRequest::builder()
@@ -189,19 +189,29 @@ pub fn get_latest_version_from_tag(repo: &str) -> zed::Result<String> {
         .body,
     )
     .map_err(|err| format!("{TAG_RESPONSE_ERROR}: {err}"))?;
-    let latest_version = &tags_response_body
-        .as_array()
-        .and_then(|tag| {
-            tag.first().and_then(|latest_tag| {
-                latest_tag
-                    .get("name")
-                    .and_then(|tag_name| tag_name.as_str())
-            })
-        })
-        // Exclude 'v' at beginning
-        .ok_or(TAG_UNEXPECTED_FORMAT_ERROR)?[1..];
 
-    Ok(latest_version.to_string())
+    let latest_version = get_tag_at(&tags_response_body, 0);
+    let second_version = get_tag_at(&tags_response_body, 1);
+
+    if latest_version.is_none() {
+        return Err(TAG_UNEXPECTED_FORMAT_ERROR.to_string());
+    }
+
+    Ok((
+        latest_version.unwrap().to_string(),
+        second_version.map(|second| second.to_string()),
+    ))
+}
+
+fn get_tag_at(github_tags: &Value, index: usize) -> Option<&str> {
+    github_tags.as_array().and_then(|tag| {
+        tag.get(index).and_then(|latest_tag| {
+            latest_tag
+                .get("name")
+                .and_then(|tag_name| tag_name.as_str())
+                .map(|val| &val[1..])
+        })
+    })
 }
 
 /// Convert [`path`] into [`String`]
