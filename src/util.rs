@@ -6,6 +6,7 @@ use std::{
 };
 use zed_extension_api::{
     self as zed, Command, LanguageServerId, Os, Worktree, current_platform, serde_json::Value,
+    http_client::{HttpMethod, HttpRequest, fetch}
 };
 
 use crate::{
@@ -23,6 +24,9 @@ const PATH_TO_STR_ERROR: &str = "Failed to convert path to string";
 const JAVA_EXEC_ERROR: &str = "Failed to convert Java executable path to string";
 const JAVA_VERSION_ERROR: &str = "Failed to determine Java major version";
 const JAVA_EXEC_NOT_FOUND_ERROR: &str = "Could not find Java executable in JAVA_HOME or on PATH";
+const TAG_RETRIEVAL_ERROR: &str = "Failed to fetch GitHub tags";
+const TAG_RESPONSE_ERROR: &str = "Failed to deserialize GitHub tags response";
+const TAG_UNEXPECTED_FORMAT_ERROR: &str = "Malformed GitHub tags response";
 
 /// Expand ~ on Unix-like systems
 ///
@@ -155,6 +159,59 @@ pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
     } else {
         Err(JAVA_VERSION_ERROR.to_string())
     }
+}
+
+/// Retrieve the latest and second latest versions from the repo tags
+///
+/// # Arguments
+///
+/// * [`repo`] The GitHub repository from which to retrieve the tags
+///
+/// # Returns
+///
+/// A tuple containing the latest version, and optionally, the second latest version if available
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// * Could not fetch tags from Github
+/// * Failed to deserialize response
+/// * Unexpected Github response format
+pub fn get_latest_versions_from_tag(repo: &str) -> zed::Result<(String, Option<String>)> {
+    let tags_response_body = serde_json::from_slice::<Value>(
+        &fetch(
+            &HttpRequest::builder()
+                .method(HttpMethod::Get)
+                .url(format!("https://api.github.com/repos/{repo}/tags"))
+                .build()?,
+        )
+        .map_err(|err| format!("{TAG_RETRIEVAL_ERROR}: {err}"))?
+        .body,
+    )
+    .map_err(|err| format!("{TAG_RESPONSE_ERROR}: {err}"))?;
+
+    let latest_version = get_tag_at(&tags_response_body, 0);
+    let second_version = get_tag_at(&tags_response_body, 1);
+
+    if latest_version.is_none() {
+        return Err(TAG_UNEXPECTED_FORMAT_ERROR.to_string());
+    }
+
+    Ok((
+        latest_version.unwrap().to_string(),
+        second_version.map(|second| second.to_string()),
+    ))
+}
+
+fn get_tag_at(github_tags: &Value, index: usize) -> Option<&str> {
+    github_tags.as_array().and_then(|tag| {
+        tag.get(index).and_then(|latest_tag| {
+            latest_tag
+                .get("name")
+                .and_then(|tag_name| tag_name.as_str())
+                .map(|val| &val[1..])
+        })
+    })
 }
 
 /// Convert [`path`] into [`String`]
