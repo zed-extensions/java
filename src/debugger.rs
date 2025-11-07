@@ -104,6 +104,9 @@ impl Debugger {
             return Ok(path.clone());
         }
 
+        fs::remove_dir_all(prefix).map_err(|err| err.to_string())?;
+        fs::create_dir(prefix).map_err(|err| err.to_string())?;
+
         download_file(
             JAVA_DEBUG_PLUGIN_FORK_URL,
             &path_to_string(jar_path.clone())?,
