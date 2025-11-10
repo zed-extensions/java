@@ -11,7 +11,7 @@ use zed_extension_api::{
 
 use crate::{
     lsp::LspWrapper,
-    util::{get_curr_dir, path_to_string},
+    util::{create_path_if_not_exists, get_curr_dir, path_to_string},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -104,8 +104,7 @@ impl Debugger {
             return Ok(path.clone());
         }
 
-        fs::remove_dir_all(prefix).map_err(|err| err.to_string())?;
-        fs::create_dir(prefix).map_err(|err| err.to_string())?;
+        create_path_if_not_exists(prefix)?;
 
         download_file(
             JAVA_DEBUG_PLUGIN_FORK_URL,
