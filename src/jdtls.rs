@@ -1,6 +1,6 @@
 use std::{
     env::current_dir,
-    fs::{create_dir, metadata, read_dir},
+    fs::{metadata, read_dir},
     path::{Path, PathBuf},
 };
 
@@ -18,8 +18,9 @@ use crate::{
     config::is_java_autodownload,
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
-        get_curr_dir, get_java_exec_name, get_java_executable, get_java_major_version,
-        get_latest_versions_from_tag, path_to_string, remove_all_files_except,
+        create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
+        get_java_major_version, get_latest_versions_from_tag, path_to_string,
+        remove_all_files_except,
     },
 };
 
@@ -219,7 +220,7 @@ pub fn try_to_fetch_and_install_latest_lombok(
             language_server_id,
             &LanguageServerInstallationStatus::Downloading,
         );
-        create_dir(prefix).map_err(|err| err.to_string())?;
+        create_path_if_not_exists(prefix)?;
         download_file(
             &format!("https://projectlombok.org/downloads/{jar_name}"),
             path_to_string(jar_path.clone())?.as_str(),
