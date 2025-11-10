@@ -210,7 +210,7 @@ impl Debugger {
                 language_server_id,
                 &LanguageServerInstallationStatus::Downloading,
             );
-            fs::create_dir(prefix).map_err(|err| err.to_string())?;
+            create_path_if_not_exists(prefix)?;
 
             let url = format!(
                 "https://repo1.maven.org/maven2/com/microsoft/java/{artifact}/{latest_version}/{jar_name}"

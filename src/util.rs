@@ -28,6 +28,7 @@ const JAVA_EXEC_NOT_FOUND_ERROR: &str = "Could not find Java executable in JAVA_
 const TAG_RETRIEVAL_ERROR: &str = "Failed to fetch GitHub tags";
 const TAG_RESPONSE_ERROR: &str = "Failed to deserialize GitHub tags response";
 const TAG_UNEXPECTED_FORMAT_ERROR: &str = "Malformed GitHub tags response";
+const PATH_IS_NOT_DIR: &str = "File exists but is not a path";
 
 /// Create a Path if it does not exist
 ///
@@ -46,7 +47,7 @@ pub fn create_path_if_not_exists<P: AsRef<Path>>(path: P) -> zed::Result<()> {
             if metadata.is_dir() {
                 Ok(())
             } else {
-                Err(format!("File exists but is not a path: {:?}", path_ref))
+                Err(format!("{PATH_IS_NOT_DIR}: {:?}", path_ref))
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
