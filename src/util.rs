@@ -35,11 +35,11 @@ const TAG_UNEXPECTED_FORMAT_ERROR: &str = "Malformed GitHub tags response";
 ///
 ///# Arguments
 /// * [`path`] the path to create
-/// 
+///
 ///# Returns
-/// 
+///
 /// Ok(()) if the path exists or was created successfully
-pub fn create_path_if_not_exists(path: impl AsRef<Path>) -> zed::Result<()> {
+pub fn create_path_if_not_exists<P: AsRef<Path>>(path: P) -> zed::Result<()> {
     let path_ref = path.as_ref();
     match fs::metadata(path_ref) {
         Ok(metadata) => {
