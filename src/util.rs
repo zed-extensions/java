@@ -5,8 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 use zed_extension_api::{
-    self as zed, Command, LanguageServerId, Os, Worktree, current_platform, serde_json::Value,
-    http_client::{HttpMethod, HttpRequest, fetch}
+    self as zed, Command, LanguageServerId, Os, Worktree, current_platform,
+    http_client::{HttpMethod, HttpRequest, fetch},
+    serde_json::Value,
 };
 
 use crate::{
@@ -27,6 +28,33 @@ const JAVA_EXEC_NOT_FOUND_ERROR: &str = "Could not find Java executable in JAVA_
 const TAG_RETRIEVAL_ERROR: &str = "Failed to fetch GitHub tags";
 const TAG_RESPONSE_ERROR: &str = "Failed to deserialize GitHub tags response";
 const TAG_UNEXPECTED_FORMAT_ERROR: &str = "Malformed GitHub tags response";
+
+/// Create a Path if it does not exist
+///
+/// **Errors** if a file that is not a path exists at the location or read/write access failed for the location
+///
+///# Arguments
+/// * [`path`] the path to create
+///
+///# Returns
+///
+/// Ok(()) if the path exists or was created successfully
+pub fn create_path_if_not_exists<P: AsRef<Path>>(path: P) -> zed::Result<()> {
+    let path_ref = path.as_ref();
+    match fs::metadata(path_ref) {
+        Ok(metadata) => {
+            if metadata.is_dir() {
+                Ok(())
+            } else {
+                Err(format!("File exists but is not a path: {:?}", path_ref))
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir_all(path_ref).map_err(|e| e.to_string())
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
 
 /// Expand ~ on Unix-like systems
 ///
