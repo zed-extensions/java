@@ -74,6 +74,7 @@ impl Java {
     fn language_server_binary_path(
         &mut self,
         language_server_id: &LanguageServerId,
+        worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         // Use cached path if exists
 
@@ -83,13 +84,16 @@ impl Java {
             return Ok(path.clone());
         }
 
+        let configuration =
+            self.language_server_workspace_configuration(language_server_id, worktree)?;
+
         // Check for latest version
         set_language_server_installation_status(
             language_server_id,
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        match try_to_fetch_and_install_latest_jdtls(language_server_id) {
+        match try_to_fetch_and_install_latest_jdtls(language_server_id, &configuration) {
             Ok(path) => {
                 self.cached_binary_path = Some(path.clone());
                 Ok(path)
@@ -105,14 +109,21 @@ impl Java {
         }
     }
 
-    fn lombok_jar_path(&mut self, language_server_id: &LanguageServerId) -> zed::Result<PathBuf> {
+    fn lombok_jar_path(
+        &mut self,
+        language_server_id: &LanguageServerId,
+        worktree: &Worktree,
+    ) -> zed::Result<PathBuf> {
         if let Some(path) = &self.cached_lombok_path
             && fs::metadata(path).is_ok_and(|stat| stat.is_file())
         {
             return Ok(path.clone());
         }
 
-        match try_to_fetch_and_install_latest_lombok(language_server_id) {
+        let configuration =
+            self.language_server_workspace_configuration(language_server_id, worktree)?;
+
+        match try_to_fetch_and_install_latest_lombok(language_server_id, &configuration) {
             Ok(path) => {
                 self.cached_lombok_path = Some(path.clone());
                 Ok(path)
@@ -270,7 +281,7 @@ impl Extension for Java {
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_jvm_arg = if is_lombok_enabled(&configuration) {
-            let lombok_jar_path = self.lombok_jar_path(language_server_id)?;
+            let lombok_jar_path = self.lombok_jar_path(language_server_id, worktree)?;
             let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
 
             Some(format!("-javaagent:{canonical_lombok_jar_path}"))
@@ -289,7 +300,7 @@ impl Extension for Java {
         } else {
             // otherwise we launch ourselves
             args.extend(build_jdtls_launch_args(
-                &self.language_server_binary_path(language_server_id)?,
+                &self.language_server_binary_path(language_server_id, worktree)?,
                 &configuration,
                 worktree,
                 lombok_jvm_arg.into_iter().collect(),
@@ -298,7 +309,10 @@ impl Extension for Java {
         }
 
         // download debugger if not exists
-        if let Err(err) = self.debugger()?.get_or_download(language_server_id) {
+        if let Err(err) = self
+            .debugger()?
+            .get_or_download(language_server_id, &configuration)
+        {
             println!("Failed to download debugger: {err}");
         };
 

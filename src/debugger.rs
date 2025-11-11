@@ -10,6 +10,7 @@ use zed_extension_api::{
 };
 
 use crate::{
+    config::{get_debugger_download_url, is_check_updates_enabled},
     lsp::LspWrapper,
     util::{create_path_if_not_exists, get_curr_dir, path_to_string},
 };
@@ -80,16 +81,47 @@ impl Debugger {
     pub fn get_or_download(
         &mut self,
         language_server_id: &LanguageServerId,
+        configuration: &Option<Value>,
     ) -> zed::Result<PathBuf> {
+        // If update checks are disabled, prefer local installation only.
+        if !is_check_updates_enabled(configuration) {
+            if let Some(path) = &self.plugin_path
+                && fs::metadata(path).is_ok_and(|stat| stat.is_file())
+            {
+                return Ok(path.clone());
+            }
+
+            // Try to find any existing debugger jar in the directory
+            let prefix = "debugger";
+            if let Ok(entries) = fs::read_dir(prefix) {
+                for entry in entries.filter_map(Result::ok) {
+                    let path = entry.path();
+                    if path.is_file()
+                        && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
+                        && path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| name.starts_with("com.microsoft.java.debug.plugin"))
+                    {
+                        self.plugin_path = Some(path.clone());
+                        return Ok(path);
+                    }
+                }
+            }
+
+            return Err("Update checks are disabled and no local debugger installation found. Please enable check_updates_on_startup or manually install the debugger.".to_string());
+        }
+
         // when the fix to https://github.com/microsoft/java-debug/issues/605 becomes part of an official release
         // switch back to this:
         // return self.get_or_download_latest_official(language_server_id);
-        self.get_or_download_fork(language_server_id)
+        self.get_or_download_fork(language_server_id, configuration)
     }
 
     fn get_or_download_fork(
         &mut self,
-        _language_server_id: &LanguageServerId,
+        language_server_id: &LanguageServerId,
+        configuration: &Option<Value>,
     ) -> zed::Result<PathBuf> {
         let prefix = "debugger";
         let artifact = "com.microsoft.java.debug.plugin";
@@ -97,26 +129,41 @@ impl Debugger {
         let jar_name = format!("{artifact}-{latest_version}.jar");
         let jar_path = PathBuf::from(prefix).join(&jar_name);
 
+        // Report checking-for-update status
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::CheckingForUpdate,
+        );
+
         if let Some(path) = &self.plugin_path
             && fs::metadata(path).is_ok_and(|stat| stat.is_file())
-            && path.ends_with(jar_name)
+            && path.ends_with(&jar_name)
         {
             return Ok(path.clone());
         }
 
+        // Report downloading status
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::Downloading,
+        );
+
         create_path_if_not_exists(prefix)?;
 
+        let download_url = if let Some(custom_url) = get_debugger_download_url(configuration) {
+            // Use custom URL directly (no placeholders since we use fixed version)
+            custom_url
+        } else {
+            // Use default fork URL
+            JAVA_DEBUG_PLUGIN_FORK_URL.to_string()
+        };
+
         download_file(
-            JAVA_DEBUG_PLUGIN_FORK_URL,
+            &download_url,
             &path_to_string(jar_path.clone())?,
             DownloadedFileType::Uncompressed,
         )
-        .map_err(|err| {
-            format!(
-                "Failed to download java-debug fork from {}: {err}",
-                JAVA_DEBUG_PLUGIN_FORK_URL
-            )
-        })?;
+        .map_err(|err| format!("Failed to download java-debug from {}: {err}", download_url))?;
 
         self.plugin_path = Some(jar_path.clone());
         Ok(jar_path)

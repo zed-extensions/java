@@ -24,7 +24,11 @@ Here is a common `settings.json` including the above mentioned configurations:
     "settings": {
       "java_home": "/path/to/your/JDK21+",
       "lombok_support": true,
-      "jdk_auto_download": false
+      "jdk_auto_download": false,
+      "check_updates_on_startup": true,
+      "jdtls_download_url": "https://download.eclipse.org/jdtls/milestones/{version}/jdt-language-server-{version}.tar.gz",
+      "lombok_download_url": "https://projectlombok.org/downloads/lombok-{version}.jar",
+      "debugger_download_url": "https://github.com/zed-industries/java-debug/releases/download/{version}/com.microsoft.java.debug.plugin-{version}.jar"
     }
   }
 }

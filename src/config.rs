@@ -51,3 +51,41 @@ pub fn is_lombok_enabled(configuration: &Option<Value>) -> bool {
         })
         .unwrap_or(true)
 }
+
+pub fn is_check_updates_enabled(configuration: &Option<Value>) -> bool {
+    configuration
+        .as_ref()
+        .and_then(|configuration| {
+            configuration
+                .pointer("/check_updates_on_startup")
+                .and_then(|enabled| enabled.as_bool())
+        })
+        .unwrap_or(true)
+}
+
+pub fn get_jdtls_download_url(configuration: &Option<Value>) -> Option<String> {
+    configuration.as_ref().and_then(|configuration| {
+        configuration
+            .pointer("/jdtls_download_url")
+            .and_then(|url| url.as_str())
+            .map(|s| s.to_string())
+    })
+}
+
+pub fn get_lombok_download_url(configuration: &Option<Value>) -> Option<String> {
+    configuration.as_ref().and_then(|configuration| {
+        configuration
+            .pointer("/lombok_download_url")
+            .and_then(|url| url.as_str())
+            .map(|s| s.to_string())
+    })
+}
+
+pub fn get_debugger_download_url(configuration: &Option<Value>) -> Option<String> {
+    configuration.as_ref().and_then(|configuration| {
+        configuration
+            .pointer("/debugger_download_url")
+            .and_then(|url| url.as_str())
+            .map(|s| s.to_string())
+    })
+}
