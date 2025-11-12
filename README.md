@@ -25,10 +25,18 @@ Here is a common `settings.json` including the above mentioned configurations:
       "java_home": "/path/to/your/JDK21+",
       "lombok_support": true,
       "jdk_auto_download": false,
-      "check_updates_on_startup": true,
-      "jdtls_download_url": "https://download.eclipse.org/jdtls/milestones/{version}/jdt-language-server-{version}.tar.gz",
-      "lombok_download_url": "https://projectlombok.org/downloads/lombok-{version}.jar",
-      "debugger_download_url": "https://github.com/zed-industries/java-debug/releases/download/{version}/com.microsoft.java.debug.plugin-{version}.jar"
+
+      // Component update mode (default: "always")
+      // Controls how JDTLS, Lombok, and Debugger are managed:
+      //
+      //   "always"
+      //     - Every startup: Checks for and downloads latest versions
+      //   "once"
+      //     - First startup: Downloads the latest versions
+      //   "never"
+      //     - Only uses existing local installations
+      //     - Will fail if components are not already installed
+      "update_check_mode": "always"
     }
   }
 }

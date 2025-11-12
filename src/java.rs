@@ -74,18 +74,13 @@ impl Java {
     fn language_server_binary_path(
         &mut self,
         language_server_id: &LanguageServerId,
-        worktree: &Worktree,
+        configuration: &Option<Value>,
     ) -> zed::Result<PathBuf> {
-        // Use cached path if exists
-
         if let Some(path) = &self.cached_binary_path
             && metadata(path).is_ok_and(|stat| stat.is_file())
         {
             return Ok(path.clone());
         }
-
-        let configuration =
-            self.language_server_workspace_configuration(language_server_id, worktree)?;
 
         // Check for latest version
         set_language_server_installation_status(
@@ -300,7 +295,7 @@ impl Extension for Java {
         } else {
             // otherwise we launch ourselves
             args.extend(build_jdtls_launch_args(
-                &self.language_server_binary_path(language_server_id, worktree)?,
+                &self.language_server_binary_path(language_server_id, &configuration)?,
                 &configuration,
                 worktree,
                 lombok_jvm_arg.into_iter().collect(),
