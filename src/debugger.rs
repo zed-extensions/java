@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    fs::{self, metadata, read_dir},
-    path::PathBuf,
-};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use zed_extension_api::{
@@ -69,7 +65,7 @@ const MAVEN_METADATA_URL: &str = "https://repo1.maven.org/maven2/com/microsoft/j
 pub fn find_latest_local_debugger() -> Option<PathBuf> {
     let prefix = PathBuf::from(DEBUGGER_INSTALL_PATH);
     // walk the dir where we install lombok
-    read_dir(&prefix)
+    fs::read_dir(&prefix)
         .map(|entries| {
             entries
                 .filter_map(Result::ok)
@@ -79,7 +75,7 @@ pub fn find_latest_local_debugger() -> Option<PathBuf> {
                     path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
                 })
                 .filter_map(|path| {
-                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
+                    let created_time = fs::metadata(&path).and_then(|meta| meta.created()).ok()?;
                     Some((path, created_time))
                 })
                 .max_by_key(|&(_, time)| time)
@@ -111,15 +107,19 @@ impl Debugger {
         language_server_id: &LanguageServerId,
         configuration: &Option<Value>,
     ) -> zed::Result<PathBuf> {
-        let local = find_latest_local_debugger();
+        // when the fix to https://github.com/microsoft/java-debug/issues/605 becomes part of an official release
+        // switch back to this:
+        // return self.get_or_download_latest_official(language_server_id);
 
-        match should_use_local_or_download(configuration, local, "debugger")? {
-            Some(path) => {
-                self.plugin_path = Some(path.clone());
-                Ok(path)
-            }
-            None => self.get_or_download_fork(language_server_id),
+        // Use local installation if update mode requires it
+        if let Some(path) =
+            should_use_local_or_download(configuration, find_latest_local_debugger(), "debugger")?
+        {
+            self.plugin_path = Some(path.clone());
+            return Ok(path);
         }
+
+        self.get_or_download_fork(language_server_id)
     }
 
     fn get_or_download_fork(

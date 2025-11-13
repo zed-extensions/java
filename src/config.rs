@@ -60,7 +60,7 @@ pub fn is_lombok_enabled(configuration: &Option<Value>) -> bool {
         .unwrap_or(true)
 }
 
-pub fn get_update_check_mode(configuration: &Option<Value>) -> CheckUpdates {
+pub fn get_check_updates(configuration: &Option<Value>) -> CheckUpdates {
     if let Some(configuration) = configuration
         && let Some(mode_str) = configuration
             .pointer("/check_updates")

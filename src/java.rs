@@ -76,6 +76,8 @@ impl Java {
         language_server_id: &LanguageServerId,
         configuration: &Option<Value>,
     ) -> zed::Result<PathBuf> {
+        // Use cached path if exists
+
         if let Some(path) = &self.cached_binary_path
             && metadata(path).is_ok_and(|stat| stat.is_file())
         {
@@ -107,7 +109,7 @@ impl Java {
     fn lombok_jar_path(
         &mut self,
         language_server_id: &LanguageServerId,
-        worktree: &Worktree,
+        configuration: &Option<Value>,
     ) -> zed::Result<PathBuf> {
         if let Some(path) = &self.cached_lombok_path
             && fs::metadata(path).is_ok_and(|stat| stat.is_file())
@@ -115,10 +117,7 @@ impl Java {
             return Ok(path.clone());
         }
 
-        let configuration =
-            self.language_server_workspace_configuration(language_server_id, worktree)?;
-
-        match try_to_fetch_and_install_latest_lombok(language_server_id, &configuration) {
+        match try_to_fetch_and_install_latest_lombok(language_server_id, configuration) {
             Ok(path) => {
                 self.cached_lombok_path = Some(path.clone());
                 Ok(path)
@@ -276,7 +275,7 @@ impl Extension for Java {
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_jvm_arg = if is_lombok_enabled(&configuration) {
-            let lombok_jar_path = self.lombok_jar_path(language_server_id, worktree)?;
+            let lombok_jar_path = self.lombok_jar_path(language_server_id, &configuration)?;
             let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
 
             Some(format!("-javaagent:{canonical_lombok_jar_path}"))

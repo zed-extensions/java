@@ -11,7 +11,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{CheckUpdates, get_java_home, get_update_check_mode, is_java_autodownload},
+    config::{CheckUpdates, get_check_updates, get_java_home, is_java_autodownload},
     jdk::try_to_fetch_and_install_latest_jdk,
 };
 
@@ -324,7 +324,7 @@ pub fn should_use_local_or_download(
     local: Option<PathBuf>,
     component_name: &str,
 ) -> Result<Option<PathBuf>, String> {
-    match get_update_check_mode(configuration) {
+    match get_check_updates(configuration) {
         CheckUpdates::Never => match local {
             Some(path) => Ok(Some(path)),
             None => Err(format!(

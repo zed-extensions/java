@@ -155,103 +155,103 @@ pub fn try_to_fetch_and_install_latest_jdtls(
     language_server_id: &LanguageServerId,
     configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
-    let local = find_latest_local_jdtls();
-
-    match should_use_local_or_download(configuration, local, "jdtls")? {
-        Some(path) => Ok(path),
-        None => {
-            let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
-
-            let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
-                .map_or_else(
-                    |_| {
-                        second_last
-                            .as_ref()
-                            .ok_or(JDTLS_VERION_ERROR.to_string())
-                            .and_then(|fallback| download_jdtls_milestone(fallback))
-                            .map(|milestone| {
-                                (second_last.unwrap(), milestone.trim_end().to_string())
-                            })
-                    },
-                    |milestone| Ok((last, milestone.trim_end().to_string())),
-                )?;
-
-            let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
-
-            let build_directory = latest_version_build.replace(".tar.gz", "");
-            let build_path = prefix.join(&build_directory);
-            let binary_path = build_path.join("bin").join(get_binary_name());
-
-            // If latest version isn't installed,
-            if !metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
-                // then download it...
-
-                set_language_server_installation_status(
-                    language_server_id,
-                    &LanguageServerInstallationStatus::Downloading,
-                );
-                download_file(
-                    &format!(
-                        "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
-                    ),
-                    path_to_string(build_path.clone())?.as_str(),
-                    DownloadedFileType::GzipTar,
-                )?;
-                make_file_executable(path_to_string(binary_path)?.as_str())?;
-
-                // ...and delete other versions
-                let _ = remove_all_files_except(prefix, build_directory.as_str());
-            }
-
-            // return jdtls base path
-            Ok(build_path)
-        }
+    // Use local installation if update mode requires it
+    if let Some(path) =
+        should_use_local_or_download(configuration, find_latest_local_jdtls(), "jdtls")?
+    {
+        return Ok(path);
     }
+
+    // Download latest version
+    let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
+
+    let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
+        .map_or_else(
+            |_| {
+                second_last
+                    .as_ref()
+                    .ok_or(JDTLS_VERION_ERROR.to_string())
+                    .and_then(|fallback| download_jdtls_milestone(fallback))
+                    .map(|milestone| (second_last.unwrap(), milestone.trim_end().to_string()))
+            },
+            |milestone| Ok((last, milestone.trim_end().to_string())),
+        )?;
+
+    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
+
+    let build_directory = latest_version_build.replace(".tar.gz", "");
+    let build_path = prefix.join(&build_directory);
+    let binary_path = build_path.join("bin").join(get_binary_name());
+
+    // If latest version isn't installed,
+    if !metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
+        // then download it...
+
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::Downloading,
+        );
+        download_file(
+            &format!(
+                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
+            ),
+            path_to_string(build_path.clone())?.as_str(),
+            DownloadedFileType::GzipTar,
+        )?;
+        make_file_executable(path_to_string(binary_path)?.as_str())?;
+
+        // ...and delete other versions
+        let _ = remove_all_files_except(prefix, build_directory.as_str());
+    }
+
+    // return jdtls base path
+    Ok(build_path)
 }
 
 pub fn try_to_fetch_and_install_latest_lombok(
     language_server_id: &LanguageServerId,
     configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
-    let local = find_latest_local_lombok();
-
-    match should_use_local_or_download(configuration, local, "lombok")? {
-        Some(path) => Ok(path),
-        None => {
-            set_language_server_installation_status(
-                language_server_id,
-                &LanguageServerInstallationStatus::CheckingForUpdate,
-            );
-
-            let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)?;
-            let prefix = LOMBOK_INSTALL_PATH;
-            let jar_name = format!("lombok-{latest_version}.jar");
-            let jar_path = Path::new(prefix).join(&jar_name);
-
-            // If latest version isn't installed,
-            if !metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
-                // then download it...
-
-                set_language_server_installation_status(
-                    language_server_id,
-                    &LanguageServerInstallationStatus::Downloading,
-                );
-                create_path_if_not_exists(prefix)?;
-                download_file(
-                    &format!("https://projectlombok.org/downloads/{jar_name}"),
-                    path_to_string(jar_path.clone())?.as_str(),
-                    DownloadedFileType::Uncompressed,
-                )?;
-
-                // ...and delete other versions
-
-                let _ = remove_all_files_except(prefix, jar_name.as_str());
-            }
-
-            // else use it
-            Ok(jar_path)
-        }
+    // Use local installation if update mode requires it
+    if let Some(path) =
+        should_use_local_or_download(configuration, find_latest_local_lombok(), "lombok")?
+    {
+        return Ok(path);
     }
+
+    // Download latest version
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::CheckingForUpdate,
+    );
+
+    let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)?;
+    let prefix = LOMBOK_INSTALL_PATH;
+    let jar_name = format!("lombok-{latest_version}.jar");
+    let jar_path = Path::new(prefix).join(&jar_name);
+
+    // If latest version isn't installed,
+    if !metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
+        // then download it...
+
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::Downloading,
+        );
+        create_path_if_not_exists(prefix)?;
+        download_file(
+            &format!("https://projectlombok.org/downloads/{jar_name}"),
+            path_to_string(jar_path.clone())?.as_str(),
+            DownloadedFileType::Uncompressed,
+        )?;
+
+        // ...and delete other versions
+
+        let _ = remove_all_files_except(prefix, jar_name.as_str());
+    }
+
+    // else use it
+    Ok(jar_path)
 }
 
 fn download_jdtls_milestone(version: &str) -> zed::Result<String> {
