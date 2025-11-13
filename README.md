@@ -26,17 +26,14 @@ Here is a common `settings.json` including the above mentioned configurations:
       "lombok_support": true,
       "jdk_auto_download": false,
 
-      // Component update mode (default: "always")
-      // Controls how JDTLS, Lombok, and Debugger are managed:
+      // Controls when to check for updates for JDTLS, Lombok, and Debugger:
       //
-      //   "always"
-      //     - Every startup: Checks for and downloads latest versions
-      //   "once"
-      //     - First startup: Downloads the latest versions
-      //   "never"
-      //     - Only uses existing local installations
-      //     - Will fail if components are not already installed
-      "update_check_mode": "always"
+      // - "always" (default): Always check for and download the latest version
+      // - "once": Check for updates only if no local installation exists
+      // - "never": Never check for updates, only use existing local installations (errors if missing)
+      //
+      // Note: Invalid values will default to "always"
+      "check_updates": "always"
     }
   }
 }

@@ -88,7 +88,7 @@ impl Java {
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        match try_to_fetch_and_install_latest_jdtls(language_server_id, &configuration) {
+        match try_to_fetch_and_install_latest_jdtls(language_server_id, configuration) {
             Ok(path) => {
                 self.cached_binary_path = Some(path.clone());
                 Ok(path)

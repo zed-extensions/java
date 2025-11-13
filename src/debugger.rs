@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
+    fs::{self, metadata, read_dir},
+    path::PathBuf,
 };
 
 use serde::{Deserialize, Serialize};
@@ -15,10 +15,7 @@ use zed_extension_api::{
 
 use crate::{
     lsp::LspWrapper,
-    util::{
-        ComponentPathResolution, ComponentResolver, create_path_if_not_exists, get_curr_dir,
-        path_to_string, should_use_local_or_download,
-    },
+    util::{create_path_if_not_exists, get_curr_dir, path_to_string, should_use_local_or_download},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -63,47 +60,33 @@ const RUNTIME_SCOPE: &str = "$Runtime";
 
 const SCOPES: [&str; 3] = [TEST_SCOPE, AUTO_SCOPE, RUNTIME_SCOPE];
 
+const DEBUGGER_INSTALL_PATH: &str = "debugger";
+
 const JAVA_DEBUG_PLUGIN_FORK_URL: &str = "https://github.com/zed-industries/java-debug/releases/download/0.53.2/com.microsoft.java.debug.plugin-0.53.2.jar";
 
 const MAVEN_METADATA_URL: &str = "https://repo1.maven.org/maven2/com/microsoft/java/com.microsoft.java.debug.plugin/maven-metadata.xml";
 
-fn is_valid_debug_plugin_jar(path: &Path) -> bool {
-    if !path.is_file() {
-        return false;
-    }
-
-    let has_jar_extension = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map_or(false, |ext| ext == "jar");
-
-    let has_correct_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map_or(false, |name| {
-            name.starts_with("com.microsoft.java.debug.plugin")
-        });
-
-    has_jar_extension && has_correct_name
-}
-
-fn find_local_debugger(cached_path: &Option<PathBuf>) -> Option<PathBuf> {
-    if let Some(path) = cached_path {
-        if fs::metadata(path).is_ok() {
-            return Some(path.clone());
-        }
-    }
-
-    if let Ok(entries) = fs::read_dir("debugger") {
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            if is_valid_debug_plugin_jar(&path) {
-                return Some(path);
-            }
-        }
-    }
-
-    None
+pub fn find_latest_local_debugger() -> Option<PathBuf> {
+    let prefix = PathBuf::from(DEBUGGER_INSTALL_PATH);
+    // walk the dir where we install lombok
+    read_dir(&prefix)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                // get the most recently created jar file
+                .filter(|path| {
+                    path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
+                })
+                .filter_map(|path| {
+                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
+                    Some((path, created_time))
+                })
+                .max_by_key(|&(_, time)| time)
+                .map(|(path, _)| path)
+        })
+        .ok()
+        .flatten()
 }
 
 pub struct Debugger {
@@ -128,19 +111,14 @@ impl Debugger {
         language_server_id: &LanguageServerId,
         configuration: &Option<Value>,
     ) -> zed::Result<PathBuf> {
-        let resolver = ComponentResolver {
-            find_local: &|| find_local_debugger(&self.plugin_path),
-            component_name: "debugger",
-        };
+        let local = find_latest_local_debugger();
 
-        match should_use_local_or_download(configuration, &resolver)? {
-            ComponentPathResolution::LocalPath(path) => {
+        match should_use_local_or_download(configuration, local, "debugger")? {
+            Some(path) => {
                 self.plugin_path = Some(path.clone());
                 Ok(path)
             }
-            ComponentPathResolution::ShouldDownload => {
-                self.get_or_download_fork(language_server_id)
-            }
+            None => self.get_or_download_fork(language_server_id),
         }
     }
 

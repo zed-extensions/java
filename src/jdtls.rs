@@ -18,10 +18,9 @@ use crate::{
     config::is_java_autodownload,
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
-        ComponentPathResolution, ComponentResolver, create_path_if_not_exists, get_curr_dir,
-        get_java_exec_name, get_java_executable, get_java_major_version,
-        get_latest_versions_from_tag, path_to_string, remove_all_files_except,
-        should_use_local_or_download,
+        create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
+        get_java_major_version, get_latest_versions_from_tag, path_to_string,
+        remove_all_files_except, should_use_local_or_download,
     },
 };
 
@@ -156,14 +155,11 @@ pub fn try_to_fetch_and_install_latest_jdtls(
     language_server_id: &LanguageServerId,
     configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
-    let resolver = ComponentResolver {
-        find_local: &find_latest_local_jdtls,
-        component_name: "jdtls",
-    };
+    let local = find_latest_local_jdtls();
 
-    match should_use_local_or_download(configuration, &resolver)? {
-        ComponentPathResolution::LocalPath(path) => Ok(path),
-        ComponentPathResolution::ShouldDownload => {
+    match should_use_local_or_download(configuration, local, "jdtls")? {
+        Some(path) => Ok(path),
+        None => {
             let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
 
             let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
@@ -217,14 +213,11 @@ pub fn try_to_fetch_and_install_latest_lombok(
     language_server_id: &LanguageServerId,
     configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
-    let resolver = ComponentResolver {
-        find_local: &find_latest_local_lombok,
-        component_name: "lombok",
-    };
+    let local = find_latest_local_lombok();
 
-    match should_use_local_or_download(configuration, &resolver)? {
-        ComponentPathResolution::LocalPath(path) => Ok(path),
-        ComponentPathResolution::ShouldDownload => {
+    match should_use_local_or_download(configuration, local, "lombok")? {
+        Some(path) => Ok(path),
+        None => {
             set_language_server_installation_status(
                 language_server_id,
                 &LanguageServerInstallationStatus::CheckingForUpdate,

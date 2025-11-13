@@ -2,6 +2,14 @@ use zed_extension_api::{Worktree, serde_json::Value};
 
 use crate::util::expand_home_path;
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum CheckUpdates {
+    #[default]
+    Always,
+    Once,
+    Never,
+}
+
 pub fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
     // try to read the value from settings
     if let Some(configuration) = configuration
@@ -52,31 +60,19 @@ pub fn is_lombok_enabled(configuration: &Option<Value>) -> bool {
         .unwrap_or(true)
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum UpdateCheckMode {
-    Always,
-    Once,
-    Never,
-}
-
-impl Default for UpdateCheckMode {
-    fn default() -> Self {
-        UpdateCheckMode::Always
-    }
-}
-
-pub fn get_update_check_mode(configuration: &Option<Value>) -> UpdateCheckMode {
+pub fn get_update_check_mode(configuration: &Option<Value>) -> CheckUpdates {
     if let Some(configuration) = configuration
         && let Some(mode_str) = configuration
-            .pointer("/update_check_mode")
+            .pointer("/check_updates")
             .and_then(|x| x.as_str())
+            .map(|s| s.to_lowercase())
     {
-        return match mode_str.to_lowercase().as_str() {
-            "once" => UpdateCheckMode::Once,
-            "never" => UpdateCheckMode::Never,
-            "always" => UpdateCheckMode::Always,
-            _ => UpdateCheckMode::default(),
+        return match mode_str.as_str() {
+            "once" => CheckUpdates::Once,
+            "never" => CheckUpdates::Never,
+            "always" => CheckUpdates::Always,
+            _ => CheckUpdates::default(),
         };
     }
-    UpdateCheckMode::default()
+    CheckUpdates::default()
 }

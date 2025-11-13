@@ -11,7 +11,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{UpdateCheckMode, get_java_home, get_update_check_mode, is_java_autodownload},
+    config::{CheckUpdates, get_java_home, get_update_check_mode, is_java_autodownload},
     jdk::try_to_fetch_and_install_latest_jdk,
 };
 
@@ -31,22 +31,6 @@ const TAG_UNEXPECTED_FORMAT_ERROR: &str = "Malformed GitHub tags response";
 const PATH_IS_NOT_DIR: &str = "File exists but is not a path";
 const NO_LOCAL_INSTALL_NEVER_ERROR: &str =
     "Update checks disabled (never) and no local installation found";
-
-// Result of component path resolution
-pub enum ComponentPathResolution {
-    /// Local installation found
-    LocalPath(PathBuf),
-    /// No local installation, should download
-    ShouldDownload,
-}
-
-// Configuration for component path resolution
-pub struct ComponentResolver<'a> {
-    /// Function to find latest local installation
-    pub find_local: &'a dyn Fn() -> Option<PathBuf>,
-    /// Component name for error messages (e.g., "jdtls", "lombok")
-    pub component_name: &'static str,
-}
 
 /// Create a Path if it does not exist
 ///
@@ -325,38 +309,30 @@ pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed
 ///
 /// # Arguments
 /// * `configuration` - User configuration JSON
-/// * `resolver` - Component-specific configuration
+/// * `local` - Optional path to local installation
+/// * `component_name` - Component name for error messages (e.g., "jdtls", "lombok", "debugger")
 ///
 /// # Returns
-/// * `Ok(ComponentPathResolution)` - Path resolution result
+/// * `Ok(Some(PathBuf))` - Local installation should be used
+/// * `Ok(None)` - Should download
 /// * `Err(String)` - Error message if resolution failed
 ///
 /// # Errors
 /// - Update mode is Never but no local installation found
 pub fn should_use_local_or_download(
     configuration: &Option<Value>,
-    resolver: &ComponentResolver,
-) -> Result<ComponentPathResolution, String> {
-    let update_mode = get_update_check_mode(configuration);
-
-    match update_mode {
-        UpdateCheckMode::Never => {
-            if let Some(local) = (resolver.find_local)() {
-                return Ok(ComponentPathResolution::LocalPath(local));
-            }
-            return Err(format!(
+    local: Option<PathBuf>,
+    component_name: &str,
+) -> Result<Option<PathBuf>, String> {
+    match get_update_check_mode(configuration) {
+        CheckUpdates::Never => match local {
+            Some(path) => Ok(Some(path)),
+            None => Err(format!(
                 "{} for {}",
-                NO_LOCAL_INSTALL_NEVER_ERROR, resolver.component_name
-            ));
-        }
-        UpdateCheckMode::Once => {
-            if let Some(local) = (resolver.find_local)() {
-                return Ok(ComponentPathResolution::LocalPath(local));
-            }
-            return Ok(ComponentPathResolution::ShouldDownload);
-        }
-        UpdateCheckMode::Always => {
-            return Ok(ComponentPathResolution::ShouldDownload);
-        }
+                NO_LOCAL_INSTALL_NEVER_ERROR, component_name
+            )),
+        },
+        CheckUpdates::Once => Ok(local),
+        CheckUpdates::Always => Ok(None),
     }
 }
