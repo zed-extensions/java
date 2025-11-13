@@ -10,6 +10,7 @@ use zed_extension_api::{
 };
 
 use crate::{
+    config::get_java_debug_jar,
     lsp::LspWrapper,
     util::{create_path_if_not_exists, get_curr_dir, path_to_string, should_use_local_or_download},
 };
@@ -106,10 +107,18 @@ impl Debugger {
         &mut self,
         language_server_id: &LanguageServerId,
         configuration: &Option<Value>,
+        worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         // when the fix to https://github.com/microsoft/java-debug/issues/605 becomes part of an official release
         // switch back to this:
         // return self.get_or_download_latest_official(language_server_id);
+
+        // Use user-configured path if provided
+        if let Some(jar_path) = get_java_debug_jar(configuration, worktree) {
+            let path = PathBuf::from(&jar_path);
+            self.plugin_path = Some(path.clone());
+            return Ok(path);
+        }
 
         // Use local installation if update mode requires it
         if let Some(path) =

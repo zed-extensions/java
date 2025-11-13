@@ -24,7 +24,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{get_java_home, is_lombok_enabled},
+    config::{get_java_home, get_jdtls_launcher, get_lombok_jar, is_lombok_enabled},
     debugger::Debugger,
     jdtls::{
         build_jdtls_launch_args, find_latest_local_jdtls, find_latest_local_lombok,
@@ -110,7 +110,16 @@ impl Java {
         &mut self,
         language_server_id: &LanguageServerId,
         configuration: &Option<Value>,
+        worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
+        // Use user-configured path if provided
+        if let Some(jar_path) = get_lombok_jar(configuration, worktree) {
+            let path = PathBuf::from(&jar_path);
+            self.cached_lombok_path = Some(path.clone());
+            return Ok(path);
+        }
+
+        // Use cached path if exists
         if let Some(path) = &self.cached_lombok_path
             && fs::metadata(path).is_ok_and(|stat| stat.is_file())
         {
@@ -275,7 +284,8 @@ impl Extension for Java {
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_jvm_arg = if is_lombok_enabled(&configuration) {
-            let lombok_jar_path = self.lombok_jar_path(language_server_id, &configuration)?;
+            let lombok_jar_path =
+                self.lombok_jar_path(language_server_id, &configuration, worktree)?;
             let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
 
             Some(format!("-javaagent:{canonical_lombok_jar_path}"))
@@ -285,7 +295,13 @@ impl Extension for Java {
 
         self.init(worktree);
 
-        if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
+        // Check for user-configured JDTLS launcher first
+        if let Some(launcher) = get_jdtls_launcher(&configuration, worktree) {
+            args.push(launcher);
+            if let Some(lombok_jvm_arg) = lombok_jvm_arg {
+                args.push(format!("--jvm-arg={lombok_jvm_arg}"));
+            }
+        } else if let Some(launcher) = get_jdtls_launcher_from_path(worktree) {
             // if the user has `jdtls(.bat)` on their PATH, we use that
             args.push(launcher);
             if let Some(lombok_jvm_arg) = lombok_jvm_arg {
@@ -303,9 +319,9 @@ impl Extension for Java {
         }
 
         // download debugger if not exists
-        if let Err(err) = self
-            .debugger()?
-            .get_or_download(language_server_id, &configuration)
+        if let Err(err) =
+            self.debugger()?
+                .get_or_download(language_server_id, &configuration, worktree)
         {
             println!("Failed to download debugger: {err}");
         };

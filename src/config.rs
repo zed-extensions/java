@@ -76,3 +76,54 @@ pub fn get_check_updates(configuration: &Option<Value>) -> CheckUpdates {
     }
     CheckUpdates::default()
 }
+
+pub fn get_jdtls_launcher(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(launcher_path) = configuration
+            .pointer("/jdtls_launcher")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, launcher_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{}", err);
+            }
+        }
+    }
+
+    None
+}
+
+pub fn get_lombok_jar(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(jar_path) = configuration
+            .pointer("/lombok_jar")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, jar_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{}", err);
+            }
+        }
+    }
+
+    None
+}
+
+pub fn get_java_debug_jar(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(jar_path) = configuration
+            .pointer("/java_debug_jar")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, jar_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{}", err);
+            }
+        }
+    }
+
+    None
+}
