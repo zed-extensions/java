@@ -323,7 +323,7 @@ pub fn should_use_local_or_download(
     configuration: &Option<Value>,
     local: Option<PathBuf>,
     component_name: &str,
-) -> Result<Option<PathBuf>, String> {
+) -> zed::Result<Option<PathBuf>> {
     match get_check_updates(configuration) {
         CheckUpdates::Never => match local {
             Some(path) => Ok(Some(path)),

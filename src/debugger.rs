@@ -64,7 +64,7 @@ const MAVEN_METADATA_URL: &str = "https://repo1.maven.org/maven2/com/microsoft/j
 
 pub fn find_latest_local_debugger() -> Option<PathBuf> {
     let prefix = PathBuf::from(DEBUGGER_INSTALL_PATH);
-    // walk the dir where we install lombok
+    // walk the dir where we install debugger
     fs::read_dir(&prefix)
         .map(|entries| {
             entries
