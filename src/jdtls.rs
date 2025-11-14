@@ -20,7 +20,7 @@ use crate::{
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
         get_java_major_version, get_latest_versions_from_tag, path_to_string,
-        remove_all_files_except,
+        remove_all_files_except, should_use_local_or_download,
     },
 };
 
@@ -153,7 +153,16 @@ pub fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
 
 pub fn try_to_fetch_and_install_latest_jdtls(
     language_server_id: &LanguageServerId,
+    configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
+    // Use local installation if update mode requires it
+    if let Some(path) =
+        should_use_local_or_download(configuration, find_latest_local_jdtls(), "jdtls")?
+    {
+        return Ok(path);
+    }
+
+    // Download latest version
     let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
 
     let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
@@ -201,7 +210,16 @@ pub fn try_to_fetch_and_install_latest_jdtls(
 
 pub fn try_to_fetch_and_install_latest_lombok(
     language_server_id: &LanguageServerId,
+    configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
+    // Use local installation if update mode requires it
+    if let Some(path) =
+        should_use_local_or_download(configuration, find_latest_local_lombok(), "lombok")?
+    {
+        return Ok(path);
+    }
+
+    // Download latest version
     set_language_server_installation_status(
         language_server_id,
         &LanguageServerInstallationStatus::CheckingForUpdate,

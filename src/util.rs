@@ -11,7 +11,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{get_java_home, is_java_autodownload},
+    config::{CheckUpdates, get_check_updates, get_java_home, is_java_autodownload},
     jdk::try_to_fetch_and_install_latest_jdk,
 };
 
@@ -29,6 +29,8 @@ const TAG_RETRIEVAL_ERROR: &str = "Failed to fetch GitHub tags";
 const TAG_RESPONSE_ERROR: &str = "Failed to deserialize GitHub tags response";
 const TAG_UNEXPECTED_FORMAT_ERROR: &str = "Malformed GitHub tags response";
 const PATH_IS_NOT_DIR: &str = "File exists but is not a path";
+const NO_LOCAL_INSTALL_NEVER_ERROR: &str =
+    "Update checks disabled (never) and no local installation found";
 
 /// Create a Path if it does not exist
 ///
@@ -297,4 +299,40 @@ pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed
     }
 
     Ok(())
+}
+
+/// Determine whether to use local component or download based on update mode
+///
+/// This function handles the common logic for all components (JDTLS, Lombok, Debugger):
+/// 1. Apply update check mode (Never/Once/Always)
+/// 2. Find local installation if applicable
+///
+/// # Arguments
+/// * `configuration` - User configuration JSON
+/// * `local` - Optional path to local installation
+/// * `component_name` - Component name for error messages (e.g., "jdtls", "lombok", "debugger")
+///
+/// # Returns
+/// * `Ok(Some(PathBuf))` - Local installation should be used
+/// * `Ok(None)` - Should download
+/// * `Err(String)` - Error message if resolution failed
+///
+/// # Errors
+/// - Update mode is Never but no local installation found
+pub fn should_use_local_or_download(
+    configuration: &Option<Value>,
+    local: Option<PathBuf>,
+    component_name: &str,
+) -> zed::Result<Option<PathBuf>> {
+    match get_check_updates(configuration) {
+        CheckUpdates::Never => match local {
+            Some(path) => Ok(Some(path)),
+            None => Err(format!(
+                "{} for {}",
+                NO_LOCAL_INSTALL_NEVER_ERROR, component_name
+            )),
+        },
+        CheckUpdates::Once => Ok(local),
+        CheckUpdates::Always => Ok(None),
+    }
 }

@@ -24,7 +24,22 @@ Here is a common `settings.json` including the above mentioned configurations:
     "settings": {
       "java_home": "/path/to/your/JDK21+",
       "lombok_support": true,
-      "jdk_auto_download": false
+      "jdk_auto_download": false,
+
+      // Controls when to check for updates for JDTLS, Lombok, and Debugger
+      // - "always" (default): Always check for and download the latest version
+      // - "once": Check for updates only if no local installation exists
+      // - "never": Never check for updates, only use existing local installations (errors if missing)
+      //
+      // Note: Invalid values will default to "always"
+      // If custom paths (below) are provided, check_updates is IGNORED for that component
+      "check_updates": "always",
+      
+      // Use custom installations instead of managed downloads
+      // When these are set, the extension will not download or manage these components
+      "jdtls_launcher": "/path/to/your/jdt-language-server/bin/jdtls",
+      "lombok_jar": "/path/to/your/lombok.jar",
+      "java_debug_jar": "/path/to/your/com.microsoft.java.debug.plugin.jar"
     }
   }
 }

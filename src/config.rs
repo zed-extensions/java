@@ -2,6 +2,14 @@ use zed_extension_api::{Worktree, serde_json::Value};
 
 use crate::util::expand_home_path;
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum CheckUpdates {
+    #[default]
+    Always,
+    Once,
+    Never,
+}
+
 pub fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
     // try to read the value from settings
     if let Some(configuration) = configuration
@@ -50,4 +58,72 @@ pub fn is_lombok_enabled(configuration: &Option<Value>) -> bool {
                 .and_then(|enabled| enabled.as_bool())
         })
         .unwrap_or(true)
+}
+
+pub fn get_check_updates(configuration: &Option<Value>) -> CheckUpdates {
+    if let Some(configuration) = configuration
+        && let Some(mode_str) = configuration
+            .pointer("/check_updates")
+            .and_then(|x| x.as_str())
+            .map(|s| s.to_lowercase())
+    {
+        return match mode_str.as_str() {
+            "once" => CheckUpdates::Once,
+            "never" => CheckUpdates::Never,
+            "always" => CheckUpdates::Always,
+            _ => CheckUpdates::default(),
+        };
+    }
+    CheckUpdates::default()
+}
+
+pub fn get_jdtls_launcher(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(launcher_path) = configuration
+            .pointer("/jdtls_launcher")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, launcher_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{}", err);
+            }
+        }
+    }
+
+    None
+}
+
+pub fn get_lombok_jar(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(jar_path) = configuration
+            .pointer("/lombok_jar")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, jar_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{}", err);
+            }
+        }
+    }
+
+    None
+}
+
+pub fn get_java_debug_jar(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(jar_path) = configuration
+            .pointer("/java_debug_jar")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, jar_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{}", err);
+            }
+        }
+    }
+
+    None
 }

@@ -10,8 +10,9 @@ use zed_extension_api::{
 };
 
 use crate::{
+    config::get_java_debug_jar,
     lsp::LspWrapper,
-    util::{create_path_if_not_exists, get_curr_dir, path_to_string},
+    util::{create_path_if_not_exists, get_curr_dir, path_to_string, should_use_local_or_download},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -56,9 +57,34 @@ const RUNTIME_SCOPE: &str = "$Runtime";
 
 const SCOPES: [&str; 3] = [TEST_SCOPE, AUTO_SCOPE, RUNTIME_SCOPE];
 
+const DEBUGGER_INSTALL_PATH: &str = "debugger";
+
 const JAVA_DEBUG_PLUGIN_FORK_URL: &str = "https://github.com/zed-industries/java-debug/releases/download/0.53.2/com.microsoft.java.debug.plugin-0.53.2.jar";
 
 const MAVEN_METADATA_URL: &str = "https://repo1.maven.org/maven2/com/microsoft/java/com.microsoft.java.debug.plugin/maven-metadata.xml";
+
+pub fn find_latest_local_debugger() -> Option<PathBuf> {
+    let prefix = PathBuf::from(DEBUGGER_INSTALL_PATH);
+    // walk the dir where we install debugger
+    fs::read_dir(&prefix)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                // get the most recently created jar file
+                .filter(|path| {
+                    path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
+                })
+                .filter_map(|path| {
+                    let created_time = fs::metadata(&path).and_then(|meta| meta.created()).ok()?;
+                    Some((path, created_time))
+                })
+                .max_by_key(|&(_, time)| time)
+                .map(|(path, _)| path)
+        })
+        .ok()
+        .flatten()
+}
 
 pub struct Debugger {
     lsp: LspWrapper,
@@ -80,10 +106,28 @@ impl Debugger {
     pub fn get_or_download(
         &mut self,
         language_server_id: &LanguageServerId,
+        configuration: &Option<Value>,
+        worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         // when the fix to https://github.com/microsoft/java-debug/issues/605 becomes part of an official release
         // switch back to this:
         // return self.get_or_download_latest_official(language_server_id);
+
+        // Use user-configured path if provided
+        if let Some(jar_path) = get_java_debug_jar(configuration, worktree) {
+            let path = PathBuf::from(&jar_path);
+            self.plugin_path = Some(path.clone());
+            return Ok(path);
+        }
+
+        // Use local installation if update mode requires it
+        if let Some(path) =
+            should_use_local_or_download(configuration, find_latest_local_debugger(), "debugger")?
+        {
+            self.plugin_path = Some(path.clone());
+            return Ok(path);
+        }
+
         self.get_or_download_fork(language_server_id)
     }
 
