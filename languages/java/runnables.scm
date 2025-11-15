@@ -2,7 +2,7 @@
 (
     (package_declaration
         (scoped_identifier) @java_package_name
-    )
+    )?
     (class_declaration
         (modifiers) @class-modifier
         (#match? @class-modifier "public")
@@ -24,7 +24,7 @@
 (
     (package_declaration
         (scoped_identifier) @java_package_name
-    )
+    )?
     (class_declaration
         (modifiers) @class-modifier
         (#match? @class-modifier "public")
