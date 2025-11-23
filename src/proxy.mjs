@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { spawn } from "node:child_process";
+import { spawn, exec } from "node:child_process";
 import { EventEmitter } from "node:events";
 import {
   existsSync,
