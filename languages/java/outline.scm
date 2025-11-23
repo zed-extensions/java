@@ -12,11 +12,13 @@
             "static"
         ]* @context)?
     "class" @context
-    name: (_) @name) @item
+    name: (_) @name
+    body: (_) @item)
 
 (record_declaration
     "record" @context
-    name: (_) @name) @item
+    name: (_) @name
+    body: (_) @item)
 
 (interface_declaration
     (modifiers
@@ -31,7 +33,8 @@
             "static"
         ]* @context)?
     "interface" @context
-    name: (_) @name) @item
+    name: (_) @name
+    body: (_) @item)
 
 (enum_declaration
     (modifiers
@@ -44,7 +47,8 @@
             "strictfp"
         ]* @context)?
     "enum" @context
-    name: (_) @name) @item
+    name: (_) @name
+    body: (_) @item)
 
 (annotation_type_declaration
     (modifiers
