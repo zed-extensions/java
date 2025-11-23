@@ -16,6 +16,18 @@
     body: (_) @item)
 
 (record_declaration
+    (modifiers
+        [
+            "private"
+            "public"
+            "protected"
+            "abstract"
+            "sealed"
+            "non-sealed"
+            "final"
+            "strictfp"
+            "static"
+        ]* @context)?
     "record" @context
     name: (_) @name
     body: (_) @item)
@@ -192,7 +204,7 @@
     (block) @item)
 
 (record_declaration
-    (formal_parameters
+    parameters: (formal_parameters
         (formal_parameter
             type: (_) @context
-            name: (_) @name @item)))
+            name: (_) @name) @item))
