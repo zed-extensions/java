@@ -29,7 +29,38 @@ const PROXY_ID = Buffer.from(process.cwd().replace(/\/+$/, "")).toString("hex");
 const PROXY_HTTP_PORT_FILE = join(workdir, "proxy", PROXY_ID);
 const command = process.platform === "win32" ? `"${bin}"` : bin;
 
-const lsp = spawn(command, args, { shell: process.platform === "win32" });
+const lsp = spawn(command, args, {
+  shell: process.platform === "win32",
+  detached: false
+});
+
+function cleanup() {
+  if (lsp && !lsp.killed && lsp.exitCode === null) {
+    lsp.kill('SIGTERM');
+    setTimeout(() => {
+      if (!lsp.killed && lsp.exitCode === null) {
+        lsp.kill('SIGKILL');
+      }
+    }, 1000);
+  }
+}
+
+// Handle graceful IDE shutdown via stdin close
+process.stdin.on('end', () => {
+  cleanup();
+  process.exit(0);
+});
+
+// Fallback: monitor parent process for ungraceful shutdown
+setInterval(() => {
+  try {
+    process.kill(process.ppid, 0);
+  } catch (e) {
+    cleanup();
+    process.exit(0);
+  }
+}, 5000);
+
 const proxy = createLspProxy({ server: lsp, proxy: process });
 
 proxy.on("client", (data, passthrough) => {
