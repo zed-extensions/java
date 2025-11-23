@@ -57,7 +57,8 @@
             "strictfp"
         ]* @context)?
     "@interface" @context
-    name: (_) @name) @item
+    name: (_) @name
+    body: (_) @item)
 
 (enum_constant
     name: (identifier) @name) @item
