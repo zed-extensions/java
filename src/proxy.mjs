@@ -60,6 +60,8 @@ process.stdin.on('end', () => {
   cleanup();
   process.exit(0);
 });
+// Ensure node is monitoring the pipe
+process.stdin.resume();
 
 // Fallback: monitor parent process for ungraceful shutdown
 setInterval(() => {
