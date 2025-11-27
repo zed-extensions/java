@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { spawn } from "node:child_process";
+import { spawn, exec } from "node:child_process";
 import { EventEmitter } from "node:events";
 import {
   existsSync,
@@ -27,9 +27,59 @@ const args = process.argv.slice(3);
 
 const PROXY_ID = Buffer.from(process.cwd().replace(/\/+$/, "")).toString("hex");
 const PROXY_HTTP_PORT_FILE = join(workdir, "proxy", PROXY_ID);
-const command = process.platform === "win32" ? `"${bin}"` : bin;
+const isWindows = process.platform === "win32";
+const command = isWindows ? `"${bin}"` : bin;
 
-const lsp = spawn(command, args, { shell: process.platform === "win32" });
+const lsp = spawn(command, args, {
+  shell: isWindows,
+  detached: false
+});
+
+function cleanup() {
+  if (!lsp || lsp.killed || lsp.exitCode !== null) {
+    return;
+  }
+
+  if (isWindows) {
+    // Windows: Use taskkill to kill the process tree (cmd.exe + the child)
+    // /T = Tree kill (child processes), /F = Force
+    exec(`taskkill /pid ${lsp.pid} /T /F`);
+  }
+  else {
+    lsp.kill('SIGTERM');
+    setTimeout(() => {
+      if (!lsp.killed && lsp.exitCode === null) {
+        lsp.kill('SIGKILL');
+      }
+    }, 1000);
+  }
+}
+
+// Handle graceful IDE shutdown via stdin close
+process.stdin.on('end', () => {
+  cleanup();
+  process.exit(0);
+});
+// Ensure node is monitoring the pipe
+process.stdin.resume();
+
+// Fallback: monitor parent process for ungraceful shutdown
+setInterval(() => {
+  try {
+    // Check if parent is still alive
+    process.kill(process.ppid, 0);
+  } catch (e) {
+    // On Windows, checking a process you don't own might throw EPERM.
+    // We only want to kill if the error is ESRCH (No Such Process).
+    if (e.code === 'ESRCH') {
+      cleanup();
+      process.exit(0);
+    }
+    // If e.code is EPERM, the parent is alive but we don't have permission to signal it.
+    // Do nothing.
+  }
+}, 5000);
+
 const proxy = createLspProxy({ server: lsp, proxy: process });
 
 proxy.on("client", (data, passthrough) => {
