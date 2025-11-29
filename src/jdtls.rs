@@ -283,7 +283,7 @@ fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String>
 
     // else get the first file that matches the glob 'org.eclipse.equinox.launcher_*.jar'
     let entries =
-        read_dir(&plugins_dir).map_err(|e| format!("Failed to read plugins directory: {}", e))?;
+        read_dir(&plugins_dir).map_err(|e| format!("Failed to read plugins directory: {e}"))?;
 
     entries
         .filter_map(Result::ok)
@@ -325,7 +325,7 @@ fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
     let cache_key = worktree.root_path();
 
     let hex_digest = get_sha1_hex(&cache_key);
-    let unique_dir_name = format!("jdtls-{}", hex_digest);
+    let unique_dir_name = format!("jdtls-{hex_digest}");
     Ok(base_cachedir.join(unique_dir_name))
 }
 

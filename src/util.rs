@@ -20,7 +20,6 @@ const EXPAND_ERROR: &str = "Failed to expand ~";
 const CURR_DIR_ERROR: &str = "Could not get current dir";
 const DIR_ENTRY_LOAD_ERROR: &str = "Failed to load directory entry";
 const DIR_ENTRY_RM_ERROR: &str = "Failed to remove directory entry";
-const DIR_ENTRY_LS_ERROR: &str = "Failed to list prefix directory";
 const PATH_TO_STR_ERROR: &str = "Failed to convert path to string";
 const JAVA_EXEC_ERROR: &str = "Failed to convert Java executable path to string";
 const JAVA_VERSION_ERROR: &str = "Failed to determine Java major version";
@@ -49,7 +48,7 @@ pub fn create_path_if_not_exists<P: AsRef<Path>>(path: P) -> zed::Result<()> {
             if metadata.is_dir() {
                 Ok(())
             } else {
-                Err(format!("{PATH_IS_NOT_DIR}: {:?}", path_ref))
+                Err(format!("{PATH_IS_NOT_DIR}: {path_ref:?}"))
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -280,22 +279,20 @@ pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
 ///
 /// Returns `Ok(())` on success, even if some removals fail (errors are printed to stdout).
 pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed::Result<()> {
-    match fs::read_dir(prefix) {
-        Ok(entries) => {
-            for entry in entries {
-                match entry {
-                    Ok(entry) => {
-                        if entry.file_name().to_str() != Some(filename)
-                            && let Err(err) = fs::remove_dir_all(entry.path())
-                        {
-                            println!("{msg}: {err}", msg = DIR_ENTRY_RM_ERROR, err = err);
-                        }
-                    }
-                    Err(err) => println!("{msg}: {err}", msg = DIR_ENTRY_LOAD_ERROR, err = err),
-                }
+    let entries: Vec<_> = match fs::read_dir(prefix) {
+        Ok(entries) => entries.filter_map(|e| e.ok()).collect(),
+        Err(err) => {
+            println!("{DIR_ENTRY_LOAD_ERROR}: {err}");
+            return Err(format!("{DIR_ENTRY_LOAD_ERROR}: {err}"));
+        }
+    };
+
+    for entry in entries {
+        if entry.file_name().to_str() != Some(filename) {
+            if let Err(err) = fs::remove_dir_all(entry.path()) {
+                println!("{DIR_ENTRY_RM_ERROR}: {err}");
             }
         }
-        Err(err) => println!("{msg}: {err}", msg = DIR_ENTRY_LS_ERROR, err = err),
     }
 
     Ok(())
@@ -328,8 +325,7 @@ pub fn should_use_local_or_download(
         CheckUpdates::Never => match local {
             Some(path) => Ok(Some(path)),
             None => Err(format!(
-                "{} for {}",
-                NO_LOCAL_INSTALL_NEVER_ERROR, component_name
+                "{NO_LOCAL_INSTALL_NEVER_ERROR} for {component_name}"
             )),
         },
         CheckUpdates::Once => Ok(local),

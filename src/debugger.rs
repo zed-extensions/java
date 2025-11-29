@@ -157,8 +157,7 @@ impl Debugger {
         )
         .map_err(|err| {
             format!(
-                "Failed to download java-debug fork from {}: {err}",
-                JAVA_DEBUG_PLUGIN_FORK_URL
+                "Failed to download java-debug fork from {JAVA_DEBUG_PLUGIN_FORK_URL}: {err}"
             )
         })?;
 
@@ -198,8 +197,7 @@ impl Debugger {
             }
 
             println!(
-                "Could not fetch debugger: {}\nFalling back to local version.",
-                err
+                "Could not fetch debugger: {err}\nFalling back to local version."
             );
 
             let exists = fs::read_dir(prefix)
