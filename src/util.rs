@@ -297,7 +297,9 @@ pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed
                         && let Err(err) = fs::remove_dir_all(entry.path())
                     {
                         println!("{DIR_ENTRY_RM_ERROR}: {err}");
-                    } else if let Err(err) = fs::remove_file(entry.path()) {
+                    } else if t.is_file()
+                        && let Err(err) = fs::remove_file(entry.path())
+                    {
                         println!("{FILE_ENTRY_RM_ERROR}: {err}");
                     }
                 }
