@@ -20,6 +20,8 @@ const EXPAND_ERROR: &str = "Failed to expand ~";
 const CURR_DIR_ERROR: &str = "Could not get current dir";
 const DIR_ENTRY_LOAD_ERROR: &str = "Failed to load directory entry";
 const DIR_ENTRY_RM_ERROR: &str = "Failed to remove directory entry";
+const ENTRY_TYPE_ERROR: &str = "Could not determine entry type";
+const FILE_ENTRY_RM_ERROR: &str = "Failed to remove file entry";
 const PATH_TO_STR_ERROR: &str = "Failed to convert path to string";
 const JAVA_EXEC_ERROR: &str = "Failed to convert Java executable path to string";
 const JAVA_VERSION_ERROR: &str = "Failed to determine Java major version";
@@ -289,8 +291,17 @@ pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed
 
     for entry in entries {
         if entry.file_name().to_str() != Some(filename) {
-            if let Err(err) = fs::remove_dir_all(entry.path()) {
-                println!("{DIR_ENTRY_RM_ERROR}: {err}");
+            match entry.file_type() {
+                Ok(t) => {
+                    if t.is_dir()
+                        && let Err(err) = fs::remove_dir_all(entry.path())
+                    {
+                        println!("{DIR_ENTRY_RM_ERROR}: {err}");
+                    } else if let Err(err) = fs::remove_file(entry.path()) {
+                        println!("{FILE_ENTRY_RM_ERROR}: {err}");
+                    }
+                }
+                Err(type_err) => println!("{ENTRY_TYPE_ERROR}: {type_err}"),
             }
         }
     }
