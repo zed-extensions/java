@@ -21,7 +21,7 @@ pub fn get_java_home(configuration: &Option<Value>, worktree: &Worktree) -> Opti
         match expand_home_path(worktree, java_home.to_string()) {
             Ok(home_path) => return Some(home_path),
             Err(err) => {
-                println!("{}", err);
+                println!("{err}");
             }
         };
     }
@@ -86,7 +86,7 @@ pub fn get_jdtls_launcher(configuration: &Option<Value>, worktree: &Worktree) ->
         match expand_home_path(worktree, launcher_path.to_string()) {
             Ok(path) => return Some(path),
             Err(err) => {
-                println!("{}", err);
+                println!("{err}");
             }
         }
     }
@@ -103,7 +103,7 @@ pub fn get_lombok_jar(configuration: &Option<Value>, worktree: &Worktree) -> Opt
         match expand_home_path(worktree, jar_path.to_string()) {
             Ok(path) => return Some(path),
             Err(err) => {
-                println!("{}", err);
+                println!("{err}");
             }
         }
     }
@@ -120,7 +120,7 @@ pub fn get_java_debug_jar(configuration: &Option<Value>, worktree: &Worktree) ->
         match expand_home_path(worktree, jar_path.to_string()) {
             Ok(path) => return Some(path),
             Err(err) => {
-                println!("{}", err);
+                println!("{err}");
             }
         }
     }

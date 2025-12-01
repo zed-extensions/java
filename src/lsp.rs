@@ -118,7 +118,7 @@ impl LspClient {
 fn string_to_hex(s: &str) -> String {
     let mut hex_string = String::new();
     for byte in s.as_bytes() {
-        hex_string.push_str(&format!("{:02x}", byte));
+        hex_string.push_str(&format!("{byte:02x}"));
     }
     hex_string
 }
