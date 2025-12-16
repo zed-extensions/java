@@ -72,7 +72,7 @@ pub fn build_jdtls_launch_args(
         "-Dosgi.checkConfiguration=true".to_string(),
         format!(
             "-Dosgi.sharedConfiguration.area={}",
-            escape_path_if_needed(path_to_string(shared_config_path)?, current_platform().0)
+            path_to_string(shared_config_path)?
         ),
         "-Dosgi.sharedConfiguration.area.readOnly=true".to_string(),
         "-Dosgi.configuration.cascaded=true".to_string(),
@@ -352,35 +352,4 @@ fn get_shared_config_path(jdtls_base_directory: &Path) -> PathBuf {
         Os::Windows => "config_win",
     };
     jdtls_base_directory.join(config_to_use)
-}
-
-fn escape_path_if_needed(path: String, os: Os) -> String {
-    if os == Os::Windows {
-        format!("\"{}\"", path)
-    } else {
-        path
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use zed_extension_api::Os;
-
-    #[test]
-    fn test_escape_path_if_needed_windows() {
-        let path = "C:\\Users\\User Name\\Projects\\zed-extension-java".to_string();
-        let escaped = escape_path_if_needed(path.clone(), Os::Windows);
-        assert_eq!(escaped, format!("\"{}\"", path));
-    }
-
-    #[test]
-    fn test_escape_path_if_needed_unix() {
-        let path = "/Users/username/Projects/zed-extension-java".to_string();
-        let escaped = escape_path_if_needed(path.clone(), Os::Mac);
-        assert_eq!(escaped, path);
-
-        let escaped_linux = escape_path_if_needed(path.clone(), Os::Linux);
-        assert_eq!(escaped_linux, path);
-    }
 }

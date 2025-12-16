@@ -264,6 +264,7 @@ pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
         .to_path_buf()
         .into_os_string()
         .into_string()
+        .map(escape_path_if_needed)
         .map_err(|_| PATH_TO_STR_ERROR.to_string())
 }
 
@@ -343,5 +344,58 @@ pub fn should_use_local_or_download(
         },
         CheckUpdates::Once => Ok(local),
         CheckUpdates::Always => Ok(None),
+    }
+}
+
+// Escape path if included spaces
+// Add quotes to path if needed for avoid errors with spaces in path
+//
+// # Arguments
+// * `path` - The path to escape
+//
+// # Returns
+// * `String` - The escaped path
+//
+fn escape_path_if_needed(path: String) -> String {
+    if path.contains(' ') {
+        format!("\"{}\"", path)
+    } else {
+        path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_path_to_string_with_spaces_windows() {
+        let path = PathBuf::from("C:\\Users\\User Name\\Projects\\zed-extension-java");
+        let escaped = path_to_string(&path).unwrap();
+        assert_eq!(
+            escaped,
+            "\"C:\\Users\\User Name\\Projects\\zed-extension-java\""
+        );
+    }
+
+    #[test]
+    fn test_path_to_string_without_spaces_windows() {
+        let path = PathBuf::from("C:\\Users\\UserName\\Projects\\zed-extension-java");
+        let escaped = path_to_string(&path).unwrap();
+        assert_eq!(escaped, "C:\\Users\\UserName\\Projects\\zed-extension-java");
+    }
+
+    #[test]
+    fn test_path_to_string_with_spaces_unix() {
+        let path = PathBuf::from("/home/username/Projects/zed extension java");
+        let escaped = path_to_string(&path).unwrap();
+        assert_eq!(escaped, "\"/home/username/Projects/zed extension java\"");
+    }
+
+    #[test]
+    fn test_path_to_string_without_spaces_unix() {
+        let path = PathBuf::from("/home/username/Projects/zed-extension-java");
+        let escaped = path_to_string(&path).unwrap();
+        assert_eq!(escaped, "/home/username/Projects/zed-extension-java");
     }
 }
