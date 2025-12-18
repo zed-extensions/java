@@ -156,9 +156,7 @@ impl Debugger {
             DownloadedFileType::Uncompressed,
         )
         .map_err(|err| {
-            format!(
-                "Failed to download java-debug fork from {JAVA_DEBUG_PLUGIN_FORK_URL}: {err}"
-            )
+            format!("Failed to download java-debug fork from {JAVA_DEBUG_PLUGIN_FORK_URL}: {err}")
         })?;
 
         self.plugin_path = Some(jar_path.clone());
@@ -196,9 +194,7 @@ impl Debugger {
                 return Err(err.to_owned());
             }
 
-            println!(
-                "Could not fetch debugger: {err}\nFalling back to local version."
-            );
+            println!("Could not fetch debugger: {err}\nFalling back to local version.");
 
             let exists = fs::read_dir(prefix)
                 .ok()
