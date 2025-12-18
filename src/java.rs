@@ -143,6 +143,37 @@ impl Java {
     }
 }
 
+fn format_lombok_agent_arg(path: &str, os: zed::Os) -> String {
+    if os == zed::Os::Windows {
+        format!("-javaagent:\"{path}\"")
+    } else {
+        format!("-javaagent:{path}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zed_extension_api::Os;
+
+    #[test]
+    fn test_format_lombok_agent_arg_windows() {
+        let path = "C:\\Users\\User Name\\lombok.jar";
+        let arg = format_lombok_agent_arg(path, Os::Windows);
+        assert_eq!(arg, format!("-javaagent:\"{path}\""));
+    }
+
+    #[test]
+    fn test_format_lombok_agent_arg_unix() {
+        let path = "/Users/username/lombok.jar";
+        let arg = format_lombok_agent_arg(path, Os::Mac);
+        assert_eq!(arg, format!("-javaagent:{path}"));
+
+        let arg_linux = format_lombok_agent_arg(path, Os::Linux);
+        assert_eq!(arg_linux, format!("-javaagent:{path}"));
+    }
+}
+
 impl Extension for Java {
     fn new() -> Self
     where
@@ -288,7 +319,10 @@ impl Extension for Java {
                 self.lombok_jar_path(language_server_id, &configuration, worktree)?;
             let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
 
-            Some(format!("-javaagent:{canonical_lombok_jar_path}"))
+            Some(format_lombok_agent_arg(
+                &canonical_lombok_jar_path,
+                zed::current_platform().0,
+            ))
         } else {
             None
         };
