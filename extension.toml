@@ -1,6 +1,6 @@
 id = "java"
 name = "Java"
-version = "6.8.0"
+version = "6.8.1"
 schema_version = 1
 authors = [
     "Valentine Briese <valentinegb@icloud.com>",

@@ -449,9 +449,14 @@ impl Extension for Java {
                 };
                 let braces = " {}";
                 let code = format!("{keyword}{}{braces}", completion.label);
-                let namespace = completion
-                    .detail
-                    .map(|detail| detail[..detail.len() - completion.label.len() - 1].to_string());
+                let namespace = completion.detail.and_then(|detail| {
+                    if detail.len() > completion.label.len() {
+                        let prefix_len = detail.len() - completion.label.len() - 1;
+                        Some(detail[..prefix_len].to_string())
+                    } else {
+                        None
+                    }
+                });
                 let mut spans = vec![CodeLabelSpan::code_range(
                     keyword.len()..code.len() - braces.len(),
                 )];
