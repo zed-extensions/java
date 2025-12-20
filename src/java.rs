@@ -32,7 +32,7 @@ use crate::{
         try_to_fetch_and_install_latest_lombok,
     },
     lsp::LspWrapper,
-    util::path_to_string,
+    util::path_to_quoted_string,
 };
 
 const PROXY_FILE: &str = include_str!("proxy.mjs");
@@ -279,14 +279,15 @@ impl Extension for Java {
             "--input-type=module".to_string(),
             "-e".to_string(),
             PROXY_FILE.to_string(),
-            path_to_string(current_dir.clone())?,
+            path_to_quoted_string(current_dir.clone())?,
         ];
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_jvm_arg = if is_lombok_enabled(&configuration) {
             let lombok_jar_path =
                 self.lombok_jar_path(language_server_id, &configuration, worktree)?;
-            let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
+            let canonical_lombok_jar_path =
+                path_to_quoted_string(current_dir.join(lombok_jar_path))?;
 
             Some(format!("-javaagent:{canonical_lombok_jar_path}"))
         } else {

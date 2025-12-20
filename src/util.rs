@@ -176,7 +176,8 @@ pub fn get_java_exec_name() -> String {
 /// * [`java_executable`] can't be converted into a String
 /// * No major version can be determined
 pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
-    let program = path_to_string(java_executable).map_err(|_| JAVA_EXEC_ERROR.to_string())?;
+    let program =
+        path_to_quoted_string(java_executable).map_err(|_| JAVA_EXEC_ERROR.to_string())?;
     let output_bytes = Command::new(program).arg("-version").output()?.stderr;
     let output = String::from_utf8(output_bytes).map_err(|e| e.to_string())?;
 
@@ -246,24 +247,28 @@ fn get_tag_at(github_tags: &Value, index: usize) -> Option<&str> {
     })
 }
 
-/// Convert [`path`] into [`String`]
+/// Converts a [`Path`] into a double-quoted [`String`].
+///
+/// This function performs two steps in one: it converts the path to a string
+/// and wraps the result in double quotes (e.g., `"path/to/file"`).
 ///
 /// # Arguments
 ///
-/// * [`path`] the path of type [`AsRef<Path>`] to convert
+/// * `path` - The path of type `AsRef<Path>` to be converted and quoted.
 ///
 /// # Returns
 ///
-/// Returns a String representing [`path`]
+/// Returns a `String` representing the `path` enclosed in double quotes.
 ///
 /// # Errors
 ///
 /// This function will return an error when the string conversion fails
-pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
+pub fn path_to_quoted_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
     path.as_ref()
         .to_path_buf()
         .into_os_string()
         .into_string()
+        .map(|s| format!("\"{}\"", s))
         .map_err(|_| PATH_TO_STR_ERROR.to_string())
 }
 
@@ -343,5 +348,27 @@ pub fn should_use_local_or_download(
         },
         CheckUpdates::Once => Ok(local),
         CheckUpdates::Always => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_path_to_quoted_string_windows() {
+        let path = PathBuf::from("C:\\Users\\User Name\\Projects\\zed-extension-java");
+        let escaped = path_to_quoted_string(&path).unwrap();
+        assert_eq!(
+            escaped,
+            "\"C:\\Users\\User Name\\Projects\\zed-extension-java\""
+        );
+    }
+
+    #[test]
+    fn test_path_to_quoted_string_unix() {
+        let path = PathBuf::from("/home/username/Projects/zed extension java");
+        let escaped = path_to_quoted_string(&path).unwrap();
+        assert_eq!(escaped, "\"/home/username/Projects/zed extension java\"");
     }
 }
