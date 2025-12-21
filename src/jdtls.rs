@@ -15,12 +15,12 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::is_java_autodownload,
+    config::{CheckUpdates, get_check_updates, is_java_autodownload},
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
-        get_java_major_version, get_latest_versions_from_tag, path_to_quoted_string,
-        remove_all_files_except, should_use_local_or_download,
+        get_java_major_version, get_latest_versions_from_tag, mark_checked_once,
+        path_to_quoted_string, remove_all_files_except, should_use_local_or_download,
     },
 };
 
@@ -50,7 +50,8 @@ pub fn build_jdtls_launch_args(
     if java_major_version < 21 {
         if is_java_autodownload(configuration) {
             java_executable =
-                try_to_fetch_and_install_latest_jdk(language_server_id)?.join(get_java_exec_name());
+                try_to_fetch_and_install_latest_jdk(language_server_id, configuration)?
+                    .join(get_java_exec_name());
         } else {
             return Err(JAVA_VERSION_ERROR.to_string());
         }
@@ -204,6 +205,11 @@ pub fn try_to_fetch_and_install_latest_jdtls(
         let _ = remove_all_files_except(prefix, build_directory.as_str());
     }
 
+    // Mark as checked once if in Once mode
+    if get_check_updates(configuration) == CheckUpdates::Once {
+        let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
+    }
+
     // return jdtls base path
     Ok(build_path)
 }
@@ -248,6 +254,11 @@ pub fn try_to_fetch_and_install_latest_lombok(
         // ...and delete other versions
 
         let _ = remove_all_files_except(prefix, jar_name.as_str());
+    }
+
+    // Mark as checked once if in Once mode
+    if get_check_updates(configuration) == CheckUpdates::Once {
+        let _ = mark_checked_once(LOMBOK_INSTALL_PATH, &latest_version);
     }
 
     // else use it

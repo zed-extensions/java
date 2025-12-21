@@ -2,11 +2,17 @@ use std::path::{Path, PathBuf};
 
 use zed_extension_api::{
     self as zed, Architecture, DownloadedFileType, LanguageServerId,
-    LanguageServerInstallationStatus, Os, current_platform, download_file,
+    LanguageServerInstallationStatus, Os, current_platform, download_file, serde_json::Value,
     set_language_server_installation_status,
 };
 
-use crate::util::{get_curr_dir, path_to_quoted_string, remove_all_files_except};
+use crate::{
+    config::{CheckUpdates, get_check_updates},
+    util::{
+        get_curr_dir, has_checked_once, mark_checked_once, path_to_quoted_string,
+        remove_all_files_except,
+    },
+};
 
 // Errors
 const JDK_DIR_ERROR: &str = "Failed to read into JDK install directory";
@@ -15,6 +21,7 @@ const NO_JDK_DIR_ERROR: &str = "No match for jdk or corretto in the extracted di
 const CORRETTO_REPO: &str = "corretto/corretto-25";
 const CORRETTO_UNIX_URL_TEMPLATE: &str = "https://corretto.aws/downloads/resources/{version}/amazon-corretto-{version}-{platform}-{arch}.tar.gz";
 const CORRETTO_WINDOWS_URL_TEMPLATE: &str = "https://corretto.aws/downloads/resources/{version}/amazon-corretto-{version}-{platform}-{arch}-jdk.zip";
+const JDK_INSTALL_PATH: &str = "jdk";
 
 fn build_corretto_url(version: &str, platform: &str, arch: &str) -> String {
     let template = match zed::current_platform().0 {
@@ -46,9 +53,58 @@ fn get_platform() -> zed::Result<String> {
     }
 }
 
+fn find_latest_local_jdk() -> Option<PathBuf> {
+    let jdk_path = get_curr_dir().ok()?.join(JDK_INSTALL_PATH);
+    std::fs::read_dir(&jdk_path)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .filter_map(|path| {
+            let created_time = std::fs::metadata(&path)
+                .and_then(|meta| meta.created())
+                .ok()?;
+            Some((path, created_time))
+        })
+        .max_by_key(|&(_, time)| time)
+        .map(|(path, _)| path)
+}
+
 pub fn try_to_fetch_and_install_latest_jdk(
     language_server_id: &LanguageServerId,
+    configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
+    let jdk_path = get_curr_dir()?.join(JDK_INSTALL_PATH);
+
+    // Check if we should use local installation based on update mode
+    match get_check_updates(configuration) {
+        CheckUpdates::Never => {
+            if let Some(local_path) = find_latest_local_jdk() {
+                return get_jdk_bin_path(&local_path);
+            }
+            return Err(
+                "Update checks disabled (never) and no local JDK installation found".to_string(),
+            );
+        }
+        CheckUpdates::Once => {
+            // If we have a local installation, use it
+            if let Some(local_path) = find_latest_local_jdk() {
+                return get_jdk_bin_path(&local_path);
+            }
+
+            // If we've already checked once, don't check again
+            if has_checked_once(JDK_INSTALL_PATH) {
+                return Err(
+                    "Update check already performed once for JDK. No local installation found."
+                        .to_string(),
+                );
+            }
+        }
+        CheckUpdates::Always => {
+            // Continue to check for updates
+        }
+    }
+
     let version = zed::latest_github_release(
         CORRETTO_REPO,
         zed_extension_api::GithubReleaseOptions {
@@ -58,7 +114,6 @@ pub fn try_to_fetch_and_install_latest_jdk(
     )?
     .version;
 
-    let jdk_path = get_curr_dir()?.join("jdk");
     let install_path = jdk_path.join(&version);
 
     // Check for updates, if same version is already downloaded skip download
@@ -87,12 +142,21 @@ pub fn try_to_fetch_and_install_latest_jdk(
         )?;
 
         // Remove older versions
-        let _ = remove_all_files_except(jdk_path, version.as_str());
+        let _ = remove_all_files_except(&jdk_path, version.as_str());
     }
 
+    // Mark as checked once if in Once mode
+    if get_check_updates(configuration) == CheckUpdates::Once {
+        let _ = mark_checked_once(JDK_INSTALL_PATH, &version);
+    }
+
+    get_jdk_bin_path(&install_path)
+}
+
+fn get_jdk_bin_path(install_path: &Path) -> zed::Result<PathBuf> {
     // Depending on the platform the name of the extracted dir might differ
     // Rather than hard coding, extract it dynamically
-    let extracted_dir = get_extracted_dir(&install_path)?;
+    let extracted_dir = get_extracted_dir(install_path)?;
 
     Ok(install_path
         .join(extracted_dir)

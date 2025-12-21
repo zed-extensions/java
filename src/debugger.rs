@@ -10,10 +10,10 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::get_java_debug_jar,
+    config::{CheckUpdates, get_check_updates, get_java_debug_jar},
     lsp::LspWrapper,
     util::{
-        create_path_if_not_exists, get_curr_dir, path_to_quoted_string,
+        create_path_if_not_exists, get_curr_dir, mark_checked_once, path_to_quoted_string,
         should_use_local_or_download,
     },
 };
@@ -131,7 +131,14 @@ impl Debugger {
             return Ok(path);
         }
 
-        self.get_or_download_fork(language_server_id)
+        let result = self.get_or_download_fork(language_server_id);
+
+        // Mark as checked once if in Once mode and download was successful
+        if result.is_ok() && get_check_updates(configuration) == CheckUpdates::Once {
+            let _ = mark_checked_once(DEBUGGER_INSTALL_PATH, "0.53.2");
+        }
+
+        result
     }
 
     fn get_or_download_fork(
