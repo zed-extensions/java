@@ -247,29 +247,45 @@ fn get_tag_at(github_tags: &Value, index: usize) -> Option<&str> {
     })
 }
 
-/// Converts a [`Path`] into a double-quoted [`String`].
+/// Formats a path string with platform-specific quoting.
 ///
-/// This function performs two steps in one: it converts the path to a string
-/// and wraps the result in double quotes (e.g., `"path/to/file"`).
+/// On Windows, wraps the path in double quotes for shell mode compatibility.
+/// On Unix, returns the path unquoted since spawn() treats quotes as literals.
+fn format_path_for_os(path_str: String, os: Os) -> String {
+    if os == Os::Windows {
+        format!("\"{}\"", path_str)
+    } else {
+        path_str
+    }
+}
+
+/// Converts a [`Path`] into a [`String`], with platform-specific quoting.
+///
+/// On Windows, the path is wrapped in double quotes (e.g., `"C:\path\to\file"`)
+/// for compatibility with shell mode. On Unix-like systems, the path is returned
+/// unquoted, as the proxy uses `spawn()` with `shell: false` which treats quotes
+/// as literal filename characters, causing "No such file or directory" errors.
 ///
 /// # Arguments
 ///
-/// * `path` - The path of type `AsRef<Path>` to be converted and quoted.
+/// * `path` - The path of type `AsRef<Path>` to be converted.
 ///
 /// # Returns
 ///
-/// Returns a `String` representing the `path` enclosed in double quotes.
+/// Returns a `String` representing the path, quoted on Windows, unquoted on Unix.
 ///
 /// # Errors
 ///
 /// This function will return an error when the string conversion fails
 pub fn path_to_quoted_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
-    path.as_ref()
+    let path_str = path
+        .as_ref()
         .to_path_buf()
         .into_os_string()
         .into_string()
-        .map(|s| format!("\"{}\"", s))
-        .map_err(|_| PATH_TO_STR_ERROR.to_string())
+        .map_err(|_| PATH_TO_STR_ERROR.to_string())?;
+
+    Ok(format_path_for_os(path_str, current_platform().0))
 }
 
 /// Remove all files or directories that aren't equal to [`filename`].
@@ -356,19 +372,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_path_to_quoted_string_windows() {
-        let path = PathBuf::from("C:\\Users\\User Name\\Projects\\zed-extension-java");
-        let escaped = path_to_quoted_string(&path).unwrap();
+    fn test_format_path_for_os_windows() {
+        let path = "C:\\Users\\User Name\\Projects\\zed-extension-java".to_string();
+        let result = format_path_for_os(path, Os::Windows);
         assert_eq!(
-            escaped,
+            result,
             "\"C:\\Users\\User Name\\Projects\\zed-extension-java\""
         );
     }
 
     #[test]
-    fn test_path_to_quoted_string_unix() {
-        let path = PathBuf::from("/home/username/Projects/zed extension java");
-        let escaped = path_to_quoted_string(&path).unwrap();
-        assert_eq!(escaped, "\"/home/username/Projects/zed extension java\"");
+    fn test_format_path_for_os_unix() {
+        let path = "/home/username/Projects/zed extension java".to_string();
+        let result = format_path_for_os(path, Os::Mac);
+        assert_eq!(result, "/home/username/Projects/zed extension java");
+    }
+
+    #[test]
+    fn test_format_path_for_os_linux() {
+        let path = "/home/username/Projects/zed extension java".to_string();
+        let result = format_path_for_os(path, Os::Linux);
+        assert_eq!(result, "/home/username/Projects/zed extension java");
     }
 }
