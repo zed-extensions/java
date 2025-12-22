@@ -15,7 +15,7 @@ use std::{
 use zed_extension_api::{
     self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition, Extension,
     LanguageServerId, LanguageServerInstallationStatus, StartDebuggingRequestArguments,
-    StartDebuggingRequestArgumentsRequest, Worktree,
+    StartDebuggingRequestArgumentsRequest, Worktree, current_platform,
     lsp::{Completion, CompletionKind},
     register_extension,
     serde_json::{Value, json},
@@ -32,7 +32,7 @@ use crate::{
         try_to_fetch_and_install_latest_lombok,
     },
     lsp::LspWrapper,
-    util::path_to_quoted_string,
+    util::{path_to_string, quote_path_for_os},
 };
 
 const PROXY_FILE: &str = include_str!("proxy.mjs");
@@ -279,17 +279,19 @@ impl Extension for Java {
             "--input-type=module".to_string(),
             "-e".to_string(),
             PROXY_FILE.to_string(),
-            path_to_quoted_string(current_dir.clone())?,
+            path_to_string(current_dir.clone())?,
         ];
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_jvm_arg = if is_lombok_enabled(&configuration) {
             let lombok_jar_path =
                 self.lombok_jar_path(language_server_id, &configuration, worktree)?;
-            let canonical_lombok_jar_path =
-                path_to_quoted_string(current_dir.join(lombok_jar_path))?;
+            let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
 
-            Some(format!("-javaagent:{canonical_lombok_jar_path}"))
+            Some(format!(
+                "-javaagent:{}",
+                quote_path_for_os(canonical_lombok_jar_path, current_platform().0)
+            ))
         } else {
             None
         };

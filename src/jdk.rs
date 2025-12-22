@@ -6,7 +6,7 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::util::{get_curr_dir, path_to_quoted_string, remove_all_files_except};
+use crate::util::{get_curr_dir, path_to_string, remove_all_files_except};
 
 // Errors
 const JDK_DIR_ERROR: &str = "Failed to read into JDK install directory";
@@ -79,7 +79,7 @@ pub fn try_to_fetch_and_install_latest_jdk(
 
         download_file(
             build_corretto_url(&version, &platform, &arch).as_str(),
-            path_to_quoted_string(install_path.clone())?.as_str(),
+            path_to_string(install_path.clone())?.as_str(),
             match zed::current_platform().0 {
                 Os::Windows => DownloadedFileType::Zip,
                 _ => DownloadedFileType::GzipTar,
