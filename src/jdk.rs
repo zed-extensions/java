@@ -80,6 +80,12 @@ pub fn try_to_fetch_and_install_latest_jdk(
         return get_jdk_bin_path(&path);
     }
 
+    // Check for updates, if same version is already downloaded skip download
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::CheckingForUpdate,
+    );
+
     let version = zed::latest_github_release(
         CORRETTO_REPO,
         zed_extension_api::GithubReleaseOptions {
@@ -90,13 +96,6 @@ pub fn try_to_fetch_and_install_latest_jdk(
     .version;
 
     let install_path = jdk_path.join(&version);
-
-    // Check for updates, if same version is already downloaded skip download
-
-    set_language_server_installation_status(
-        language_server_id,
-        &LanguageServerInstallationStatus::CheckingForUpdate,
-    );
 
     if !install_path.exists() {
         set_language_server_installation_status(
@@ -118,10 +117,10 @@ pub fn try_to_fetch_and_install_latest_jdk(
 
         // Remove older versions
         let _ = remove_all_files_except(&jdk_path, version.as_str());
-    }
 
-    // Always mark the downloaded version for "Once" mode tracking
-    let _ = mark_checked_once(JDK_INSTALL_PATH, &version);
+        // Mark the downloaded version for "Once" mode tracking
+        let _ = mark_checked_once(JDK_INSTALL_PATH, &version);
+    }
 
     get_jdk_bin_path(&install_path)
 }

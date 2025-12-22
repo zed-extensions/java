@@ -164,6 +164,11 @@ pub fn try_to_fetch_and_install_latest_jdtls(
     }
 
     // Download latest version
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::CheckingForUpdate,
+    );
+
     let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
 
     let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
@@ -203,10 +208,10 @@ pub fn try_to_fetch_and_install_latest_jdtls(
 
         // ...and delete other versions
         let _ = remove_all_files_except(prefix, build_directory.as_str());
-    }
 
-    // Always mark the downloaded version for "Once" mode tracking
-    let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
+        // Mark the downloaded version for "Once" mode tracking
+        let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
+    }
 
     // return jdtls base path
     Ok(build_path)
@@ -254,10 +259,10 @@ pub fn try_to_fetch_and_install_latest_lombok(
         // ...and delete other versions
 
         let _ = remove_all_files_except(prefix, jar_name.as_str());
-    }
 
-    // Always mark the downloaded version for "Once" mode tracking
-    let _ = mark_checked_once(LOMBOK_INSTALL_PATH, &latest_version);
+        // Mark the downloaded version for "Once" mode tracking
+        let _ = mark_checked_once(LOMBOK_INSTALL_PATH, &latest_version);
+    }
 
     // else use it
     Ok(jar_path)
