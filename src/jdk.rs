@@ -6,12 +6,9 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::{
-    config::{CheckUpdates, get_check_updates},
-    util::{
-        get_curr_dir, has_checked_once, mark_checked_once, path_to_quoted_string,
-        remove_all_files_except,
-    },
+use crate::util::{
+    get_curr_dir, mark_checked_once, path_to_quoted_string, remove_all_files_except,
+    should_use_local_or_download,
 };
 
 // Errors
@@ -77,32 +74,10 @@ pub fn try_to_fetch_and_install_latest_jdk(
     let jdk_path = get_curr_dir()?.join(JDK_INSTALL_PATH);
 
     // Check if we should use local installation based on update mode
-    match get_check_updates(configuration) {
-        CheckUpdates::Never => {
-            if let Some(local_path) = find_latest_local_jdk() {
-                return get_jdk_bin_path(&local_path);
-            }
-            return Err(
-                "Update checks disabled (never) and no local JDK installation found".to_string(),
-            );
-        }
-        CheckUpdates::Once => {
-            // If we have a local installation, use it
-            if let Some(local_path) = find_latest_local_jdk() {
-                return get_jdk_bin_path(&local_path);
-            }
-
-            // If we've already checked once, don't check again
-            if has_checked_once(JDK_INSTALL_PATH) {
-                return Err(
-                    "Update check already performed once for JDK. No local installation found."
-                        .to_string(),
-                );
-            }
-        }
-        CheckUpdates::Always => {
-            // Continue to check for updates
-        }
+    if let Some(path) =
+        should_use_local_or_download(configuration, find_latest_local_jdk(), JDK_INSTALL_PATH)?
+    {
+        return get_jdk_bin_path(&path);
     }
 
     let version = zed::latest_github_release(
@@ -145,10 +120,8 @@ pub fn try_to_fetch_and_install_latest_jdk(
         let _ = remove_all_files_except(&jdk_path, version.as_str());
     }
 
-    // Mark as checked once if in Once mode
-    if get_check_updates(configuration) == CheckUpdates::Once {
-        let _ = mark_checked_once(JDK_INSTALL_PATH, &version);
-    }
+    // Always mark the downloaded version for "Once" mode tracking
+    let _ = mark_checked_once(JDK_INSTALL_PATH, &version);
 
     get_jdk_bin_path(&install_path)
 }

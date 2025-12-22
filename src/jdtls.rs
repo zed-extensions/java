@@ -15,7 +15,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{CheckUpdates, get_check_updates, is_java_autodownload},
+    config::is_java_autodownload,
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
@@ -158,7 +158,7 @@ pub fn try_to_fetch_and_install_latest_jdtls(
 ) -> zed::Result<PathBuf> {
     // Use local installation if update mode requires it
     if let Some(path) =
-        should_use_local_or_download(configuration, find_latest_local_jdtls(), "jdtls")?
+        should_use_local_or_download(configuration, find_latest_local_jdtls(), JDTLS_INSTALL_PATH)?
     {
         return Ok(path);
     }
@@ -205,10 +205,8 @@ pub fn try_to_fetch_and_install_latest_jdtls(
         let _ = remove_all_files_except(prefix, build_directory.as_str());
     }
 
-    // Mark as checked once if in Once mode
-    if get_check_updates(configuration) == CheckUpdates::Once {
-        let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
-    }
+    // Always mark the downloaded version for "Once" mode tracking
+    let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
 
     // return jdtls base path
     Ok(build_path)
@@ -219,9 +217,11 @@ pub fn try_to_fetch_and_install_latest_lombok(
     configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
     // Use local installation if update mode requires it
-    if let Some(path) =
-        should_use_local_or_download(configuration, find_latest_local_lombok(), "lombok")?
-    {
+    if let Some(path) = should_use_local_or_download(
+        configuration,
+        find_latest_local_lombok(),
+        LOMBOK_INSTALL_PATH,
+    )? {
         return Ok(path);
     }
 
@@ -256,10 +256,8 @@ pub fn try_to_fetch_and_install_latest_lombok(
         let _ = remove_all_files_except(prefix, jar_name.as_str());
     }
 
-    // Mark as checked once if in Once mode
-    if get_check_updates(configuration) == CheckUpdates::Once {
-        let _ = mark_checked_once(LOMBOK_INSTALL_PATH, &latest_version);
-    }
+    // Always mark the downloaded version for "Once" mode tracking
+    let _ = mark_checked_once(LOMBOK_INSTALL_PATH, &latest_version);
 
     // else use it
     Ok(jar_path)

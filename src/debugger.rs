@@ -10,7 +10,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{CheckUpdates, get_check_updates, get_java_debug_jar},
+    config::get_java_debug_jar,
     lsp::LspWrapper,
     util::{
         create_path_if_not_exists, get_curr_dir, mark_checked_once, path_to_quoted_string,
@@ -124,21 +124,18 @@ impl Debugger {
         }
 
         // Use local installation if update mode requires it
-        if let Some(path) =
-            should_use_local_or_download(configuration, find_latest_local_debugger(), "debugger")?
-        {
+        if let Some(path) = should_use_local_or_download(
+            configuration,
+            find_latest_local_debugger(),
+            DEBUGGER_INSTALL_PATH,
+        )? {
             self.plugin_path = Some(path.clone());
             return Ok(path);
         }
 
-        let result = self.get_or_download_fork(language_server_id);
+        
 
-        // Mark as checked once if in Once mode and download was successful
-        if result.is_ok() && get_check_updates(configuration) == CheckUpdates::Once {
-            let _ = mark_checked_once(DEBUGGER_INSTALL_PATH, "0.53.2");
-        }
-
-        result
+        self.get_or_download_fork(language_server_id)
     }
 
     fn get_or_download_fork(
@@ -168,6 +165,9 @@ impl Debugger {
         .map_err(|err| {
             format!("Failed to download java-debug fork from {JAVA_DEBUG_PLUGIN_FORK_URL}: {err}")
         })?;
+
+        // Mark the downloaded version for "Once" mode tracking
+        let _ = mark_checked_once(DEBUGGER_INSTALL_PATH, latest_version);
 
         self.plugin_path = Some(jar_path.clone());
         Ok(jar_path)
@@ -270,6 +270,9 @@ impl Debugger {
                 DownloadedFileType::Uncompressed,
             )
             .map_err(|err| format!("Failed to download {url} {err}"))?;
+
+            // Mark the downloaded version for "Once" mode tracking
+            let _ = mark_checked_once(DEBUGGER_INSTALL_PATH, latest_version);
         }
 
         self.plugin_path = Some(jar_path.clone());
