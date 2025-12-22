@@ -479,5 +479,93 @@
     "prefix": "jerr",
     "body": ["log.error(\"${1:message}\", ${2:throwable});", "$0"],
     "description": "log.error with throwable."
+  },
+  "Java: Thread (lambda)": {
+    "prefix": "jthread",
+    "body": ["new Thread(() -> {", "  $0", "}).start();"],
+    "description": "Start a Thread with lambda."
+  },
+  "Java: Runnable": {
+    "prefix": "jrunnable",
+    "body": ["Runnable ${1:task} = () -> {", "  $0", "};"],
+    "description": "Runnable lambda."
+  },
+  "Java: Callable": {
+    "prefix": "jcallable",
+    "body": [
+      "java.util.concurrent.Callable<${1:T}> ${2:task} = () -> {",
+      "  return $0;",
+      "};"
+    ],
+    "description": "Callable lambda."
+  },
+  "Java: ExecutorService (fixed pool)": {
+    "prefix": "jexec",
+    "body": [
+      "java.util.concurrent.ExecutorService ${1:pool} = java.util.concurrent.Executors.newFixedThreadPool(${2:nThreads});",
+      "try {",
+      "  $0",
+      "} finally {",
+      "  ${1:pool}.shutdown();",
+      "}"
+    ],
+    "description": "ExecutorService fixed thread pool."
+  },
+  "Java: CompletableFuture.supplyAsync": {
+    "prefix": "jcf",
+    "body": [
+      "java.util.concurrent.CompletableFuture<${1:T}> ${2:cf} = java.util.concurrent.CompletableFuture.supplyAsync(() -> {",
+      "  return $0;",
+      "});"
+    ],
+    "description": "CompletableFuture.supplyAsync template."
+  },
+  "Java: synchronized block": {
+    "prefix": "jsync",
+    "body": ["synchronized (${1:lock}) {", "  $0", "}"],
+    "description": "Synchronized block."
+  },
+  "Java: ReentrantLock": {
+    "prefix": "jlock",
+    "body": [
+      "java.util.concurrent.locks.Lock ${1:lock} = new java.util.concurrent.locks.ReentrantLock();",
+      "${1:lock}.lock();",
+      "try {",
+      "  $0",
+      "} finally {",
+      "  ${1:lock}.unlock();",
+      "}"
+    ],
+    "description": "ReentrantLock with try/finally."
+  },
+
+  "Java: Path.of": {
+    "prefix": "jpath",
+    "body": [
+      "java.nio.file.Path ${1:path} = java.nio.file.Path.of(${2:\"file.txt\"});",
+      "$0"
+    ],
+    "description": "Create a Path."
+  },
+  "Java: Files.readString": {
+    "prefix": "jreadstr",
+    "body": [
+      "String ${1:text} = java.nio.file.Files.readString(${2:path});",
+      "$0"
+    ],
+    "description": "Read file contents as String."
+  },
+  "Java: Files.readAllLines": {
+    "prefix": "jreadlines",
+    "body": [
+      "java.util.List<String> ${1:lines} = java.nio.file.Files.readAllLines(${2:path});",
+      "$0"
+    ],
+    "description": "Read all lines into List<String>."
+  },
+  "Java: Files.writeString": {
+    "prefix": "jwritestr",
+    "body": ["java.nio.file.Files.writeString(${1:path}, ${2:text});", "$0"],
+    "description": "Write String to file."
   }
 }
