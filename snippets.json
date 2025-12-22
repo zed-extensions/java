@@ -586,7 +586,7 @@
     ],
     "description": "HttpClient GET request."
   },
-  "Java: HttpClient POST JSON (Java 11+)": {
+  " HttpClient POST JSON (Java 11+)": {
     "prefix": "jhttppost",
     "body": [
       "java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();",
@@ -606,7 +606,7 @@
     "description": "HttpClient POST JSON request."
   },
 
-  "Java: Jackson ObjectMapper": {
+  " Jackson ObjectMapper": {
     "prefix": "jjackson",
     "body": [
       "com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();",
@@ -614,7 +614,7 @@
     ],
     "description": "Create Jackson ObjectMapper."
   },
-  "Java: Jackson readValue (class)": {
+  " Jackson readValue (class)": {
     "prefix": "jreadjson",
     "body": [
       "com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();",
@@ -623,7 +623,7 @@
     ],
     "description": "Jackson readValue into class."
   },
-  "Java: Jackson writeValueAsString": {
+  " Jackson writeValueAsString": {
     "prefix": "jwritejson",
     "body": [
       "com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();",
@@ -950,5 +950,85 @@
       ""
     ],
     "description": "Lombok immutable + builder."
+  },
+  "Pattern: Builder (manual)": {
+    "prefix": "jbuilder",
+    "body": [
+      "public static class Builder {",
+      "  private ${1:Type} ${2:field};",
+      "",
+      "  public Builder ${2:field}(${1:Type} ${3:value}) {",
+      "    this.${2:field} = ${3:value};",
+      "    return this;",
+      "  }",
+      "",
+      "  public ${4:ClassName} build() {",
+      "    return new ${4:ClassName}(this);",
+      "  }",
+      "}",
+      "$0"
+    ],
+    "description": "Manual builder inner class."
+  },
+  "Pattern: Singleton": {
+    "prefix": "jsingleton",
+    "body": [
+      "public final class ${1:Singleton} {",
+      "  private static final ${1:Singleton} INSTANCE = new ${1:Singleton}();",
+      "",
+      "  private ${1:Singleton}() {}",
+      "",
+      "  public static ${1:Singleton} getInstance() {",
+      "    return INSTANCE;",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Eager singleton pattern."
+  },
+  "Pattern: Factory method": {
+    "prefix": "jfactory",
+    "body": [
+      "public static ${1:Type} ${2:create}(${3:Args}) {",
+      "  return new ${1:Type}(${4:ctorArgs});",
+      "}",
+      "$0"
+    ],
+    "description": "Factory method template."
+  },
+
+  "Regex: Pattern/Matcher": {
+    "prefix": "jre",
+    "body": [
+      "java.util.regex.Pattern p = java.util.regex.Pattern.compile(${1:\"\\\\\\\\d+\"});",
+      "java.util.regex.Matcher m = p.matcher(${2:input});",
+      "while (m.find()) {",
+      "  $0",
+      "}"
+    ],
+    "description": "Regex Pattern/Matcher loop."
+  },
+
+  "DateTime: Instant.now": {
+    "prefix": "jnowi",
+    "body": ["java.time.Instant ${1:now} = java.time.Instant.now();", "$0"],
+    "description": "Instant.now()."
+  },
+  "DateTime: LocalDate.now": {
+    "prefix": "jnowd",
+    "body": [
+      "java.time.LocalDate ${1:today} = java.time.LocalDate.now();",
+      "$0"
+    ],
+    "description": "LocalDate.now()."
+  },
+  "DateTime: DateTimeFormatter": {
+    "prefix": "jdtf",
+    "body": [
+      "java.time.format.DateTimeFormatter ${1:fmt} = java.time.format.DateTimeFormatter.ofPattern(${2:\"yyyy-MM-dd\"});",
+      "String ${3:s} = ${4:date}.format(${1:fmt});",
+      "$0"
+    ],
+    "description": "DateTimeFormatter pattern + format."
   }
 }

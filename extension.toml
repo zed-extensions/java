@@ -6,6 +6,7 @@ authors = [
     "Valentine Briese <valentinegb@icloud.com>",
     "Samuser107 L.Longheval <samuser107@gmail.com>",
     "Yury Abykhodau <abehodau@gmail.com>",
+    "Keys <70819367+keys-i@users.noreply.github.com>"
 ]
 description = "Java support."
 repository = "https://github.com/zed-extensions/java"
