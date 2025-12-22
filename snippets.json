@@ -130,5 +130,90 @@
       ""
     ],
     "description": "Setter method."
+  },
+  "method (public)": {
+    "prefix": "jpubm",
+    "body": [
+      "public ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Public method template."
+  },
+  "method (private)": {
+    "prefix": "jprim",
+    "body": [
+      "private ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Private method template."
+  },
+  "static method": {
+    "prefix": "jstaticm",
+    "body": [
+      "public static ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Static method template."
+  },
+  "generic method": {
+    "prefix": "jgenm",
+    "body": [
+      "public static <${1:T}> ${1:T} ${2:methodName}(${1:T} ${3:value}) {",
+      "  return ${3:value};",
+      "}",
+      ""
+    ],
+    "description": "Generic method template."
+  },
+
+  "override method": {
+    "prefix": "joverride",
+    "body": [
+      "@Override",
+      "public ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "@Override method template."
+  },
+
+  "equals/hashCode (Objects)": {
+    "prefix": "jeqh",
+    "body": [
+      "@Override",
+      "public boolean equals(Object o) {",
+      "  if (this == o) return true;",
+      "  if (o == null || getClass() != o.getClass()) return false;",
+      "  ${1:ClassName} that = (${1:ClassName}) o;",
+      "  return java.util.Objects.equals(${2:field}, that.${2:field});",
+      "}",
+      "",
+      "@Override",
+      "public int hashCode() {",
+      "  return java.util.Objects.hash(${2:field});",
+      "}",
+      ""
+    ],
+    "description": "equals/hashCode using java.util.Objects."
+  },
+  "toString": {
+    "prefix": "jts",
+    "body": [
+      "@Override",
+      "public String toString() {",
+      "  return \"${1:ClassName}{\" +",
+      "      \"${2:field}=\" + ${2:field} +",
+      "      '}';",
+      "}",
+      ""
+    ],
+    "description": "toString template."
   }
 }
