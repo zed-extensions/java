@@ -769,5 +769,186 @@
       "$0"
     ],
     "description": "Mockito ArgumentCaptor pattern."
+  },
+  "Spring Boot: @SpringBootApplication main": {
+    "prefix": "sbapp",
+    "body": [
+      "import org.springframework.boot.SpringApplication;",
+      "import org.springframework.boot.autoconfigure.SpringBootApplication;",
+      "",
+      "@SpringBootApplication",
+      "public class ${1:Application} {",
+      "  public static void main(String[] args) {",
+      "    SpringApplication.run(${1:Application}.class, args);",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Spring Boot application entry."
+  },
+  "Spring: @RestController": {
+    "prefix": "sbrest",
+    "body": [
+      "import org.springframework.web.bind.annotation.*;",
+      "",
+      "@RestController",
+      "@RequestMapping(\"/${1:resource}\")",
+      "public class ${2:Resource}Controller {",
+      "  @GetMapping",
+      "  public ${3:String} index() {",
+      "    return ${4:\"ok\"};",
+      "  }",
+      "",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring REST controller skeleton."
+  },
+  "Spring: @Service": {
+    "prefix": "sbservice",
+    "body": [
+      "import org.springframework.stereotype.Service;",
+      "",
+      "@Service",
+      "public class ${1:ServiceName} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring @Service skeleton."
+  },
+  "Spring: @Repository": {
+    "prefix": "sbrepo",
+    "body": [
+      "import org.springframework.stereotype.Repository;",
+      "",
+      "@Repository",
+      "public class ${1:RepositoryName} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring @Repository skeleton."
+  },
+  "Spring Data: CrudRepository": {
+    "prefix": "sbcrud",
+    "body": [
+      "import org.springframework.data.repository.CrudRepository;",
+      "",
+      "public interface ${1:RepoName} extends CrudRepository<${2:Entity}, ${3:IdType}> {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring Data CrudRepository interface."
+  },
+  "Spring: @ControllerAdvice (exception handler)": {
+    "prefix": "sbadvice",
+    "body": [
+      "import org.springframework.http.*;",
+      "import org.springframework.web.bind.annotation.*;",
+      "",
+      "@ControllerAdvice",
+      "public class ${1:GlobalExceptionHandler} {",
+      "  @ExceptionHandler(${2:ExceptionType}.class)",
+      "  public ResponseEntity<${3:String}> handle(${2:ExceptionType} e) {",
+      "    return ResponseEntity.status(HttpStatus.${4:BAD_REQUEST}).body(e.getMessage());",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Spring global exception handler."
+  },
+  "JPA: @Entity": {
+    "prefix": "jpaentity",
+    "body": [
+      "import jakarta.persistence.*;",
+      "",
+      "@Entity",
+      "@Table(name = \"${1:table_name}\")",
+      "public class ${2:EntityName} {",
+      "  @Id",
+      "  @GeneratedValue(strategy = GenerationType.IDENTITY)",
+      "  private ${3:Long} id;",
+      "",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "JPA entity skeleton."
+  },
+  "JPA: @Column": {
+    "prefix": "jpacol",
+    "body": [
+      "@Column(name = \"${1:col}\", nullable = ${2:true})",
+      "private ${3:Type} ${4:field};",
+      "$0"
+    ],
+    "description": "JPA column field."
+  },
+  "JPA: @ManyToOne": {
+    "prefix": "jpam2o",
+    "body": [
+      "@ManyToOne(fetch = FetchType.LAZY)",
+      "@JoinColumn(name = \"${1:other_id}\")",
+      "private ${2:OtherEntity} ${3:other};",
+      "$0"
+    ],
+    "description": "JPA ManyToOne association."
+  },
+  "JPA: @OneToMany": {
+    "prefix": "jpao2m",
+    "body": [
+      "@OneToMany(mappedBy = \"${1:owner}\", cascade = CascadeType.ALL, orphanRemoval = true)",
+      "private java.util.List<${2:ChildEntity}> ${3:children} = new java.util.ArrayList<>();",
+      "$0"
+    ],
+    "description": "JPA OneToMany association."
+  },
+
+  "Jakarta Validation: @Valid + @NotNull": {
+    "prefix": "jvalid",
+    "body": [
+      "import jakarta.validation.Valid;",
+      "import jakarta.validation.constraints.NotNull;",
+      "",
+      "public ${1:void} ${2:method}(@Valid @NotNull ${3:Type} ${4:req}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Validation annotations template."
+  },
+
+  "Lombok: @Data class": {
+    "prefix": "ldata",
+    "body": [
+      "import lombok.Data;",
+      "",
+      "@Data",
+      "public class ${1:Dto} {",
+      "  private ${2:Type} ${3:field};",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Lombok @Data class."
+  },
+  "Lombok: @Builder": {
+    "prefix": "lbuilder",
+    "body": [
+      "import lombok.Builder;",
+      "import lombok.Value;",
+      "",
+      "@Value",
+      "@Builder",
+      "public class ${1:ValueType} {",
+      "  ${2:Type} ${3:field};",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Lombok immutable + builder."
   }
 }
