@@ -377,5 +377,107 @@
       ""
     ],
     "description": "Custom RuntimeException."
+  },
+  "List declaration": {
+    "prefix": "jlist",
+    "body": [
+      "java.util.List<${1:Type}> ${2:list} = new java.util.ArrayList<>();",
+      "$0"
+    ],
+    "description": "New ArrayList."
+  },
+  "Set declaration": {
+    "prefix": "jset",
+    "body": [
+      "java.util.Set<${1:Type}> ${2:set} = new java.util.HashSet<>();",
+      "$0"
+    ],
+    "description": "New HashSet."
+  },
+  "Map declaration": {
+    "prefix": "jmap",
+    "body": [
+      "java.util.Map<${1:K}, ${2:V}> ${3:map} = new java.util.HashMap<>();",
+      "$0"
+    ],
+    "description": "New HashMap."
+  },
+
+  "Stream filter/map/toList": {
+    "prefix": "jstream",
+    "body": [
+      "${1:list}.stream()",
+      "  .filter(${2:x} -> ${3:predicate})",
+      "  .map(${2:x} -> ${4:transform})",
+      "  .toList();",
+      "$0"
+    ],
+    "description": "Stream pipeline (Java 16+ toList)."
+  },
+  "Collectors.toList": {
+    "prefix": "jcolist",
+    "body": [
+      "${1:stream}.collect(java.util.stream.Collectors.toList());",
+      "$0"
+    ],
+    "description": "Collect stream to list."
+  },
+  "Collectors.toMap": {
+    "prefix": "jcomap",
+    "body": [
+      "${1:stream}.collect(java.util.stream.Collectors.toMap(",
+      "  ${2:x} -> ${3:key},",
+      "  ${2:x} -> ${4:value}",
+      "));",
+      "$0"
+    ],
+    "description": "Collect stream to map."
+  },
+  "Comparator.comparing": {
+    "prefix": "jcomp",
+    "body": ["java.util.Comparator.comparing(${1:Type}::${2:getField})", "$0"],
+    "description": "Comparator.comparing reference."
+  },
+
+  "Optional.ofNullable": {
+    "prefix": "jopt",
+    "body": [
+      "java.util.Optional.ofNullable(${1:value})",
+      "  .orElse(${2:defaultValue});",
+      "$0"
+    ],
+    "description": "Optional.ofNullable(...).orElse(...)."
+  },
+  "Optional.orElseThrow": {
+    "prefix": "joptx",
+    "body": [
+      "${1:optional}.orElseThrow(() -> new ${2:IllegalStateException}(\"${3:message}\"));",
+      "$0"
+    ],
+    "description": "Optional.orElseThrow with custom exception."
+  },
+
+  "logger (SLF4J)": {
+    "prefix": "jlog",
+    "body": [
+      "private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(${1:ClassName}.class);",
+      "$0"
+    ],
+    "description": "SLF4J logger field."
+  },
+  "log.info": {
+    "prefix": "jinfo",
+    "body": ["log.info(\"${1:message}: {}\", ${2:value});", "$0"],
+    "description": "log.info with placeholder."
+  },
+  "log.warn": {
+    "prefix": "jwarn",
+    "body": ["log.warn(\"${1:message}: {}\", ${2:value});", "$0"],
+    "description": "log.warn with placeholder."
+  },
+  "log.error (with throwable)": {
+    "prefix": "jerr",
+    "body": ["log.error(\"${1:message}\", ${2:throwable});", "$0"],
+    "description": "log.error with throwable."
   }
 }
