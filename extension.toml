@@ -9,6 +9,7 @@ authors = [
 ]
 description = "Java support."
 repository = "https://github.com/zed-extensions/java"
+snippets = "snippets.json"
 
 [grammars.java]
 repository = "https://github.com/tree-sitter/tree-sitter-java"

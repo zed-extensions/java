@@ -1,0 +1,85 @@
+{
+  "Package declaration": {
+    "prefix": "jpkg",
+    "body": ["package ${1:com.example};", ""],
+    "description": "Insert a package declaration."
+  },
+  "Import block": {
+    "prefix": "jimp",
+    "body": ["import ${1:java.util.*};", ""],
+    "description": "Insert an import statement."
+  },
+  "Class skeleton": {
+    "prefix": "jclass",
+    "body": ["public class ${1:ClassName} {", "  $0", "}", ""],
+    "description": "Public class skeleton."
+  },
+  "Class + main": {
+    "prefix": "jmain",
+    "body": [
+      "public class ${1:Main} {",
+      "  public static void main(String[] args) {",
+      "    $0",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Class with a main method."
+  },
+  "Method (public)": {
+    "prefix": "jpubm",
+    "body": [
+      "public ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Public method template."
+  },
+  "Method (private)": {
+    "prefix": "jprim",
+    "body": [
+      "private ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Private method template."
+  },
+  "Constructor": {
+    "prefix": "jctor",
+    "body": [
+      "public ${1:ClassName}(${2:Type arg}) {",
+      "  this.${3:field} = ${2:arg};",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Constructor template."
+  },
+  "Field (private final)": {
+    "prefix": "jpf",
+    "body": ["private final ${1:Type} ${2:name};", ""],
+    "description": "Private final field."
+  },
+  "Getter": {
+    "prefix": "jget",
+    "body": [
+      "public ${1:Type} get${2:Name}() {",
+      "  return ${3:field};",
+      "}",
+      ""
+    ],
+    "description": "Getter method."
+  },
+  "Setter": {
+    "prefix": "jset",
+    "body": [
+      "public void set${1:Name}(${2:Type} ${3:value}) {",
+      "  this.${4:field} = ${3:value};",
+      "}",
+      ""
+    ],
+    "description": "Setter method."
+  }
+}
