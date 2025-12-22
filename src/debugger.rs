@@ -133,8 +133,6 @@ impl Debugger {
             return Ok(path);
         }
 
-        
-
         self.get_or_download_fork(language_server_id)
     }
 
