@@ -1,20 +1,72 @@
 {
-  "Package declaration": {
+  "package": {
     "prefix": "jpkg",
-    "body": ["package ${1:com.example};", ""],
-    "description": "Insert a package declaration."
+    "body": ["package ${1:com.example};", "", "$0"],
+    "description": "Package declaration."
   },
-  "Import block": {
+  "import": {
     "prefix": "jimp",
-    "body": ["import ${1:java.util.*};", ""],
-    "description": "Insert an import statement."
+    "body": ["import ${1:java.util.*};", "$0"],
+    "description": "Import statement."
   },
-  "Class skeleton": {
+  "static import": {
+    "prefix": "jimps",
+    "body": ["import static ${1:org.junit.jupiter.api.Assertions}.*;", "$0"],
+    "description": "Static import statement."
+  },
+
+  "class": {
     "prefix": "jclass",
     "body": ["public class ${1:ClassName} {", "  $0", "}", ""],
     "description": "Public class skeleton."
   },
-  "Class + main": {
+  "final class": {
+    "prefix": "jfclass",
+    "body": ["public final class ${1:ClassName} {", "  $0", "}", ""],
+    "description": "Final class skeleton."
+  },
+  "abstract class": {
+    "prefix": "jabs",
+    "body": ["public abstract class ${1:AbstractName} {", "  $0", "}", ""],
+    "description": "Abstract class skeleton."
+  },
+  "interface": {
+    "prefix": "jint",
+    "body": ["public interface ${1:MyInterface} {", "  $0", "}", ""],
+    "description": "Interface skeleton."
+  },
+  "enum": {
+    "prefix": "jenum",
+    "body": ["public enum ${1:MyEnum} {", "  ${2:VALUE};", "  $0", "}", ""],
+    "description": "Enum skeleton."
+  },
+  "record (Java 16+)": {
+    "prefix": "jrec",
+    "body": ["public record ${1:Name}(${2:Type field}) {", "  $0", "}", ""],
+    "description": "Record skeleton."
+  },
+  "sealed interface (Java 17+)": {
+    "prefix": "jsealedint",
+    "body": [
+      "public sealed interface ${1:Shape} permits ${2:Circle}, ${3:Square} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Sealed interface skeleton."
+  },
+  "sealed class (Java 17+)": {
+    "prefix": "jsealedclass",
+    "body": [
+      "public sealed class ${1:Base} permits ${2:ChildA}, ${3:ChildB} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Sealed class skeleton."
+  },
+
+  "class + main": {
     "prefix": "jmain",
     "body": [
       "public class ${1:Main} {",
@@ -24,45 +76,42 @@
       "}",
       ""
     ],
-    "description": "Class with a main method."
+    "description": "Class with main method."
   },
-  "Method (public)": {
-    "prefix": "jpubm",
-    "body": [
-      "public ${1:void} ${2:methodName}(${3:Type arg}) {",
-      "  $0",
-      "}",
-      ""
-    ],
-    "description": "Public method template."
+  "private field": {
+    "prefix": "jpf",
+    "body": ["private ${1:Type} ${2:name};", "$0"],
+    "description": "Private field."
   },
-  "Method (private)": {
-    "prefix": "jprim",
-    "body": [
-      "private ${1:void} ${2:methodName}(${3:Type arg}) {",
-      "  $0",
-      "}",
-      ""
-    ],
-    "description": "Private method template."
+  "private final field": {
+    "prefix": "jpff",
+    "body": ["private final ${1:Type} ${2:name};", "$0"],
+    "description": "Private final field."
   },
-  "Constructor": {
+  "public static final constant": {
+    "prefix": "jconst",
+    "body": ["public static final ${1:Type} ${2:NAME} = ${3:value};", "$0"],
+    "description": "Constant declaration."
+  },
+
+  "constructor": {
     "prefix": "jctor",
     "body": [
-      "public ${1:ClassName}(${2:Type arg}) {",
-      "  this.${3:field} = ${2:arg};",
+      "public ${1:ClassName}(${2:Type ${3:arg}}) {",
+      "  this.${4:field} = ${3:arg};",
       "  $0",
       "}",
       ""
     ],
     "description": "Constructor template."
   },
-  "Field (private final)": {
-    "prefix": "jpf",
-    "body": ["private final ${1:Type} ${2:name};", ""],
-    "description": "Private final field."
+  "no-args constructor": {
+    "prefix": "jctor0",
+    "body": ["public ${1:ClassName}() {", "  $0", "}", ""],
+    "description": "No-args constructor."
   },
-  "Getter": {
+
+  "getter": {
     "prefix": "jget",
     "body": [
       "public ${1:Type} get${2:Name}() {",
@@ -72,7 +121,7 @@
     ],
     "description": "Getter method."
   },
-  "Setter": {
+  "setter": {
     "prefix": "jset",
     "body": [
       "public void set${1:Name}(${2:Type} ${3:value}) {",
