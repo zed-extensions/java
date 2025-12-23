@@ -30,7 +30,7 @@ const PROXY_HTTP_PORT_FILE = join(workdir, "proxy", PROXY_ID);
 const isWindows = process.platform === "win32";
 
 const lsp = spawn(bin, args, {
-  shell: false,
+  shell: (isWindows && bin.includes(".bat")) ? true : false,
   detached: false,
 });
 
