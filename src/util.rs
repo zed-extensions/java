@@ -246,17 +246,6 @@ fn get_tag_at(github_tags: &Value, index: usize) -> Option<&str> {
     })
 }
 
-/// Formats a path string with platform-specific quoting.
-///
-/// On Windows, wraps the path in double quotes for shell mode compatibility.
-/// On Unix and Mac return the string as it is
-pub fn quote_path_for_os(path_str: String, os: Os) -> String {
-    match os {
-        Os::Windows => format!("\"{path_str}\""),
-        _ => path_str,
-    }
-}
-
 /// Converts a [`Path`] into a [`String`].
 ///
 /// # Arguments
@@ -269,7 +258,7 @@ pub fn quote_path_for_os(path_str: String, os: Os) -> String {
 ///
 /// # Errors
 ///
-/// This function will return an error when the string conversion fails
+/// This function will return an error when the string conversion fails.
 pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
     path.as_ref()
         .to_path_buf()
@@ -354,34 +343,5 @@ pub fn should_use_local_or_download(
         },
         CheckUpdates::Once => Ok(local),
         CheckUpdates::Always => Ok(None),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_quote_path_for_os_windows() {
-        let path = "C:\\Users\\User Name\\Projects\\zed-extension-java".to_string();
-        let result = quote_path_for_os(path, Os::Windows);
-        assert_eq!(
-            result,
-            "\"C:\\Users\\User Name\\Projects\\zed-extension-java\""
-        );
-    }
-
-    #[test]
-    fn test_quote_path_for_os_unix() {
-        let path = "/home/username/Projects/zed extension java".to_string();
-        let result = quote_path_for_os(path, Os::Mac);
-        assert_eq!(result, "/home/username/Projects/zed extension java");
-    }
-
-    #[test]
-    fn test_quote_path_for_os_linux() {
-        let path = "/home/username/Projects/zed extension java".to_string();
-        let result = quote_path_for_os(path, Os::Linux);
-        assert_eq!(result, "/home/username/Projects/zed extension java");
     }
 }

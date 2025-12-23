@@ -28,11 +28,10 @@ const args = process.argv.slice(3);
 const PROXY_ID = Buffer.from(process.cwd().replace(/\/+$/, "")).toString("hex");
 const PROXY_HTTP_PORT_FILE = join(workdir, "proxy", PROXY_ID);
 const isWindows = process.platform === "win32";
-const command = isWindows ? `"${bin}"` : bin;
 
-const lsp = spawn(command, args, {
-  shell: isWindows,
-  detached: false
+const lsp = spawn(bin, args, {
+  shell: false,
+  detached: false,
 });
 
 function cleanup() {
@@ -44,19 +43,18 @@ function cleanup() {
     // Windows: Use taskkill to kill the process tree (cmd.exe + the child)
     // /T = Tree kill (child processes), /F = Force
     exec(`taskkill /pid ${lsp.pid} /T /F`);
-  }
-  else {
-    lsp.kill('SIGTERM');
+  } else {
+    lsp.kill("SIGTERM");
     setTimeout(() => {
       if (!lsp.killed && lsp.exitCode === null) {
-        lsp.kill('SIGKILL');
+        lsp.kill("SIGKILL");
       }
     }, 1000);
   }
 }
 
 // Handle graceful IDE shutdown via stdin close
-process.stdin.on('end', () => {
+process.stdin.on("end", () => {
   cleanup();
   process.exit(0);
 });
@@ -71,7 +69,7 @@ setInterval(() => {
   } catch (e) {
     // On Windows, checking a process you don't own might throw EPERM.
     // We only want to kill if the error is ESRCH (No Such Process).
-    if (e.code === 'ESRCH') {
+    if (e.code === "ESRCH") {
       cleanup();
       process.exit(0);
     }

@@ -19,7 +19,7 @@ use crate::{
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
-        get_java_major_version, get_latest_versions_from_tag, path_to_string, quote_path_for_os,
+        get_java_major_version, get_latest_versions_from_tag, path_to_string,
         remove_all_files_except, should_use_local_or_download,
     },
 };
@@ -72,7 +72,7 @@ pub fn build_jdtls_launch_args(
         "-Dosgi.checkConfiguration=true".to_string(),
         format!(
             "-Dosgi.sharedConfiguration.area={}",
-            quote_path_for_os(path_to_string(shared_config_path)?, current_platform().0)
+            path_to_string(shared_config_path)?
         ),
         "-Dosgi.sharedConfiguration.area.readOnly=true".to_string(),
         "-Dosgi.configuration.cascaded=true".to_string(),
