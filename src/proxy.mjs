@@ -28,10 +28,10 @@ const args = process.argv.slice(3);
 const PROXY_ID = Buffer.from(process.cwd().replace(/\/+$/, "")).toString("hex");
 const PROXY_HTTP_PORT_FILE = join(workdir, "proxy", PROXY_ID);
 const isWindows = process.platform === "win32";
-const command = (isWindows && bin.includes(".bat")) ? `"${bin}"` : bin;
+const command = (isWindows && bin.endsWith(".bat")) ? `"${bin}"` : bin;
 
 const lsp = spawn(command, args, {
-  shell: (isWindows && bin.includes(".bat")) ? true : false,
+  shell: (isWindows && bin.endsWith(".bat")) ? true : false,
   detached: false,
 });
 
