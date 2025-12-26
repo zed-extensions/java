@@ -176,8 +176,7 @@ pub fn get_java_exec_name() -> String {
 /// * [`java_executable`] can't be converted into a String
 /// * No major version can be determined
 pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
-    let program =
-        path_to_quoted_string(java_executable).map_err(|_| JAVA_EXEC_ERROR.to_string())?;
+    let program = path_to_string(java_executable).map_err(|_| JAVA_EXEC_ERROR.to_string())?;
     let output_bytes = Command::new(program).arg("-version").output()?.stderr;
     let output = String::from_utf8(output_bytes).map_err(|e| e.to_string())?;
 
@@ -247,24 +246,7 @@ fn get_tag_at(github_tags: &Value, index: usize) -> Option<&str> {
     })
 }
 
-/// Formats a path string with platform-specific quoting.
-///
-/// On Windows, wraps the path in double quotes for shell mode compatibility.
-/// On Unix, returns the path unquoted since spawn() treats quotes as literals.
-fn format_path_for_os(path_str: String, os: Os) -> String {
-    if os == Os::Windows {
-        format!("\"{}\"", path_str)
-    } else {
-        path_str
-    }
-}
-
-/// Converts a [`Path`] into a [`String`], with platform-specific quoting.
-///
-/// On Windows, the path is wrapped in double quotes (e.g., `"C:\path\to\file"`)
-/// for compatibility with shell mode. On Unix-like systems, the path is returned
-/// unquoted, as the proxy uses `spawn()` with `shell: false` which treats quotes
-/// as literal filename characters, causing "No such file or directory" errors.
+/// Converts a [`Path`] into a [`String`].
 ///
 /// # Arguments
 ///
@@ -272,20 +254,17 @@ fn format_path_for_os(path_str: String, os: Os) -> String {
 ///
 /// # Returns
 ///
-/// Returns a `String` representing the path, quoted on Windows, unquoted on Unix.
+/// Returns a `String` representing the path.
 ///
 /// # Errors
 ///
-/// This function will return an error when the string conversion fails
-pub fn path_to_quoted_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
-    let path_str = path
-        .as_ref()
+/// This function will return an error when the string conversion fails.
+pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
+    path.as_ref()
         .to_path_buf()
         .into_os_string()
         .into_string()
-        .map_err(|_| PATH_TO_STR_ERROR.to_string())?;
-
-    Ok(format_path_for_os(path_str, current_platform().0))
+        .map_err(|_| PATH_TO_STR_ERROR.to_string())
 }
 
 /// Remove all files or directories that aren't equal to [`filename`].
@@ -364,34 +343,5 @@ pub fn should_use_local_or_download(
         },
         CheckUpdates::Once => Ok(local),
         CheckUpdates::Always => Ok(None),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_format_path_for_os_windows() {
-        let path = "C:\\Users\\User Name\\Projects\\zed-extension-java".to_string();
-        let result = format_path_for_os(path, Os::Windows);
-        assert_eq!(
-            result,
-            "\"C:\\Users\\User Name\\Projects\\zed-extension-java\""
-        );
-    }
-
-    #[test]
-    fn test_format_path_for_os_unix() {
-        let path = "/home/username/Projects/zed extension java".to_string();
-        let result = format_path_for_os(path, Os::Mac);
-        assert_eq!(result, "/home/username/Projects/zed extension java");
-    }
-
-    #[test]
-    fn test_format_path_for_os_linux() {
-        let path = "/home/username/Projects/zed extension java".to_string();
-        let result = format_path_for_os(path, Os::Linux);
-        assert_eq!(result, "/home/username/Projects/zed extension java");
     }
 }
