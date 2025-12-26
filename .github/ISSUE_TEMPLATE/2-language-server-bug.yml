@@ -1,6 +1,6 @@
 name: Language Server Bug
 description: A bug related to the language server (e.g. autocomplete, diagnostics, hover-docs, go to symbol, initialization options).
-labels: ["bug", "language-server"]
+labels: ["language-server"]
 type: "Bug"
 body:
   - type: checkboxes
