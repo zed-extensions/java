@@ -31,7 +31,7 @@ const isWindows = process.platform === "win32";
 const command = (isWindows && bin.endsWith(".bat")) ? `"${bin}"` : bin;
 
 const lsp = spawn(command, args, {
-  shell: (isWindows && bin.endsWith(".bat")) ? true : false,
+  shell: (isWindows && bin.endsWith(".bat")),
   detached: false,
 });
 
