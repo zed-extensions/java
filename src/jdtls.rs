@@ -19,7 +19,7 @@ use crate::{
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
-        get_java_major_version, get_latest_versions_from_tag, path_to_string,
+        get_java_major_version, get_latest_versions_from_tag, mark_checked_once, path_to_string,
         remove_all_files_except, should_use_local_or_download,
     },
 };
@@ -50,7 +50,8 @@ pub fn build_jdtls_launch_args(
     if java_major_version < 21 {
         if is_java_autodownload(configuration) {
             java_executable =
-                try_to_fetch_and_install_latest_jdk(language_server_id)?.join(get_java_exec_name());
+                try_to_fetch_and_install_latest_jdk(language_server_id, configuration)?
+                    .join(get_java_exec_name());
         } else {
             return Err(JAVA_VERSION_ERROR.to_string());
         }
@@ -157,12 +158,17 @@ pub fn try_to_fetch_and_install_latest_jdtls(
 ) -> zed::Result<PathBuf> {
     // Use local installation if update mode requires it
     if let Some(path) =
-        should_use_local_or_download(configuration, find_latest_local_jdtls(), "jdtls")?
+        should_use_local_or_download(configuration, find_latest_local_jdtls(), JDTLS_INSTALL_PATH)?
     {
         return Ok(path);
     }
 
     // Download latest version
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::CheckingForUpdate,
+    );
+
     let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
 
     let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
@@ -202,6 +208,9 @@ pub fn try_to_fetch_and_install_latest_jdtls(
 
         // ...and delete other versions
         let _ = remove_all_files_except(prefix, build_directory.as_str());
+
+        // Mark the downloaded version for "Once" mode tracking
+        let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
     }
 
     // return jdtls base path
@@ -213,9 +222,11 @@ pub fn try_to_fetch_and_install_latest_lombok(
     configuration: &Option<Value>,
 ) -> zed::Result<PathBuf> {
     // Use local installation if update mode requires it
-    if let Some(path) =
-        should_use_local_or_download(configuration, find_latest_local_lombok(), "lombok")?
-    {
+    if let Some(path) = should_use_local_or_download(
+        configuration,
+        find_latest_local_lombok(),
+        LOMBOK_INSTALL_PATH,
+    )? {
         return Ok(path);
     }
 
@@ -248,6 +259,9 @@ pub fn try_to_fetch_and_install_latest_lombok(
         // ...and delete other versions
 
         let _ = remove_all_files_except(prefix, jar_name.as_str());
+
+        // Mark the downloaded version for "Once" mode tracking
+        let _ = mark_checked_once(LOMBOK_INSTALL_PATH, &latest_version);
     }
 
     // else use it

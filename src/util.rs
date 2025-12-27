@@ -32,6 +32,10 @@ const TAG_UNEXPECTED_FORMAT_ERROR: &str = "Malformed GitHub tags response";
 const PATH_IS_NOT_DIR: &str = "File exists but is not a path";
 const NO_LOCAL_INSTALL_NEVER_ERROR: &str =
     "Update checks disabled (never) and no local installation found";
+const NO_LOCAL_INSTALL_ONCE_ERROR: &str =
+    "Update check already performed once and no local installation found";
+
+const ONCE_CHECK_MARKER: &str = ".update_checked";
 
 /// Create a Path if it does not exist
 ///
@@ -58,6 +62,41 @@ pub fn create_path_if_not_exists<P: AsRef<Path>>(path: P) -> zed::Result<()> {
         }
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Check if update check has been performed once for a component
+///
+/// # Arguments
+///
+/// * [`component_name`] - The component directory name (e.g., "jdtls", "lombok")
+///
+/// # Returns
+///
+/// Returns true if the marker file exists, indicating a check was already performed
+pub fn has_checked_once(component_name: &str) -> bool {
+    PathBuf::from(component_name)
+        .join(ONCE_CHECK_MARKER)
+        .exists()
+}
+
+/// Mark that an update check has been performed for a component
+///
+/// # Arguments
+///
+/// * [`component_name`] - The component directory name (e.g., "jdtls", "lombok")
+/// * [`version`] - The version that was downloaded
+///
+/// # Returns
+///
+/// Returns Ok(()) if the marker was created successfully
+///
+/// # Errors
+///
+/// Returns an error if the directory or marker file could not be created
+pub fn mark_checked_once(component_name: &str, version: &str) -> zed::Result<()> {
+    let marker_path = PathBuf::from(component_name).join(ONCE_CHECK_MARKER);
+    create_path_if_not_exists(PathBuf::from(component_name))?;
+    fs::write(marker_path, version).map_err(|e| e.to_string())
 }
 
 /// Expand ~ on Unix-like systems
@@ -140,7 +179,8 @@ pub fn get_java_executable(
     // If the user has set the option, retrieve the latest version of Corretto (OpenJDK)
     if is_java_autodownload(configuration) {
         return Ok(
-            try_to_fetch_and_install_latest_jdk(language_server_id)?.join(java_executable_filename)
+            try_to_fetch_and_install_latest_jdk(language_server_id, configuration)?
+                .join(java_executable_filename),
         );
     }
 
@@ -329,6 +369,7 @@ pub fn remove_all_files_except<P: AsRef<Path>>(prefix: P, filename: &str) -> zed
 ///
 /// # Errors
 /// - Update mode is Never but no local installation found
+/// - Update mode is Once and already checked but no local installation found
 pub fn should_use_local_or_download(
     configuration: &Option<Value>,
     local: Option<PathBuf>,
@@ -341,7 +382,22 @@ pub fn should_use_local_or_download(
                 "{NO_LOCAL_INSTALL_NEVER_ERROR} for {component_name}"
             )),
         },
-        CheckUpdates::Once => Ok(local),
+        CheckUpdates::Once => {
+            // If we have a local installation, use it
+            if let Some(path) = local {
+                return Ok(Some(path));
+            }
+
+            // If we've already checked once, don't check again
+            if has_checked_once(component_name) {
+                return Err(format!(
+                    "{NO_LOCAL_INSTALL_ONCE_ERROR} for {component_name}"
+                ));
+            }
+
+            // First time checking - allow download
+            Ok(None)
+        }
         CheckUpdates::Always => Ok(None),
     }
 }
