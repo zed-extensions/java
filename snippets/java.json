@@ -1,0 +1,1034 @@
+{
+  "package": {
+    "prefix": "jpkg",
+    "body": ["package ${1:com.example};", "", "$0"],
+    "description": "Package declaration."
+  },
+  "import": {
+    "prefix": "jimp",
+    "body": ["import ${1:java.util.*};", "$0"],
+    "description": "Import statement."
+  },
+  "static import": {
+    "prefix": "jimps",
+    "body": ["import static ${1:org.junit.jupiter.api.Assertions}.*;", "$0"],
+    "description": "Static import statement."
+  },
+
+  "class": {
+    "prefix": "jclass",
+    "body": ["public class ${1:ClassName} {", "  $0", "}", ""],
+    "description": "Public class skeleton."
+  },
+  "final class": {
+    "prefix": "jfclass",
+    "body": ["public final class ${1:ClassName} {", "  $0", "}", ""],
+    "description": "Final class skeleton."
+  },
+  "abstract class": {
+    "prefix": "jabs",
+    "body": ["public abstract class ${1:AbstractName} {", "  $0", "}", ""],
+    "description": "Abstract class skeleton."
+  },
+  "interface": {
+    "prefix": "jint",
+    "body": ["public interface ${1:MyInterface} {", "  $0", "}", ""],
+    "description": "Interface skeleton."
+  },
+  "enum": {
+    "prefix": "jenum",
+    "body": ["public enum ${1:MyEnum} {", "  ${2:VALUE};", "  $0", "}", ""],
+    "description": "Enum skeleton."
+  },
+  "record (Java 16+)": {
+    "prefix": "jrec",
+    "body": ["public record ${1:Name}(${2:Type field}) {", "  $0", "}", ""],
+    "description": "Record skeleton."
+  },
+  "sealed interface (Java 17+)": {
+    "prefix": "jsealedint",
+    "body": [
+      "public sealed interface ${1:Shape} permits ${2:Circle}, ${3:Square} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Sealed interface skeleton."
+  },
+  "sealed class (Java 17+)": {
+    "prefix": "jsealedclass",
+    "body": [
+      "public sealed class ${1:Base} permits ${2:ChildA}, ${3:ChildB} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Sealed class skeleton."
+  },
+
+  "class + main": {
+    "prefix": "jmain",
+    "body": [
+      "public class ${1:Main} {",
+      "  public static void main(String[] args) {",
+      "    $0",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Class with main method."
+  },
+  "private field": {
+    "prefix": "jpf",
+    "body": ["private ${1:Type} ${2:name};", "$0"],
+    "description": "Private field."
+  },
+  "private final field": {
+    "prefix": "jpff",
+    "body": ["private final ${1:Type} ${2:name};", "$0"],
+    "description": "Private final field."
+  },
+  "public static final constant": {
+    "prefix": "jconst",
+    "body": ["public static final ${1:Type} ${2:NAME} = ${3:value};", "$0"],
+    "description": "Constant declaration."
+  },
+
+  "constructor": {
+    "prefix": "jctor",
+    "body": [
+      "public ${1:ClassName}(${2:Type ${3:arg}}) {",
+      "  this.${4:field} = ${3:arg};",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Constructor template."
+  },
+  "no-args constructor": {
+    "prefix": "jctor0",
+    "body": ["public ${1:ClassName}() {", "  $0", "}", ""],
+    "description": "No-args constructor."
+  },
+
+  "getter": {
+    "prefix": "jget",
+    "body": [
+      "public ${1:Type} get${2:Name}() {",
+      "  return ${3:field};",
+      "}",
+      ""
+    ],
+    "description": "Getter method."
+  },
+  "setter": {
+    "prefix": "jset",
+    "body": [
+      "public void set${1:Name}(${2:Type} ${3:value}) {",
+      "  this.${4:field} = ${3:value};",
+      "}",
+      ""
+    ],
+    "description": "Setter method."
+  },
+  "method (public)": {
+    "prefix": "jpubm",
+    "body": [
+      "public ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Public method template."
+  },
+  "method (private)": {
+    "prefix": "jprim",
+    "body": [
+      "private ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Private method template."
+  },
+  "static method": {
+    "prefix": "jstaticm",
+    "body": [
+      "public static ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Static method template."
+  },
+  "generic method": {
+    "prefix": "jgenm",
+    "body": [
+      "public static <${1:T}> ${1:T} ${2:methodName}(${1:T} ${3:value}) {",
+      "  return ${3:value};",
+      "}",
+      ""
+    ],
+    "description": "Generic method template."
+  },
+
+  "override method": {
+    "prefix": "joverride",
+    "body": [
+      "@Override",
+      "public ${1:void} ${2:methodName}(${3:Type arg}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "@Override method template."
+  },
+
+  "equals/hashCode (Objects)": {
+    "prefix": "jeqh",
+    "body": [
+      "@Override",
+      "public boolean equals(Object o) {",
+      "  if (this == o) return true;",
+      "  if (o == null || getClass() != o.getClass()) return false;",
+      "  ${1:ClassName} that = (${1:ClassName}) o;",
+      "  return java.util.Objects.equals(${2:field}, that.${2:field});",
+      "}",
+      "",
+      "@Override",
+      "public int hashCode() {",
+      "  return java.util.Objects.hash(${2:field});",
+      "}",
+      ""
+    ],
+    "description": "equals/hashCode using java.util.Objects."
+  },
+  "toString": {
+    "prefix": "jts",
+    "body": [
+      "@Override",
+      "public String toString() {",
+      "  return \"${1:ClassName}{\" +",
+      "      \"${2:field}=\" + ${2:field} +",
+      "      '}';",
+      "}",
+      ""
+    ],
+    "description": "toString template."
+  },
+  "System.out.println": {
+    "prefix": "sout",
+    "body": ["System.out.println(${1:msg});", "$0"],
+    "description": "Print to stdout."
+  },
+  "System.err.println": {
+    "prefix": "serr",
+    "body": ["System.err.println(${1:msg});", "$0"],
+    "description": "Print to stderr."
+  },
+
+  "Javadoc (method)": {
+    "prefix": "jdoc",
+    "body": [
+      "/**",
+      " * ${1:Summary}",
+      " *",
+      " * @param ${2:param} ${3:description}",
+      " * @return ${4:description}",
+      " */",
+      "$0"
+    ],
+    "description": "Javadoc template."
+  },
+  "TODO": {
+    "prefix": "todo",
+    "body": ["// TODO(${1:you}): ${2:what}", "$0"],
+    "description": "TODO comment."
+  },
+
+  "if": {
+    "prefix": "jif",
+    "body": ["if (${1:condition}) {", "  $0", "}"],
+    "description": "If statement."
+  },
+  "if/else": {
+    "prefix": "jife",
+    "body": ["if (${1:condition}) {", "  ${2:// ...}", "} else {", "  $0", "}"],
+    "description": "If/else statement."
+  },
+  "switch statement": {
+    "prefix": "jswitch",
+    "body": [
+      "switch (${1:expr}) {",
+      "  case ${2:VALUE}:",
+      "    $0",
+      "    break;",
+      "  default:",
+      "    break;",
+      "}"
+    ],
+    "description": "Switch statement."
+  },
+  "switch expression (Java 14+)": {
+    "prefix": "jswitchx",
+    "body": [
+      "${1:var} = switch (${2:expr}) {",
+      "  case ${3:VALUE} -> ${4:result};",
+      "  default -> ${5:result};",
+      "};",
+      "$0"
+    ],
+    "description": "Switch expression."
+  },
+
+  "for (index)": {
+    "prefix": "jfor",
+    "body": ["for (int ${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {", "  $0", "}"],
+    "description": "Indexed for loop."
+  },
+  "foreach": {
+    "prefix": "jforeach",
+    "body": ["for (${1:Type} ${2:item} : ${3:items}) {", "  $0", "}"],
+    "description": "Enhanced for loop."
+  },
+  "while": {
+    "prefix": "jwhile",
+    "body": ["while (${1:condition}) {", "  $0", "}"],
+    "description": "While loop."
+  },
+  "do/while": {
+    "prefix": "jdowhile",
+    "body": ["do {", "  $0", "} while (${1:condition});"],
+    "description": "Do/while loop."
+  },
+
+  "requireNonNull": {
+    "prefix": "jnonn",
+    "body": [
+      "java.util.Objects.requireNonNull(${1:obj}, \"${2:message}\");",
+      "$0"
+    ],
+    "description": "Objects.requireNonNull guard."
+  },
+  "null guard return": {
+    "prefix": "jngret",
+    "body": ["if (${1:obj} == null) {", "  return ${2:null};", "}", "$0"],
+    "description": "Null guard with return."
+  },
+  "null guard throw": {
+    "prefix": "jngthrow",
+    "body": [
+      "if (${1:obj} == null) {",
+      "  throw new ${2:IllegalArgumentException}(\"${3:message}\");",
+      "}",
+      "$0"
+    ],
+    "description": "Null guard with throw."
+  },
+
+  "try/catch": {
+    "prefix": "jtry",
+    "body": [
+      "try {",
+      "  $0",
+      "} catch (${1:Exception} e) {",
+      "  ${2:e.printStackTrace();}",
+      "}"
+    ],
+    "description": "try/catch block."
+  },
+  "try/catch/finally": {
+    "prefix": "jtryf",
+    "body": [
+      "try {",
+      "  $0",
+      "} catch (${1:Exception} e) {",
+      "  ${2:e.printStackTrace();}",
+      "} finally {",
+      "  ${3:// cleanup}",
+      "}"
+    ],
+    "description": "try/catch/finally block."
+  },
+  "try-with-resources": {
+    "prefix": "jtryr",
+    "body": [
+      "try (${1:var} ${2:resource} = ${3:initializer}) {",
+      "  $0",
+      "} catch (${4:Exception} e) {",
+      "  ${5:e.printStackTrace();}",
+      "}"
+    ],
+    "description": "Try-with-resources."
+  },
+
+  "custom exception": {
+    "prefix": "jex",
+    "body": [
+      "public class ${1:MyException} extends RuntimeException {",
+      "  public ${1:MyException}(String message) {",
+      "    super(message);",
+      "  }",
+      "",
+      "  public ${1:MyException}(String message, Throwable cause) {",
+      "    super(message, cause);",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Custom RuntimeException."
+  },
+  "List declaration": {
+    "prefix": "jlist",
+    "body": [
+      "java.util.List<${1:Type}> ${2:list} = new java.util.ArrayList<>();",
+      "$0"
+    ],
+    "description": "New ArrayList."
+  },
+  "Set declaration": {
+    "prefix": "jset",
+    "body": [
+      "java.util.Set<${1:Type}> ${2:set} = new java.util.HashSet<>();",
+      "$0"
+    ],
+    "description": "New HashSet."
+  },
+  "Map declaration": {
+    "prefix": "jmap",
+    "body": [
+      "java.util.Map<${1:K}, ${2:V}> ${3:map} = new java.util.HashMap<>();",
+      "$0"
+    ],
+    "description": "New HashMap."
+  },
+
+  "Stream filter/map/toList": {
+    "prefix": "jstream",
+    "body": [
+      "${1:list}.stream()",
+      "  .filter(${2:x} -> ${3:predicate})",
+      "  .map(${2:x} -> ${4:transform})",
+      "  .toList();",
+      "$0"
+    ],
+    "description": "Stream pipeline (Java 16+ toList)."
+  },
+  "Collectors.toList": {
+    "prefix": "jcolist",
+    "body": [
+      "${1:stream}.collect(java.util.stream.Collectors.toList());",
+      "$0"
+    ],
+    "description": "Collect stream to list."
+  },
+  "Collectors.toMap": {
+    "prefix": "jcomap",
+    "body": [
+      "${1:stream}.collect(java.util.stream.Collectors.toMap(",
+      "  ${2:x} -> ${3:key},",
+      "  ${2:x} -> ${4:value}",
+      "));",
+      "$0"
+    ],
+    "description": "Collect stream to map."
+  },
+  "Comparator.comparing": {
+    "prefix": "jcomp",
+    "body": ["java.util.Comparator.comparing(${1:Type}::${2:getField})", "$0"],
+    "description": "Comparator.comparing reference."
+  },
+
+  "Optional.ofNullable": {
+    "prefix": "jopt",
+    "body": [
+      "java.util.Optional.ofNullable(${1:value})",
+      "  .orElse(${2:defaultValue});",
+      "$0"
+    ],
+    "description": "Optional.ofNullable(...).orElse(...)."
+  },
+  "Optional.orElseThrow": {
+    "prefix": "joptx",
+    "body": [
+      "${1:optional}.orElseThrow(() -> new ${2:IllegalStateException}(\"${3:message}\"));",
+      "$0"
+    ],
+    "description": "Optional.orElseThrow with custom exception."
+  },
+
+  "logger (SLF4J)": {
+    "prefix": "jlog",
+    "body": [
+      "private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(${1:ClassName}.class);",
+      "$0"
+    ],
+    "description": "SLF4J logger field."
+  },
+  "log.info": {
+    "prefix": "jinfo",
+    "body": ["log.info(\"${1:message}: {}\", ${2:value});", "$0"],
+    "description": "log.info with placeholder."
+  },
+  "log.warn": {
+    "prefix": "jwarn",
+    "body": ["log.warn(\"${1:message}: {}\", ${2:value});", "$0"],
+    "description": "log.warn with placeholder."
+  },
+  "log.error (with throwable)": {
+    "prefix": "jerr",
+    "body": ["log.error(\"${1:message}\", ${2:throwable});", "$0"],
+    "description": "log.error with throwable."
+  },
+  "Thread (lambda)": {
+    "prefix": "jthread",
+    "body": ["new Thread(() -> {", "  $0", "}).start();"],
+    "description": "Start a Thread with lambda."
+  },
+  "Runnable": {
+    "prefix": "jrunnable",
+    "body": ["Runnable ${1:task} = () -> {", "  $0", "};"],
+    "description": "Runnable lambda."
+  },
+  "Callable": {
+    "prefix": "jcallable",
+    "body": [
+      "java.util.concurrent.Callable<${1:T}> ${2:task} = () -> {",
+      "  return $0;",
+      "};"
+    ],
+    "description": "Callable lambda."
+  },
+  "ExecutorService (fixed pool)": {
+    "prefix": "jexec",
+    "body": [
+      "java.util.concurrent.ExecutorService ${1:pool} = java.util.concurrent.Executors.newFixedThreadPool(${2:nThreads});",
+      "try {",
+      "  $0",
+      "} finally {",
+      "  ${1:pool}.shutdown();",
+      "}"
+    ],
+    "description": "ExecutorService fixed thread pool."
+  },
+  "CompletableFuture.supplyAsync": {
+    "prefix": "jcf",
+    "body": [
+      "java.util.concurrent.CompletableFuture<${1:T}> ${2:cf} = java.util.concurrent.CompletableFuture.supplyAsync(() -> {",
+      "  return $0;",
+      "});"
+    ],
+    "description": "CompletableFuture.supplyAsync template."
+  },
+  "synchronized block": {
+    "prefix": "jsync",
+    "body": ["synchronized (${1:lock}) {", "  $0", "}"],
+    "description": "Synchronized block."
+  },
+  "ReentrantLock": {
+    "prefix": "jlock",
+    "body": [
+      "java.util.concurrent.locks.Lock ${1:lock} = new java.util.concurrent.locks.ReentrantLock();",
+      "${1:lock}.lock();",
+      "try {",
+      "  $0",
+      "} finally {",
+      "  ${1:lock}.unlock();",
+      "}"
+    ],
+    "description": "ReentrantLock with try/finally."
+  },
+
+  "Path.of": {
+    "prefix": "jpath",
+    "body": [
+      "java.nio.file.Path ${1:path} = java.nio.file.Path.of(${2:\"file.txt\"});",
+      "$0"
+    ],
+    "description": "Create a Path."
+  },
+  "Files.readString": {
+    "prefix": "jreadstr",
+    "body": [
+      "String ${1:text} = java.nio.file.Files.readString(${2:path});",
+      "$0"
+    ],
+    "description": "Read file contents as String."
+  },
+  "Files.readAllLines": {
+    "prefix": "jreadlines",
+    "body": [
+      "java.util.List<String> ${1:lines} = java.nio.file.Files.readAllLines(${2:path});",
+      "$0"
+    ],
+    "description": "Read all lines into List<String>."
+  },
+  "Files.writeString": {
+    "prefix": "jwritestr",
+    "body": ["java.nio.file.Files.writeString(${1:path}, ${2:text});", "$0"],
+    "description": "Write String to file."
+  },
+  "HttpClient GET (Java 11+)": {
+    "prefix": "jhttpget",
+    "body": [
+      "java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();",
+      "java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()",
+      "  .uri(java.net.URI.create(${1:\"https://example.com\"}))",
+      "  .GET()",
+      "  .build();",
+      "",
+      "java.net.http.HttpResponse<String> response = client.send(",
+      "  request,",
+      "  java.net.http.HttpResponse.BodyHandlers.ofString()",
+      ");",
+      "",
+      "$0"
+    ],
+    "description": "HttpClient GET request."
+  },
+  " HttpClient POST JSON (Java 11+)": {
+    "prefix": "jhttppost",
+    "body": [
+      "java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();",
+      "java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()",
+      "  .uri(java.net.URI.create(${1:\"https://example.com\"}))",
+      "  .header(\"Content-Type\", \"application/json\")",
+      "  .POST(java.net.http.HttpRequest.BodyPublishers.ofString(${2:json}))",
+      "  .build();",
+      "",
+      "java.net.http.HttpResponse<String> response = client.send(",
+      "  request,",
+      "  java.net.http.HttpResponse.BodyHandlers.ofString()",
+      ");",
+      "",
+      "$0"
+    ],
+    "description": "HttpClient POST JSON request."
+  },
+
+  " Jackson ObjectMapper": {
+    "prefix": "jjackson",
+    "body": [
+      "com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();",
+      "$0"
+    ],
+    "description": "Create Jackson ObjectMapper."
+  },
+  " Jackson readValue (class)": {
+    "prefix": "jreadjson",
+    "body": [
+      "com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();",
+      "${1:Type} ${2:value} = mapper.readValue(${3:json}, ${1:Type}.class);",
+      "$0"
+    ],
+    "description": "Jackson readValue into class."
+  },
+  " Jackson writeValueAsString": {
+    "prefix": "jwritejson",
+    "body": [
+      "com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();",
+      "String ${1:json} = mapper.writeValueAsString(${2:obj});",
+      "$0"
+    ],
+    "description": "Jackson write object to JSON string."
+  },
+
+  "JUnit5: test class": {
+    "prefix": "junit",
+    "body": [
+      "import org.junit.jupiter.api.Test;",
+      "import static org.junit.jupiter.api.Assertions.*;",
+      "",
+      "class ${1:TestName} {",
+      "  @Test",
+      "  void ${2:shouldDoThing}() {",
+      "    $0",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "JUnit 5 test class + assertion imports."
+  },
+  "JUnit5: @BeforeEach": {
+    "prefix": "jbefore",
+    "body": [
+      "@org.junit.jupiter.api.BeforeEach",
+      "void setUp() {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "JUnit5 @BeforeEach."
+  },
+  "JUnit5: @AfterEach": {
+    "prefix": "jafter",
+    "body": [
+      "@org.junit.jupiter.api.AfterEach",
+      "void tearDown() {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "JUnit5 @AfterEach."
+  },
+  "JUnit5: assertEquals": {
+    "prefix": "aeq",
+    "body": [
+      "org.junit.jupiter.api.Assertions.assertEquals(${1:expected}, ${2:actual});",
+      "$0"
+    ],
+    "description": "Assertions.assertEquals."
+  },
+  "JUnit5: assertThrows": {
+    "prefix": "athrows",
+    "body": [
+      "org.junit.jupiter.api.Assertions.assertThrows(${1:ExceptionType}.class, () -> {",
+      "  $0",
+      "});"
+    ],
+    "description": "Assertions.assertThrows."
+  },
+  "JUnit5: parameterized @ValueSource": {
+    "prefix": "jparam",
+    "body": [
+      "import org.junit.jupiter.params.ParameterizedTest;",
+      "import org.junit.jupiter.params.provider.ValueSource;",
+      "",
+      "@ParameterizedTest",
+      "@ValueSource(${1:ints} = { ${2:1}, ${3:2}, ${4:3} })",
+      "void ${5:shouldWork}(${6:int value}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "JUnit5 parameterized test with ValueSource."
+  },
+  "JUnit5: @Nested": {
+    "prefix": "jnested",
+    "body": [
+      "@org.junit.jupiter.api.Nested",
+      "class ${1:WhenSomething} {",
+      "  @org.junit.jupiter.api.Test",
+      "  void ${2:shouldDoX}() {",
+      "    $0",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "JUnit5 nested test class."
+  },
+
+  "AssertJ: assertThat": {
+    "prefix": "aj",
+    "body": [
+      "org.assertj.core.api.Assertions.assertThat(${1:actual}).${2:isEqualTo}(${3:expected});",
+      "$0"
+    ],
+    "description": "AssertJ assertThat."
+  },
+  "AssertJ: assertThatThrownBy": {
+    "prefix": "ajthrow",
+    "body": [
+      "org.assertj.core.api.Assertions.assertThatThrownBy(() -> {",
+      "  $0",
+      "}).isInstanceOf(${1:ExceptionType}.class);"
+    ],
+    "description": "AssertJ assertThatThrownBy."
+  },
+
+  "Mockito: mock": {
+    "prefix": "mmock",
+    "body": [
+      "${1:Type} ${2:mock} = org.mockito.Mockito.mock(${1:Type}.class);",
+      "$0"
+    ],
+    "description": "Create Mockito mock."
+  },
+  "Mockito: when/thenReturn": {
+    "prefix": "mwhen",
+    "body": [
+      "org.mockito.Mockito.when(${1:mock}.${2:method}(${3:args})).thenReturn(${4:value});",
+      "$0"
+    ],
+    "description": "Mockito stubbing."
+  },
+  "Mockito: verify": {
+    "prefix": "mverify",
+    "body": [
+      "org.mockito.Mockito.verify(${1:mock}).${2:method}(${3:args});",
+      "$0"
+    ],
+    "description": "Mockito verify call."
+  },
+  "Mockito: ArgumentCaptor": {
+    "prefix": "mcap",
+    "body": [
+      "org.mockito.ArgumentCaptor<${1:Type}> ${2:captor} = org.mockito.ArgumentCaptor.forClass(${1:Type}.class);",
+      "org.mockito.Mockito.verify(${3:mock}).${4:method}(${2:captor}.capture());",
+      "${1:Type} ${5:value} = ${2:captor}.getValue();",
+      "$0"
+    ],
+    "description": "Mockito ArgumentCaptor pattern."
+  },
+  "Spring Boot: @SpringBootApplication main": {
+    "prefix": "sbapp",
+    "body": [
+      "import org.springframework.boot.SpringApplication;",
+      "import org.springframework.boot.autoconfigure.SpringBootApplication;",
+      "",
+      "@SpringBootApplication",
+      "public class ${1:Application} {",
+      "  public static void main(String[] args) {",
+      "    SpringApplication.run(${1:Application}.class, args);",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Spring Boot application entry."
+  },
+  "Spring: @RestController": {
+    "prefix": "sbrest",
+    "body": [
+      "import org.springframework.web.bind.annotation.*;",
+      "",
+      "@RestController",
+      "@RequestMapping(\"/${1:resource}\")",
+      "public class ${2:Resource}Controller {",
+      "  @GetMapping",
+      "  public ${3:String} index() {",
+      "    return ${4:\"ok\"};",
+      "  }",
+      "",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring REST controller skeleton."
+  },
+  "Spring: @Service": {
+    "prefix": "sbservice",
+    "body": [
+      "import org.springframework.stereotype.Service;",
+      "",
+      "@Service",
+      "public class ${1:ServiceName} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring @Service skeleton."
+  },
+  "Spring: @Repository": {
+    "prefix": "sbrepo",
+    "body": [
+      "import org.springframework.stereotype.Repository;",
+      "",
+      "@Repository",
+      "public class ${1:RepositoryName} {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring @Repository skeleton."
+  },
+  "Spring Data: CrudRepository": {
+    "prefix": "sbcrud",
+    "body": [
+      "import org.springframework.data.repository.CrudRepository;",
+      "",
+      "public interface ${1:RepoName} extends CrudRepository<${2:Entity}, ${3:IdType}> {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Spring Data CrudRepository interface."
+  },
+  "Spring: @ControllerAdvice (exception handler)": {
+    "prefix": "sbadvice",
+    "body": [
+      "import org.springframework.http.*;",
+      "import org.springframework.web.bind.annotation.*;",
+      "",
+      "@ControllerAdvice",
+      "public class ${1:GlobalExceptionHandler} {",
+      "  @ExceptionHandler(${2:ExceptionType}.class)",
+      "  public ResponseEntity<${3:String}> handle(${2:ExceptionType} e) {",
+      "    return ResponseEntity.status(HttpStatus.${4:BAD_REQUEST}).body(e.getMessage());",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Spring global exception handler."
+  },
+  "JPA: @Entity": {
+    "prefix": "jpaentity",
+    "body": [
+      "import jakarta.persistence.*;",
+      "",
+      "@Entity",
+      "@Table(name = \"${1:table_name}\")",
+      "public class ${2:EntityName} {",
+      "  @Id",
+      "  @GeneratedValue(strategy = GenerationType.IDENTITY)",
+      "  private ${3:Long} id;",
+      "",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "JPA entity skeleton."
+  },
+  "JPA: @Column": {
+    "prefix": "jpacol",
+    "body": [
+      "@Column(name = \"${1:col}\", nullable = ${2:true})",
+      "private ${3:Type} ${4:field};",
+      "$0"
+    ],
+    "description": "JPA column field."
+  },
+  "JPA: @ManyToOne": {
+    "prefix": "jpam2o",
+    "body": [
+      "@ManyToOne(fetch = FetchType.LAZY)",
+      "@JoinColumn(name = \"${1:other_id}\")",
+      "private ${2:OtherEntity} ${3:other};",
+      "$0"
+    ],
+    "description": "JPA ManyToOne association."
+  },
+  "JPA: @OneToMany": {
+    "prefix": "jpao2m",
+    "body": [
+      "@OneToMany(mappedBy = \"${1:owner}\", cascade = CascadeType.ALL, orphanRemoval = true)",
+      "private java.util.List<${2:ChildEntity}> ${3:children} = new java.util.ArrayList<>();",
+      "$0"
+    ],
+    "description": "JPA OneToMany association."
+  },
+
+  "Jakarta Validation: @Valid + @NotNull": {
+    "prefix": "jvalid",
+    "body": [
+      "import jakarta.validation.Valid;",
+      "import jakarta.validation.constraints.NotNull;",
+      "",
+      "public ${1:void} ${2:method}(@Valid @NotNull ${3:Type} ${4:req}) {",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Validation annotations template."
+  },
+
+  "Lombok: @Data class": {
+    "prefix": "ldata",
+    "body": [
+      "import lombok.Data;",
+      "",
+      "@Data",
+      "public class ${1:Dto} {",
+      "  private ${2:Type} ${3:field};",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Lombok @Data class."
+  },
+  "Lombok: @Builder": {
+    "prefix": "lbuilder",
+    "body": [
+      "import lombok.Builder;",
+      "import lombok.Value;",
+      "",
+      "@Value",
+      "@Builder",
+      "public class ${1:ValueType} {",
+      "  ${2:Type} ${3:field};",
+      "  $0",
+      "}",
+      ""
+    ],
+    "description": "Lombok immutable + builder."
+  },
+  "Pattern: Builder (manual)": {
+    "prefix": "jbuilder",
+    "body": [
+      "public static class Builder {",
+      "  private ${1:Type} ${2:field};",
+      "",
+      "  public Builder ${2:field}(${1:Type} ${3:value}) {",
+      "    this.${2:field} = ${3:value};",
+      "    return this;",
+      "  }",
+      "",
+      "  public ${4:ClassName} build() {",
+      "    return new ${4:ClassName}(this);",
+      "  }",
+      "}",
+      "$0"
+    ],
+    "description": "Manual builder inner class."
+  },
+  "Pattern: Singleton": {
+    "prefix": "jsingleton",
+    "body": [
+      "public final class ${1:Singleton} {",
+      "  private static final ${1:Singleton} INSTANCE = new ${1:Singleton}();",
+      "",
+      "  private ${1:Singleton}() {}",
+      "",
+      "  public static ${1:Singleton} getInstance() {",
+      "    return INSTANCE;",
+      "  }",
+      "}",
+      ""
+    ],
+    "description": "Eager singleton pattern."
+  },
+  "Pattern: Factory method": {
+    "prefix": "jfactory",
+    "body": [
+      "public static ${1:Type} ${2:create}(${3:Args}) {",
+      "  return new ${1:Type}(${4:ctorArgs});",
+      "}",
+      "$0"
+    ],
+    "description": "Factory method template."
+  },
+
+  "Regex: Pattern/Matcher": {
+    "prefix": "jre",
+    "body": [
+      "java.util.regex.Pattern p = java.util.regex.Pattern.compile(${1:\"\\\\\\\\d+\"});",
+      "java.util.regex.Matcher m = p.matcher(${2:input});",
+      "while (m.find()) {",
+      "  $0",
+      "}"
+    ],
+    "description": "Regex Pattern/Matcher loop."
+  },
+
+  "DateTime: Instant.now": {
+    "prefix": "jnowi",
+    "body": ["java.time.Instant ${1:now} = java.time.Instant.now();", "$0"],
+    "description": "Instant.now()."
+  },
+  "DateTime: LocalDate.now": {
+    "prefix": "jnowd",
+    "body": [
+      "java.time.LocalDate ${1:today} = java.time.LocalDate.now();",
+      "$0"
+    ],
+    "description": "LocalDate.now()."
+  },
+  "DateTime: DateTimeFormatter": {
+    "prefix": "jdtf",
+    "body": [
+      "java.time.format.DateTimeFormatter ${1:fmt} = java.time.format.DateTimeFormatter.ofPattern(${2:\"yyyy-MM-dd\"});",
+      "String ${3:s} = ${4:date}.format(${1:fmt});",
+      "$0"
+    ],
+    "description": "DateTimeFormatter pattern + format."
+  }
+}
