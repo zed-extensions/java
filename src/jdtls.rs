@@ -19,8 +19,8 @@ use crate::{
     jdk::try_to_fetch_and_install_latest_jdk,
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
-        get_java_major_version, get_latest_versions_from_tag, mark_checked_once,
-        path_to_quoted_string, remove_all_files_except, should_use_local_or_download,
+        get_java_major_version, get_latest_versions_from_tag, mark_checked_once, path_to_string,
+        remove_all_files_except, should_use_local_or_download,
     },
 };
 
@@ -66,14 +66,14 @@ pub fn build_jdtls_launch_args(
     let jdtls_data_path = get_jdtls_data_path(worktree)?;
 
     let mut args = vec![
-        path_to_quoted_string(java_executable)?,
+        path_to_string(java_executable)?,
         "-Declipse.application=org.eclipse.jdt.ls.core.id1".to_string(),
         "-Dosgi.bundles.defaultStartLevel=4".to_string(),
         "-Declipse.product=org.eclipse.jdt.ls.core.product".to_string(),
         "-Dosgi.checkConfiguration=true".to_string(),
         format!(
             "-Dosgi.sharedConfiguration.area={}",
-            path_to_quoted_string(shared_config_path)?
+            path_to_string(shared_config_path)?
         ),
         "-Dosgi.sharedConfiguration.area.readOnly=true".to_string(),
         "-Dosgi.configuration.cascaded=true".to_string(),
@@ -87,9 +87,9 @@ pub fn build_jdtls_launch_args(
     args.extend(jvm_args);
     args.extend(vec![
         "-jar".to_string(),
-        path_to_quoted_string(jar_path)?,
+        path_to_string(jar_path)?,
         "-data".to_string(),
-        path_to_quoted_string(jdtls_data_path)?,
+        path_to_string(jdtls_data_path)?,
     ]);
     if java_major_version >= 24 {
         args.push("-Djdk.xml.maxGeneralEntitySizeLimit=0".to_string());
@@ -201,10 +201,10 @@ pub fn try_to_fetch_and_install_latest_jdtls(
             &format!(
                 "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
             ),
-            path_to_quoted_string(build_path.clone())?.as_str(),
+            path_to_string(build_path.clone())?.as_str(),
             DownloadedFileType::GzipTar,
         )?;
-        make_file_executable(path_to_quoted_string(binary_path)?.as_str())?;
+        make_file_executable(path_to_string(binary_path)?.as_str())?;
 
         // ...and delete other versions
         let _ = remove_all_files_except(prefix, build_directory.as_str());
@@ -252,7 +252,7 @@ pub fn try_to_fetch_and_install_latest_lombok(
         create_path_if_not_exists(prefix)?;
         download_file(
             &format!("https://projectlombok.org/downloads/{jar_name}"),
-            path_to_quoted_string(jar_path.clone())?.as_str(),
+            path_to_string(jar_path.clone())?.as_str(),
             DownloadedFileType::Uncompressed,
         )?;
 

@@ -7,7 +7,7 @@ use zed_extension_api::{
 };
 
 use crate::util::{
-    get_curr_dir, mark_checked_once, path_to_quoted_string, remove_all_files_except,
+    get_curr_dir, mark_checked_once, path_to_string, remove_all_files_except,
     should_use_local_or_download,
 };
 
@@ -108,7 +108,7 @@ pub fn try_to_fetch_and_install_latest_jdk(
 
         download_file(
             build_corretto_url(&version, &platform, &arch).as_str(),
-            path_to_quoted_string(install_path.clone())?.as_str(),
+            path_to_string(install_path.clone())?.as_str(),
             match zed::current_platform().0 {
                 Os::Windows => DownloadedFileType::Zip,
                 _ => DownloadedFileType::GzipTar,

@@ -13,7 +13,7 @@ use crate::{
     config::get_java_debug_jar,
     lsp::LspWrapper,
     util::{
-        create_path_if_not_exists, get_curr_dir, mark_checked_once, path_to_quoted_string,
+        create_path_if_not_exists, get_curr_dir, mark_checked_once, path_to_string,
         should_use_local_or_download,
     },
 };
@@ -157,7 +157,7 @@ impl Debugger {
 
         download_file(
             JAVA_DEBUG_PLUGIN_FORK_URL,
-            &path_to_quoted_string(jar_path.clone())?,
+            &path_to_string(jar_path.clone())?,
             DownloadedFileType::Uncompressed,
         )
         .map_err(|err| {
@@ -264,7 +264,7 @@ impl Debugger {
 
             download_file(
                 url.as_str(),
-                &path_to_quoted_string(&jar_path)?,
+                &path_to_string(&jar_path)?,
                 DownloadedFileType::Uncompressed,
             )
             .map_err(|err| format!("Failed to download {url} {err}"))?;
