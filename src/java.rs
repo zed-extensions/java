@@ -288,7 +288,7 @@ impl Extension for Java {
                 self.lombok_jar_path(language_server_id, &configuration, worktree)?;
             let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
 
-            Some(format!("-javaagent:{}", canonical_lombok_jar_path))
+            Some(format!("-javaagent:{canonical_lombok_jar_path}"))
         } else {
             None
         };
