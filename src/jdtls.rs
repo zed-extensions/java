@@ -317,15 +317,28 @@ fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
     // we fall back to the the extension's workdir, which may never get cleaned up.
     // In future we may want to deliberately manage caches to be able to force-clean them.
 
-    let mut env_iter = worktree.shell_env().into_iter();
+    let env = worktree.shell_env();
     let base_cachedir = match current_platform().0 {
-        Os::Mac => env_iter
-            .find(|(k, _)| k == "HOME")
-            .map(|(_, v)| PathBuf::from(v).join("Library").join("Caches")),
-        Os::Linux => env_iter
-            .find(|(k, _)| k == "HOME")
-            .map(|(_, v)| PathBuf::from(v).join(".cache")),
-        Os::Windows => env_iter
+        Os::Mac => env
+            .iter()
+            .find(|(k, _)| k == "XDG_CACHE_HOME")
+            .map(|(_, v)| PathBuf::from(v))
+            .or_else(|| {
+                env.iter()
+                    .find(|(k, _)| k == "HOME")
+                    .map(|(_, v)| PathBuf::from(v).join("Library").join("Caches"))
+            }),
+        Os::Linux => env
+            .iter()
+            .find(|(k, _)| k == "XDG_CACHE_HOME")
+            .map(|(_, v)| PathBuf::from(v))
+            .or_else(|| {
+                env.iter()
+                    .find(|(k, _)| k == "HOME")
+                    .map(|(_, v)| PathBuf::from(v).join(".cache"))
+            }),
+        Os::Windows => env
+            .iter()
             .find(|(k, _)| k == "APPDATA")
             .map(|(_, v)| PathBuf::from(v)),
     }
