@@ -64,6 +64,39 @@
     (#set! tag java-test-method)
 )
 
+; Run nested test function
+(
+    (package_declaration
+        (scoped_identifier) @java_package_name
+    )
+    (class_declaration
+        name: (identifier) @java_outer_class_name
+        body: (class_body
+            (class_declaration
+                (modifiers
+                    (marker_annotation
+                        name: (identifier) @nested_annotation
+                    )
+                )
+                name: (identifier) @java_class_name
+                body: (class_body
+                    (method_declaration
+                        (modifiers
+                            (marker_annotation
+                                name: (identifier) @annotation_name
+                                )
+                            )
+                        name: (identifier) @run @java_method_name
+                        (#eq? @annotation_name "Test")
+                    )
+                )
+                (#eq? @nested_annotation "Nested")
+            ) @_
+        )
+    )
+    (#set! tag java-test-method-nested)
+)
+
 ; Run test class
 (
     (package_declaration
@@ -83,4 +116,36 @@
         )
     ) @_
     (#set! tag java-test-class)
+)
+
+; Run nested test class
+(
+    (package_declaration
+        (scoped_identifier) @java_package_name
+    )
+    (class_declaration
+        name: (identifier) @java_outer_class_name
+        body: (class_body
+            (class_declaration
+                (modifiers
+                    (marker_annotation
+                        name: (identifier) @nested_annotation
+                    )
+                )
+                name: (identifier) @run @java_class_name
+                body: (class_body
+                    (method_declaration
+                        (modifiers
+                            (marker_annotation
+                                name: (identifier) @annotation_name
+                                )
+                            )
+                        (#eq? @annotation_name "Test")
+                    )
+                )
+                (#eq? @nested_annotation "Nested")
+            ) @_
+        )
+    )
+    (#set! tag java-test-class-nested)
 )
