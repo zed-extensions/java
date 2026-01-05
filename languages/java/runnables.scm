@@ -73,6 +73,11 @@
         name: (identifier) @java_outer_class_name
         body: (class_body
             (class_declaration
+                (modifiers
+                    (marker_annotation
+                        name: (identifier) @nested_annotation
+                    )
+                )
                 name: (identifier) @java_class_name
                 body: (class_body
                     (method_declaration
@@ -85,6 +90,7 @@
                         (#eq? @annotation_name "Test")
                     )
                 )
+                (#eq? @nested_annotation "Nested")
             ) @_
         )
     )
@@ -121,6 +127,11 @@
         name: (identifier) @java_outer_class_name
         body: (class_body
             (class_declaration
+                (modifiers
+                    (marker_annotation
+                        name: (identifier) @nested_annotation
+                    )
+                )
                 name: (identifier) @run @java_class_name
                 body: (class_body
                     (method_declaration
@@ -132,6 +143,7 @@
                         (#eq? @annotation_name "Test")
                     )
                 )
+                (#eq? @nested_annotation "Nested")
             ) @_
         )
     )
