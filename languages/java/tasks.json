@@ -1,23 +1,23 @@
 [
-    {
-      "label": "Run $ZED_CUSTOM_java_class_name",
-      "command": "pkg=\"${ZED_CUSTOM_java_package_name:}\"; cls=\"$ZED_CUSTOM_java_class_name\"; if [ -n \"$pkg\" ]; then c=\"$pkg.$cls\"; else c=\"$cls\"; fi; if [ -f pom.xml ]; then ./mvnw clean compile exec:java -Dexec.mainClass=\"$c\"; elif [ -f gradlew ]; then ./gradlew run -PmainClass=\"$c\"; else find . -name '*.java' -not -path './bin/*' -not -path './target/*' -not -path './build/*' -print0 | xargs -0 javac -d bin && java -cp bin \"$c\"; fi;",
-      "use_new_terminal": false,
-      "reveal": "always",
-      "tags": ["java-main"],
-      "shell": {
-        "with_arguments": {
-          "program": "/bin/sh",
-          "args": ["-c"]
-        }
-      }
-    },
   {
-    "label": "Test $ZED_CUSTOM_java_class_name.$ZED_CUSTOM_java_method_name",
-    "command": "c=\"$ZED_CUSTOM_java_package_name.$ZED_CUSTOM_java_class_name\"; m=\"$ZED_CUSTOM_java_method_name\"; if [ -f pom.xml ]; then ./mvnw clean test -Dtest=\"$c#$m\"; elif [ -f gradlew ]; then ./gradlew test --tests $c.$m; else >&2 echo 'No build system found'; exit 1; fi;",
+    "label": "Run $ZED_CUSTOM_java_class_name",
+    "command": "pkg=\"${ZED_CUSTOM_java_package_name:}\"; cls=\"$ZED_CUSTOM_java_class_name\"; if [ -n \"$pkg\" ]; then c=\"$pkg.$cls\"; else c=\"$cls\"; fi; if [ -f pom.xml ]; then ./mvnw clean compile exec:java -Dexec.mainClass=\"$c\"; elif [ -f gradlew ]; then ./gradlew run -PmainClass=\"$c\"; else find . -name '*.java' -not -path './bin/*' -not -path './target/*' -not -path './build/*' -print0 | xargs -0 javac -d bin && java -cp bin \"$c\"; fi;",
     "use_new_terminal": false,
     "reveal": "always",
-    "tags": ["java-test-method"],
+    "tags": ["java-main"],
+    "shell": {
+      "with_arguments": {
+        "program": "/bin/sh",
+        "args": ["-c"]
+      }
+    }
+  },
+  {
+    "label": "$ZED_CUSTOM_java_class_name.${ZED_CUSTOM_java_outer_class_name:}.$ZED_CUSTOM_java_method_name",
+    "command": "package=\"$ZED_CUSTOM_java_package_name\"; outer=\"${ZED_CUSTOM_java_outer_class_name:}\"; inner=\"$ZED_CUSTOM_java_class_name\"; method=\"$ZED_CUSTOM_java_method_name\"; sep=\"$\"; if [ -n \"$outer\" ]; then c=\"$outer$sep$inner\"; else c=\"$inner\"; fi; if [ -f pom.xml ]; then ./mvnw clean test -Dtest=\"$package.$c#$method\"; elif [ -f gradlew ]; then ./gradlew test --tests \"$package.$c.$method\"; else >&2 echo 'No build system found'; exit 1; fi;",
+    "use_new_terminal": false,
+    "reveal": "always",
+    "tags": ["java-test-method", "java-test-method-nested"],
     "shell": {
       "with_arguments": {
         "program": "/bin/sh",
@@ -27,10 +27,10 @@
   },
   {
     "label": "Test class $ZED_CUSTOM_java_class_name",
-    "command": "c=\"$ZED_CUSTOM_java_package_name.$ZED_CUSTOM_java_class_name\"; if [ -f pom.xml ]; then ./mvnw clean test -Dtest=\"$c\"; elif [ -f gradlew ]; then ./gradlew test --tests $c; else >&2 echo 'No build system found'; exit 1; fi;",
+    "command": "package=\"$ZED_CUSTOM_java_package_name\"; outer=\"${ZED_CUSTOM_java_outer_class_name:}\"; inner=\"$ZED_CUSTOM_java_class_name\"; sep=\"$\"; if [ -n \"$outer\" ]; then c=\"$outer$sep$inner\"; else c=\"$inner\"; fi; if [ -f pom.xml ]; then ./mvnw clean test -Dtest=\"$package.$c\"; elif [ -f gradlew ]; then ./gradlew test --tests \"$package.$c\"; else >&2 echo 'No build system found'; exit 1; fi;",
     "use_new_terminal": false,
     "reveal": "always",
-    "tags": ["java-test-class"],
+    "tags": ["java-test-class", "java-test-class-nested"],
     "shell": {
       "with_arguments": {
         "program": "/bin/sh",
