@@ -49,5 +49,17 @@
         "args": ["-c"]
       }
     }
+  },
+  {
+    "label": "Clear JDTLS cache",
+    "command": "cache_dir=\"\"; if [ -n \"$XDG_CACHE_HOME\" ]; then cache_dir=\"$XDG_CACHE_HOME\"; elif [ \"$(uname)\" = \"Darwin\" ]; then cache_dir=\"$HOME/Library/Caches\"; else cache_dir=\"$HOME/.cache\"; fi; found=$(find \"$cache_dir\" -maxdepth 1 -type d -name 'jdtls-*' 2>/dev/null); if [ -n \"$found\" ]; then echo \"$found\" | xargs rm -rf && echo 'JDTLS cache cleared. Restart the language server'; else echo 'No JDTLS cache found'; fi",
+    "use_new_terminal": false,
+    "reveal": "always",
+    "shell": {
+      "with_arguments": {
+        "program": "/bin/sh",
+        "args": ["-c"]
+      }
+    }
   }
 ]
