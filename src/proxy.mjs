@@ -88,6 +88,30 @@ proxy.on("server", (data, passthrough) => {
   passthrough();
 });
 
+function countParams(detail) {
+  if (!detail || detail === "()") return 0;
+  const inner = detail.slice(1, -1).trim();
+  if (inner === "") return 0;
+  let count = 1, depth = 0;
+  for (const ch of inner) {
+    if (ch === "<") depth++;
+    else if (ch === ">") depth--;
+    else if (ch === "," && depth === 0) count++;
+  }
+  return count;
+}
+
+function sortCompletionsByParamCount(result) {
+  const items = Array.isArray(result) ? result : result?.items;
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    if (item.kind === 2 || item.kind === 3) { // Method or Function
+      const paramCount = countParams(item.labelDetails?.detail);
+      item.sortText = String(paramCount).padStart(2, "0") + (item.sortText || "");
+    }
+  }
+}
+
 const server = createServer(async (req, res) => {
   if (req.method !== "POST") {
     res.status = 405;
@@ -134,6 +158,13 @@ export function createLspProxy({
     if (pending) {
       pending(message);
       queue.delete(message.id);
+      return;
+    }
+
+    // Modify completion responses to sort by param count
+    if (message?.result?.items || Array.isArray(message?.result)) {
+      sortCompletionsByParamCount(message.result);
+      proxyStdout.write(stringify(message));
       return;
     }
 
