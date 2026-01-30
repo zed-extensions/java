@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "zed_java"
-version = "6.8.7"
+version = "6.8.8"
 dependencies = [
  "hex",
  "regex",
