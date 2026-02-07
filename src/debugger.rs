@@ -128,7 +128,8 @@ impl Debugger {
             configuration,
             find_latest_local_debugger(),
             DEBUGGER_INSTALL_PATH,
-        )? {
+        )
+        .map_err(|err| format!("Failed to resolve debugger installation: {err}"))? {
             self.plugin_path = Some(path.clone());
             return Ok(path);
         }
@@ -153,11 +154,13 @@ impl Debugger {
             return Ok(path.clone());
         }
 
-        create_path_if_not_exists(prefix)?;
+        create_path_if_not_exists(prefix)
+            .map_err(|err| format!("Failed to create debugger directory '{prefix}': {err}"))?;
 
         download_file(
             JAVA_DEBUG_PLUGIN_FORK_URL,
-            &path_to_string(jar_path.clone())?,
+            &path_to_string(jar_path.clone())
+                .map_err(|err| format!("Invalid debugger jar path {jar_path:?}: {err}"))?,
             DownloadedFileType::Uncompressed,
         )
         .map_err(|err| {
@@ -230,7 +233,7 @@ impl Debugger {
         }
 
         let xml = String::from_utf8(res?.body).map_err(|err| {
-            format!("could not get string from maven metadata response body: {err}")
+            format!("Failed to get string from Maven metadata response body: {err}")
         })?;
 
         let start_tag = "<latest>";
@@ -240,7 +243,7 @@ impl Debugger {
             .split_once(start_tag)
             .and_then(|(_, rest)| rest.split_once(end_tag))
             .map(|(content, _)| content.trim())
-            .ok_or(format!("Failed to parse maven-metadata.xml response {xml}"))?;
+            .ok_or(format!("Failed to parse maven-metadata.xml response: {xml}"))?;
 
         let artifact = "com.microsoft.java.debug.plugin";
 
@@ -267,7 +270,7 @@ impl Debugger {
                 &path_to_string(&jar_path)?,
                 DownloadedFileType::Uncompressed,
             )
-            .map_err(|err| format!("Failed to download {url} {err}"))?;
+            .map_err(|err| format!("Failed to download {url}: {err}"))?;
 
             // Mark the downloaded version for "Once" mode tracking
             let _ = mark_checked_once(DEBUGGER_INSTALL_PATH, latest_version);
@@ -278,10 +281,15 @@ impl Debugger {
     }
 
     pub fn start_session(&self) -> zed::Result<TcpArgumentsTemplate> {
-        let port = self.lsp.get()?.request::<u16>(
-            "workspace/executeCommand",
-            json!({ "command": "vscode.java.startDebugSession" }),
-        )?;
+        let port = self
+            .lsp
+            .get()
+            .map_err(|err| format!("Failed to acquire LSP client lock: {err}"))?
+            .request::<u16>(
+                "workspace/executeCommand",
+                json!({ "command": "vscode.java.startDebugSession" }),
+            )
+            .map_err(|err| format!("Failed to start debug session via LSP: {err}"))?;
 
         Ok(TcpArgumentsTemplate {
             host: None,
@@ -292,7 +300,7 @@ impl Debugger {
 
     pub fn inject_config(&self, worktree: &Worktree, config_string: String) -> zed::Result<String> {
         let config: Value = serde_json::from_str(&config_string)
-            .map_err(|err| format!("Failed to parse debug config {err}"))?;
+            .map_err(|err| format!("Failed to parse debug config: {err}"))?;
 
         if config
             .get("request")
@@ -303,7 +311,7 @@ impl Debugger {
         }
 
         let mut config = serde_json::from_value::<JavaDebugLaunchConfig>(config)
-            .map_err(|err| format!("Failed to parse java debug config {err}"))?;
+            .map_err(|err| format!("Failed to parse Java debug config: {err}"))?;
 
         let workspace_folder = worktree.root_path();
 
@@ -316,8 +324,10 @@ impl Debugger {
 
             let entries = self
                 .lsp
-                .get()?
-                .resolve_main_class(arguments)?
+                .get()
+                .map_err(|err| format!("Failed to acquire LSP client lock: {err}"))?
+                .resolve_main_class(arguments)
+                .map_err(|err| format!("Failed to resolve main class: {err}"))?
                 .into_iter()
                 .filter(|entry| {
                     config
@@ -369,7 +379,12 @@ impl Debugger {
 
             let arguments = vec![main_class.clone(), project_name.clone(), scope.clone()];
 
-            let result = self.lsp.get()?.resolve_class_path(arguments)?;
+            let result = self
+                .lsp
+                .get()
+                .map_err(|err| format!("Failed to acquire LSP client lock: {err}"))?
+                .resolve_class_path(arguments)
+                .map_err(|err| format!("Failed to resolve classpath: {err}"))?;
 
             for resolved in result {
                 classpaths.extend(resolved);
@@ -387,7 +402,7 @@ impl Debugger {
         config.cwd = config.cwd.or(Some(workspace_folder.to_string()));
 
         let config = serde_json::to_string(&config)
-            .map_err(|err| format!("Failed to stringify debug config {err}"))?
+            .map_err(|err| format!("Failed to stringify debug config: {err}"))?
             .replace("${workspaceFolder}", &workspace_folder);
 
         Ok(config)
@@ -397,14 +412,15 @@ impl Debugger {
         &self,
         initialization_options: Option<Value>,
     ) -> zed::Result<Value> {
-        let current_dir = get_curr_dir()?;
+        let current_dir = get_curr_dir()
+            .map_err(|err| format!("Failed to get current directory for debugger plugin: {err}"))?;
 
         let canonical_path = Value::String(
             current_dir
                 .join(
                     self.plugin_path
                         .as_ref()
-                        .ok_or("Debugger is not loaded yet")?,
+                        .ok_or("Debugger plugin path not set")?,
                 )
                 .to_string_lossy()
                 .to_string(),

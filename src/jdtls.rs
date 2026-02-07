@@ -45,25 +45,31 @@ pub fn build_jdtls_launch_args(
         return Ok(vec![jdtls_launcher]);
     }
 
-    let mut java_executable = get_java_executable(configuration, worktree, language_server_id)?;
-    let java_major_version = get_java_major_version(&java_executable)?;
+    let mut java_executable = get_java_executable(configuration, worktree, language_server_id)
+        .map_err(|err| format!("Failed to locate Java executable for JDTLS: {err}"))?;
+    let java_major_version = get_java_major_version(&java_executable)
+        .map_err(|err| format!("Failed to determine Java version: {err}"))?;
     if java_major_version < 21 {
         if is_java_autodownload(configuration) {
             java_executable =
-                try_to_fetch_and_install_latest_jdk(language_server_id, configuration)?
+                try_to_fetch_and_install_latest_jdk(language_server_id, configuration)
+                    .map_err(|err| format!("Failed to auto-download JDK for JDTLS: {err}"))?
                     .join(get_java_exec_name());
         } else {
             return Err(JAVA_VERSION_ERROR.to_string());
         }
     }
 
-    let extension_workdir = get_curr_dir()?;
+    let extension_workdir = get_curr_dir()
+        .map_err(|err| format!("Failed to get extension working directory: {err}"))?;
 
     let jdtls_base_path = extension_workdir.join(jdtls_path);
 
     let shared_config_path = get_shared_config_path(&jdtls_base_path);
-    let jar_path = find_equinox_launcher(&jdtls_base_path)?;
-    let jdtls_data_path = get_jdtls_data_path(worktree)?;
+    let jar_path = find_equinox_launcher(&jdtls_base_path)
+        .map_err(|err| format!("Failed to find JDTLS equinox launcher in {jdtls_base_path:?}: {err}"))?;
+    let jdtls_data_path = get_jdtls_data_path(worktree)
+        .map_err(|err| format!("Failed to determine JDTLS data path: {err}"))?;
 
     let mut args = vec![
         path_to_string(java_executable)?,
@@ -159,7 +165,8 @@ pub fn try_to_fetch_and_install_latest_jdtls(
 ) -> zed::Result<PathBuf> {
     // Use local installation if update mode requires it
     if let Some(path) =
-        should_use_local_or_download(configuration, find_latest_local_jdtls(), JDTLS_INSTALL_PATH)?
+        should_use_local_or_download(configuration, find_latest_local_jdtls(), JDTLS_INSTALL_PATH)
+            .map_err(|err| format!("Failed to resolve JDTLS installation: {err}"))?
     {
         return Ok(path);
     }
@@ -170,7 +177,8 @@ pub fn try_to_fetch_and_install_latest_jdtls(
         &LanguageServerInstallationStatus::CheckingForUpdate,
     );
 
-    let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)?;
+    let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)
+        .map_err(|err| format!("Failed to fetch JDTLS versions from {JDTLS_REPO}: {err}"))?;
 
     let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
         .map_or_else(
@@ -198,14 +206,23 @@ pub fn try_to_fetch_and_install_latest_jdtls(
             language_server_id,
             &LanguageServerInstallationStatus::Downloading,
         );
+        let download_url = format!(
+            "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
+        );
         download_file(
-            &format!(
-                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
-            ),
-            path_to_string(build_path.clone())?.as_str(),
+            &download_url,
+            path_to_string(build_path.clone())
+                .map_err(|err| format!("Invalid JDTLS build path {build_path:?}: {err}"))?
+                .as_str(),
             DownloadedFileType::GzipTar,
-        )?;
-        make_file_executable(path_to_string(binary_path)?.as_str())?;
+        )
+        .map_err(|err| format!("Failed to download JDTLS from {download_url}: {err}"))?;
+        make_file_executable(
+            path_to_string(&binary_path)
+                .map_err(|err| format!("Invalid JDTLS binary path {binary_path:?}: {err}"))?
+                .as_str(),
+        )
+        .map_err(|err| format!("Failed to make JDTLS executable at {binary_path:?}: {err}"))?;
 
         // ...and delete other versions
         let _ = remove_all_files_except(prefix, build_directory.as_str());
@@ -227,7 +244,8 @@ pub fn try_to_fetch_and_install_latest_lombok(
         configuration,
         find_latest_local_lombok(),
         LOMBOK_INSTALL_PATH,
-    )? {
+    )
+    .map_err(|err| format!("Failed to resolve Lombok installation: {err}"))? {
         return Ok(path);
     }
 
@@ -237,7 +255,8 @@ pub fn try_to_fetch_and_install_latest_lombok(
         &LanguageServerInstallationStatus::CheckingForUpdate,
     );
 
-    let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)?;
+    let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)
+        .map_err(|err| format!("Failed to fetch Lombok versions from {LOMBOK_REPO}: {err}"))?;
     let prefix = LOMBOK_INSTALL_PATH;
     let jar_name = format!("lombok-{latest_version}.jar");
     let jar_path = Path::new(prefix).join(&jar_name);
@@ -250,12 +269,17 @@ pub fn try_to_fetch_and_install_latest_lombok(
             language_server_id,
             &LanguageServerInstallationStatus::Downloading,
         );
-        create_path_if_not_exists(prefix)?;
+        create_path_if_not_exists(prefix)
+            .map_err(|err| format!("Failed to create Lombok directory '{prefix}': {err}"))?;
+        let download_url = format!("https://projectlombok.org/downloads/{jar_name}");
         download_file(
-            &format!("https://projectlombok.org/downloads/{jar_name}"),
-            path_to_string(jar_path.clone())?.as_str(),
+            &download_url,
+            path_to_string(jar_path.clone())
+                .map_err(|err| format!("Invalid Lombok jar path {jar_path:?}: {err}"))?
+                .as_str(),
             DownloadedFileType::Uncompressed,
-        )?;
+        )
+        .map_err(|err| format!("Failed to download Lombok from {download_url}: {err}"))?;
 
         // ...and delete other versions
 
@@ -279,11 +303,11 @@ fn download_jdtls_milestone(version: &str) -> zed::Result<String> {
                 ))
                 .build()?,
         )
-        .map_err(|err| format!("failed to get latest version's build: {err}"))?
+        .map_err(|err| format!("Failed to get latest version's build: {err}"))?
         .body,
     )
     .map_err(|err| {
-        format!("attempt to get latest version's build resulted in a malformed response: {err}")
+        format!("Failed to get latest version's build (malformed response): {err}")
     })
 }
 
@@ -298,7 +322,7 @@ fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String>
 
     // else get the first file that matches the glob 'org.eclipse.equinox.launcher_*.jar'
     let entries =
-        read_dir(&plugins_dir).map_err(|e| format!("Failed to read plugins directory: {e}"))?;
+        read_dir(&plugins_dir).map_err(|err| format!("Failed to read plugins directory: {err}"))?;
 
     entries
         .filter_map(Result::ok)

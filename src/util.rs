@@ -95,8 +95,10 @@ pub fn has_checked_once(component_name: &str) -> bool {
 /// Returns an error if the directory or marker file could not be created
 pub fn mark_checked_once(component_name: &str, version: &str) -> zed::Result<()> {
     let marker_path = PathBuf::from(component_name).join(ONCE_CHECK_MARKER);
-    create_path_if_not_exists(PathBuf::from(component_name))?;
-    fs::write(marker_path, version).map_err(|e| e.to_string())
+    create_path_if_not_exists(PathBuf::from(component_name))
+        .map_err(|err| format!("Failed to create directory for {component_name}: {err}"))?;
+    fs::write(&marker_path, version)
+        .map_err(|err| format!("Failed to write marker file {marker_path:?}: {err}"))
 }
 
 /// Expand ~ on Unix-like systems
@@ -216,12 +218,19 @@ pub fn get_java_exec_name() -> String {
 /// * [`java_executable`] can't be converted into a String
 /// * No major version can be determined
 pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
-    let program = path_to_string(java_executable).map_err(|_| JAVA_EXEC_ERROR.to_string())?;
-    let output_bytes = Command::new(program).arg("-version").output()?.stderr;
-    let output = String::from_utf8(output_bytes).map_err(|e| e.to_string())?;
+    let program = path_to_string(java_executable)
+        .map_err(|err| format!("{JAVA_EXEC_ERROR} '{java_executable:?}': {err}"))?;
+    let output_bytes = Command::new(&program)
+        .arg("-version")
+        .output()
+        .map_err(|err| format!("Failed to execute '{program} -version': {err}"))?
+        .stderr;
+    let output = String::from_utf8(output_bytes)
+        .map_err(|err| format!("Invalid UTF-8 in java version output: {err}"))?;
 
     let major_version_regex =
-        Regex::new(r#"version\s"(?P<major>\d+)(\.\d+\.\d+(_\d+)?)?"#).map_err(|e| e.to_string())?;
+        Regex::new(r#"version\s"(?P<major>\d+)(\.\d+\.\d+(_\d+)?)?"#)
+            .map_err(|err| format!("Invalid regex for Java version parsing: {err}"))?;
     let major_version = major_version_regex
         .captures_iter(&output)
         .find_map(|c| c.name("major").and_then(|m| m.as_str().parse::<u32>().ok()));
