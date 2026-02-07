@@ -173,7 +173,11 @@ impl Extension for Java {
         }
 
         if self.integrations.is_some() {
-            self.lsp()?.switch_workspace(worktree.root_path())?;
+            self.lsp()?
+                .switch_workspace(worktree.root_path())
+                .map_err(|err| {
+                    format!("Failed to switch LSP workspace for debug adapter: {err}")
+                })?;
         }
 
         Ok(DebugAdapterBinary {
@@ -182,15 +186,22 @@ impl Extension for Java {
             cwd: Some(worktree.root_path()),
             envs: vec![],
             request_args: StartDebuggingRequestArguments {
-                request: self.dap_request_kind(
-                    adapter_name,
-                    Value::from_str(config.config.as_str())
-                        .map_err(|e| format!("Invalid JSON configuration: {e}"))?,
-                )?,
-                configuration: self.debugger()?.inject_config(worktree, config.config)?,
+                request: self
+                    .dap_request_kind(
+                        adapter_name,
+                        Value::from_str(config.config.as_str())
+                            .map_err(|err| format!("Invalid JSON configuration: {err}"))?,
+                    )
+                    .map_err(|err| format!("Failed to determine debug request kind: {err}"))?,
+                configuration: self
+                    .debugger()?
+                    .inject_config(worktree, config.config)
+                    .map_err(|err| format!("Failed to inject debug configuration: {err}"))?,
             },
             connection: Some(zed::resolve_tcp_template(
-                self.debugger()?.start_session()?,
+                self.debugger()?
+                    .start_session()
+                    .map_err(|err| format!("Failed to start debug session: {err}"))?,
             )?),
         })
     }
@@ -245,7 +256,11 @@ impl Extension for Java {
                 Ok(zed::DebugScenario {
                     adapter: config.adapter,
                     build: None,
-                    tcp_connection: Some(self.debugger()?.start_session()?),
+                    tcp_connection: Some(
+                        self.debugger()?
+                            .start_session()
+                            .map_err(|err| format!("Failed to start debug session: {err}"))?,
+                    ),
                     label: "Attach to Java process".to_string(),
                     config: debug_config.to_string(),
                 })
@@ -263,7 +278,7 @@ impl Extension for Java {
         worktree: &Worktree,
     ) -> zed::Result<zed::Command> {
         let current_dir =
-            env::current_dir().map_err(|err| format!("could not get current dir: {err}"))?;
+            env::current_dir().map_err(|err| format!("Failed to get current directory: {err}"))?;
 
         let configuration =
             self.language_server_workspace_configuration(language_server_id, worktree)?;
@@ -279,14 +294,17 @@ impl Extension for Java {
             "--input-type=module".to_string(),
             "-e".to_string(),
             PROXY_FILE.to_string(),
-            path_to_string(current_dir.clone())?,
+            path_to_string(current_dir.clone())
+                .map_err(|err| format!("Failed to convert current directory to string: {err}"))?,
         ];
 
         // Add lombok as javaagent if settings.java.jdt.ls.lombokSupport.enabled is true
         let lombok_jvm_arg = if is_lombok_enabled(&configuration) {
-            let lombok_jar_path =
-                self.lombok_jar_path(language_server_id, &configuration, worktree)?;
-            let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))?;
+            let lombok_jar_path = self
+                .lombok_jar_path(language_server_id, &configuration, worktree)
+                .map_err(|err| format!("Failed to get Lombok jar path: {err}"))?;
+            let canonical_lombok_jar_path = path_to_string(current_dir.join(lombok_jar_path))
+                .map_err(|err| format!("Failed to convert Lombok jar path to string: {err}"))?;
 
             Some(format!("-javaagent:{canonical_lombok_jar_path}"))
         } else {
@@ -309,13 +327,18 @@ impl Extension for Java {
             }
         } else {
             // otherwise we launch ourselves
-            args.extend(build_jdtls_launch_args(
-                &self.language_server_binary_path(language_server_id, &configuration)?,
-                &configuration,
-                worktree,
-                lombok_jvm_arg.into_iter().collect(),
-                language_server_id,
-            )?);
+            args.extend(
+                build_jdtls_launch_args(
+                    &self
+                        .language_server_binary_path(language_server_id, &configuration)
+                        .map_err(|err| format!("Failed to get JDTLS binary path: {err}"))?,
+                    &configuration,
+                    worktree,
+                    lombok_jvm_arg.into_iter().collect(),
+                    language_server_id,
+                )
+                .map_err(|err| format!("Failed to build JDTLS launch arguments: {err}"))?,
+            );
         }
 
         // download debugger if not exists
@@ -326,10 +349,13 @@ impl Extension for Java {
             println!("Failed to download debugger: {err}");
         };
 
-        self.lsp()?.switch_workspace(worktree.root_path())?;
+        self.lsp()?
+            .switch_workspace(worktree.root_path())
+            .map_err(|err| format!("Failed to switch LSP workspace: {err}"))?;
 
         Ok(zed::Command {
-            command: zed::node_binary_path()?,
+            command: zed::node_binary_path()
+                .map_err(|err| format!("Failed to get Node.js binary path: {err}"))?,
             args,
             env,
         })
@@ -341,14 +367,25 @@ impl Extension for Java {
         worktree: &Worktree,
     ) -> zed::Result<Option<Value>> {
         if self.integrations.is_some() {
-            self.lsp()?.switch_workspace(worktree.root_path())?;
+            self.lsp()?
+                .switch_workspace(worktree.root_path())
+                .map_err(|err| {
+                    format!("Failed to switch LSP workspace for initialization: {err}")
+                })?;
         }
 
         let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
-            .map(|lsp_settings| lsp_settings.initialization_options)?;
+            .map(|lsp_settings| lsp_settings.initialization_options)
+            .map_err(|err| format!("Failed to get LSP settings for worktree: {err}"))?;
 
         if self.debugger().is_ok_and(|v| v.loaded()) {
-            return Ok(Some(self.debugger()?.inject_plugin_into_options(options)?));
+            return Ok(Some(
+                self.debugger()?
+                    .inject_plugin_into_options(options)
+                    .map_err(|err| {
+                        format!("Failed to inject debugger plugin into options: {err}")
+                    })?,
+            ));
         }
 
         Ok(options)

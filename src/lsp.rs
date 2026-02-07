@@ -35,14 +35,14 @@ impl LspWrapper {
     pub fn get(&self) -> zed::Result<std::sync::RwLockReadGuard<'_, LspClient>> {
         self.0
             .read()
-            .map_err(|err| format!("LspClient RwLock poisoned during read {err}"))
+            .map_err(|err| format!("LspClient RwLock poisoned during read: {err}"))
     }
 
     pub fn switch_workspace(&self, workspace: String) -> zed::Result<()> {
         let mut lock = self
             .0
             .write()
-            .map_err(|err| format!("LspClient RwLock poisoned during read {err}"))?;
+            .map_err(|err| format!("LspClient RwLock poisoned during read: {err}"))?;
 
         lock.workspace = workspace;
 
@@ -86,9 +86,9 @@ impl LspClient {
             }
 
             fs::read_to_string(port_path)
-                .map_err(|e| format!("Failed to read a lsp proxy port from file {e}"))?
+                .map_err(|err| format!("Failed to read LSP proxy port from file: {err}"))?
                 .parse::<u16>()
-                .map_err(|e| format!("Failed to read a lsp proxy port, file corrupted {e}"))?
+                .map_err(|err| format!("Failed to parse LSP proxy port (file corrupted): {err}"))?
         };
 
         let mut body = Map::new();
@@ -102,10 +102,10 @@ impl LspClient {
                 .body(Value::Object(body).to_string())
                 .build()?,
         )
-        .map_err(|e| format!("Failed to send request to lsp proxy {e}"))?;
+        .map_err(|err| format!("Failed to send request to LSP proxy: {err}"))?;
 
         let data: LspResponse<T> = serde_json::from_slice(&res.body)
-            .map_err(|e| format!("Failed to parse response from lsp proxy {e}"))?;
+            .map_err(|err| format!("Failed to parse response from LSP proxy: {err}"))?;
 
         match data {
             LspResponse::Success { result } => Ok(result),
