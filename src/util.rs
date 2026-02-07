@@ -228,9 +228,8 @@ pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
     let output = String::from_utf8(output_bytes)
         .map_err(|err| format!("Invalid UTF-8 in java version output: {err}"))?;
 
-    let major_version_regex =
-        Regex::new(r#"version\s"(?P<major>\d+)(\.\d+\.\d+(_\d+)?)?"#)
-            .map_err(|err| format!("Invalid regex for Java version parsing: {err}"))?;
+    let major_version_regex = Regex::new(r#"version\s"(?P<major>\d+)(\.\d+\.\d+(_\d+)?)?"#)
+        .map_err(|err| format!("Invalid regex for Java version parsing: {err}"))?;
     let major_version = major_version_regex
         .captures_iter(&output)
         .find_map(|c| c.name("major").and_then(|m| m.as_str().parse::<u32>().ok()));

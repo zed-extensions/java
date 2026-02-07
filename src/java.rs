@@ -175,7 +175,9 @@ impl Extension for Java {
         if self.integrations.is_some() {
             self.lsp()?
                 .switch_workspace(worktree.root_path())
-                .map_err(|err| format!("Failed to switch LSP workspace for debug adapter: {err}"))?;
+                .map_err(|err| {
+                    format!("Failed to switch LSP workspace for debug adapter: {err}")
+                })?;
         }
 
         Ok(DebugAdapterBinary {
@@ -184,13 +186,15 @@ impl Extension for Java {
             cwd: Some(worktree.root_path()),
             envs: vec![],
             request_args: StartDebuggingRequestArguments {
-                request: self.dap_request_kind(
-                    adapter_name,
-                    Value::from_str(config.config.as_str())
-                        .map_err(|err| format!("Invalid JSON configuration: {err}"))?,
-                )
-                .map_err(|err| format!("Failed to determine debug request kind: {err}"))?,
-                configuration: self.debugger()?
+                request: self
+                    .dap_request_kind(
+                        adapter_name,
+                        Value::from_str(config.config.as_str())
+                            .map_err(|err| format!("Invalid JSON configuration: {err}"))?,
+                    )
+                    .map_err(|err| format!("Failed to determine debug request kind: {err}"))?,
+                configuration: self
+                    .debugger()?
                     .inject_config(worktree, config.config)
                     .map_err(|err| format!("Failed to inject debug configuration: {err}"))?,
             },
@@ -365,7 +369,9 @@ impl Extension for Java {
         if self.integrations.is_some() {
             self.lsp()?
                 .switch_workspace(worktree.root_path())
-                .map_err(|err| format!("Failed to switch LSP workspace for initialization: {err}"))?;
+                .map_err(|err| {
+                    format!("Failed to switch LSP workspace for initialization: {err}")
+                })?;
         }
 
         let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
@@ -376,7 +382,9 @@ impl Extension for Java {
             return Ok(Some(
                 self.debugger()?
                     .inject_plugin_into_options(options)
-                    .map_err(|err| format!("Failed to inject debugger plugin into options: {err}"))?,
+                    .map_err(|err| {
+                        format!("Failed to inject debugger plugin into options: {err}")
+                    })?,
             ));
         }
 

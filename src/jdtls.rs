@@ -66,8 +66,9 @@ pub fn build_jdtls_launch_args(
     let jdtls_base_path = extension_workdir.join(jdtls_path);
 
     let shared_config_path = get_shared_config_path(&jdtls_base_path);
-    let jar_path = find_equinox_launcher(&jdtls_base_path)
-        .map_err(|err| format!("Failed to find JDTLS equinox launcher in {jdtls_base_path:?}: {err}"))?;
+    let jar_path = find_equinox_launcher(&jdtls_base_path).map_err(|err| {
+        format!("Failed to find JDTLS equinox launcher in {jdtls_base_path:?}: {err}")
+    })?;
     let jdtls_data_path = get_jdtls_data_path(worktree)
         .map_err(|err| format!("Failed to determine JDTLS data path: {err}"))?;
 
@@ -245,7 +246,8 @@ pub fn try_to_fetch_and_install_latest_lombok(
         find_latest_local_lombok(),
         LOMBOK_INSTALL_PATH,
     )
-    .map_err(|err| format!("Failed to resolve Lombok installation: {err}"))? {
+    .map_err(|err| format!("Failed to resolve Lombok installation: {err}"))?
+    {
         return Ok(path);
     }
 
@@ -306,9 +308,7 @@ fn download_jdtls_milestone(version: &str) -> zed::Result<String> {
         .map_err(|err| format!("Failed to get latest version's build: {err}"))?
         .body,
     )
-    .map_err(|err| {
-        format!("Failed to get latest version's build (malformed response): {err}")
-    })
+    .map_err(|err| format!("Failed to get latest version's build (malformed response): {err}"))
 }
 
 fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String> {

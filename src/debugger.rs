@@ -129,7 +129,8 @@ impl Debugger {
             find_latest_local_debugger(),
             DEBUGGER_INSTALL_PATH,
         )
-        .map_err(|err| format!("Failed to resolve debugger installation: {err}"))? {
+        .map_err(|err| format!("Failed to resolve debugger installation: {err}"))?
+        {
             self.plugin_path = Some(path.clone());
             return Ok(path);
         }
@@ -243,7 +244,9 @@ impl Debugger {
             .split_once(start_tag)
             .and_then(|(_, rest)| rest.split_once(end_tag))
             .map(|(content, _)| content.trim())
-            .ok_or(format!("Failed to parse maven-metadata.xml response: {xml}"))?;
+            .ok_or(format!(
+                "Failed to parse maven-metadata.xml response: {xml}"
+            ))?;
 
         let artifact = "com.microsoft.java.debug.plugin";
 
