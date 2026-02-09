@@ -585,9 +585,9 @@ impl Extension for Java {
                 let code = format!("{prefix}{ctor_name}() {{}} }}");
                 let ctor_start = prefix.len();
 
-                let mut spans = vec![
-                    CodeLabelSpan::code_range(ctor_start..ctor_start + ctor_name.len()),
-                ];
+                let mut spans = vec![CodeLabelSpan::code_range(
+                    ctor_start..ctor_start + ctor_name.len(),
+                )];
                 if !rest.is_empty() {
                     spans.push(CodeLabelSpan::literal(rest.to_string(), None));
                 }
