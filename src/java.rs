@@ -16,7 +16,7 @@ use zed_extension_api::{
     self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition, Extension,
     LanguageServerId, LanguageServerInstallationStatus, StartDebuggingRequestArguments,
     StartDebuggingRequestArgumentsRequest, Worktree,
-    lsp::{Completion, CompletionKind},
+    lsp::{Completion, CompletionKind, Symbol, SymbolKind},
     register_extension,
     serde_json::{Value, json},
     set_language_server_installation_status,
@@ -534,6 +534,199 @@ impl Extension for Java {
             }
             _ => None,
         })
+    }
+
+    fn label_for_symbol(
+        &self,
+        _language_server_id: &LanguageServerId,
+        symbol: Symbol,
+    ) -> Option<CodeLabel> {
+        let name = &symbol.name;
+
+        match symbol.kind {
+            SymbolKind::Class => {
+                // code: "class Name {}" → Tree-sitter: class_declaration
+                // display: "class Name"
+                let keyword = "class ";
+                let code = format!("{keyword}{name} {{}}");
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
+                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::Interface => {
+                let keyword = "interface ";
+                let code = format!("{keyword}{name} {{}}");
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
+                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::Enum => {
+                let keyword = "enum ";
+                let code = format!("{keyword}{name} {{}}");
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
+                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::Constructor => {
+                // jdtls: "ClassName(Type, Type)"
+                let ctor_name = name.split('(').next().unwrap_or(name);
+                let rest = &name[ctor_name.len()..];
+                // Wrap in matching class for constructor_declaration AST node
+                let prefix = format!("class {ctor_name} {{ ");
+                let code = format!("{prefix}{ctor_name}() {{}} }}");
+                let ctor_start = prefix.len();
+
+                let mut spans = vec![
+                    CodeLabelSpan::code_range(ctor_start..ctor_start + ctor_name.len()),
+                ];
+                if !rest.is_empty() {
+                    spans.push(CodeLabelSpan::literal(rest.to_string(), None));
+                }
+
+                Some(CodeLabel {
+                    spans,
+                    filter_range: (0..name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::Method | SymbolKind::Function => {
+                // jdtls: "methodName(Type, Type) : ReturnType" or "methodName(Type)"
+                // display: "ReturnType methodName(Type, Type)" (Java declaration order)
+                let method_name = name.split('(').next().unwrap_or(name);
+                let after_name = &name[method_name.len()..];
+
+                let (params, return_type) = if let Some((p, r)) = after_name.split_once(" : ") {
+                    (p, Some(r))
+                } else {
+                    (after_name, None)
+                };
+
+                let ret = return_type.unwrap_or("void");
+                let class_open = "class _ { ";
+                let code = format!("{class_open}{ret} {method_name}() {{}} }}");
+
+                let ret_start = class_open.len();
+                let name_start = ret_start + ret.len() + 1;
+
+                // Display: "void methodName(String, int)"
+                let mut spans = vec![
+                    CodeLabelSpan::code_range(ret_start..ret_start + ret.len()),
+                    CodeLabelSpan::literal(" ".to_string(), None),
+                    CodeLabelSpan::code_range(name_start..name_start + method_name.len()),
+                ];
+                if !params.is_empty() {
+                    spans.push(CodeLabelSpan::literal(params.to_string(), None));
+                }
+
+                // filter on "methodName(params)" portion of displayed text
+                let type_prefix_len = ret.len() + 1; // "void "
+                let filter_end = type_prefix_len + method_name.len() + params.len();
+                Some(CodeLabel {
+                    spans,
+                    filter_range: (type_prefix_len..filter_end).into(),
+                    code,
+                })
+            }
+            SymbolKind::Field | SymbolKind::Property => {
+                // jdtls: "fieldName : Type" or just "fieldName"
+                // display: "Type fieldName" (Java declaration order)
+                if let Some((field_name, field_type)) = name.split_once(" : ") {
+                    let class_open = "class _ { ";
+                    let code = format!("{class_open}{field_type} {field_name}; }}");
+
+                    let type_start = class_open.len();
+                    let name_start = type_start + field_type.len() + 1;
+
+                    // Display: "String fieldName"
+                    let spans = vec![
+                        CodeLabelSpan::code_range(type_start..type_start + field_type.len()),
+                        CodeLabelSpan::literal(" ".to_string(), None),
+                        CodeLabelSpan::code_range(name_start..name_start + field_name.len()),
+                    ];
+
+                    let type_prefix_len = field_type.len() + 1; // "String "
+                    Some(CodeLabel {
+                        spans,
+                        filter_range: (type_prefix_len..type_prefix_len + field_name.len()).into(),
+                        code,
+                    })
+                } else {
+                    // No type info, just show the name
+                    let class_open = "class _ { int ";
+                    let code = format!("{class_open}{name}; }}");
+                    let name_start = class_open.len();
+
+                    Some(CodeLabel {
+                        spans: vec![CodeLabelSpan::code_range(
+                            name_start..name_start + name.len(),
+                        )],
+                        filter_range: (0..name.len()).into(),
+                        code,
+                    })
+                }
+            }
+            SymbolKind::Constant => {
+                // Wrap in class; ALL_CAPS names get @constant from highlights.scm regex
+                let class_open = "class _ { static final int ";
+                let code = format!("{class_open}{name}; }}");
+                let name_start = class_open.len();
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(
+                        name_start..name_start + name.len(),
+                    )],
+                    filter_range: (0..name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::EnumMember => {
+                // Wrap in enum for enum_constant AST node → @constant highlight
+                let prefix = "enum _ { ";
+                let code = format!("{prefix}{name} }}");
+                let name_start = prefix.len();
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(
+                        name_start..name_start + name.len(),
+                    )],
+                    filter_range: (0..name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::Variable => {
+                let class_open = "class _ { int ";
+                let code = format!("{class_open}{name}; }}");
+                let name_start = class_open.len();
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(
+                        name_start..name_start + name.len(),
+                    )],
+                    filter_range: (0..name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::Package | SymbolKind::Module | SymbolKind::Namespace => {
+                let keyword = "package ";
+                let code = format!("{keyword}{name};");
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
+                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
+                    code,
+                })
+            }
+            _ => None,
+        }
     }
 }
 
