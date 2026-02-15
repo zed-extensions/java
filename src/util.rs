@@ -1,4 +1,5 @@
 use regex::Regex;
+use serde::{Deserialize, Serialize, Serializer};
 use std::{
     env::current_dir,
     fs,
@@ -399,5 +400,28 @@ pub fn should_use_local_or_download(
             Ok(None)
         }
         CheckUpdates::Always => Ok(None),
+    }
+}
+
+/// A type that can be deserialized from either a single string or a list of strings.
+///
+/// When serialized, it always produces a single string. If it was a list,
+/// the elements are joined with a space.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum ArgsStringOrList {
+    String(String),
+    List(Vec<String>),
+}
+
+impl Serialize for ArgsStringOrList {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            ArgsStringOrList::String(s) => serializer.serialize_str(s),
+            ArgsStringOrList::List(l) => serializer.serialize_str(&l.join(" ")),
+        }
     }
 }

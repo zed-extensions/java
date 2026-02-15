@@ -13,8 +13,8 @@ use crate::{
     config::get_java_debug_jar,
     lsp::LspWrapper,
     util::{
-        create_path_if_not_exists, get_curr_dir, mark_checked_once, path_to_string,
-        should_use_local_or_download,
+        ArgsStringOrList, create_path_if_not_exists, get_curr_dir, mark_checked_once,
+        path_to_string, should_use_local_or_download,
     },
 };
 
@@ -27,9 +27,9 @@ struct JavaDebugLaunchConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     main_class: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    args: Option<String>,
+    args: Option<ArgsStringOrList>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    vm_args: Option<String>,
+    vm_args: Option<ArgsStringOrList>,
     #[serde(skip_serializing_if = "Option::is_none")]
     encoding: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
