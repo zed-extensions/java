@@ -432,7 +432,13 @@ impl Serialize for ArgsStringOrList {
             ArgsStringOrList::List(l) => {
                 let quoted: Vec<String> = l
                     .iter()
-                    .map(|s| if s.contains(' ') { format!("\"{}\"", s) } else { s.clone() })
+                    .map(|s| {
+                        if s.contains(' ') {
+                            format!("\"{}\"", s)
+                        } else {
+                            s.clone()
+                        }
+                    })
                     .collect();
                 serializer.serialize_str(&quoted.join(" "))
             }
@@ -466,10 +472,7 @@ mod tests {
         let json = std::fs::read_to_string("testdata/args_single_string.json").unwrap();
         let wrapper: ArgsWrapper = serde_json::from_str(&json).unwrap();
         let serialized = serde_json::to_value(&wrapper).unwrap();
-        assert_eq!(
-            serialized["args"],
-            r#"C:\path with spaces\some file.txt"#
-        );
+        assert_eq!(serialized["args"], r#"C:\path with spaces\some file.txt"#);
     }
 
     #[test]
