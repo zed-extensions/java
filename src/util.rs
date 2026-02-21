@@ -414,7 +414,7 @@ pub fn should_use_local_or_download(
 /// A type that can be deserialized from either a single string or a list of strings.
 ///
 /// When serialized, it always produces a single string. If it was a list,
-/// the elements are joined with a space.
+/// the elements are joined with a space, quoting elements that contain spaces.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ArgsStringOrList {
@@ -429,7 +429,74 @@ impl Serialize for ArgsStringOrList {
     {
         match self {
             ArgsStringOrList::String(s) => serializer.serialize_str(s),
-            ArgsStringOrList::List(l) => serializer.serialize_str(&l.join(" ")),
+            ArgsStringOrList::List(l) => {
+                let quoted: Vec<String> = l
+                    .iter()
+                    .map(|s| {
+                        if s.contains(' ') {
+                            format!("\"{}\"", s)
+                        } else {
+                            s.clone()
+                        }
+                    })
+                    .collect();
+                serializer.serialize_str(&quoted.join(" "))
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[derive(Deserialize, Serialize)]
+    struct ArgsWrapper {
+        args: ArgsStringOrList,
+    }
+
+    #[test]
+    fn test_args_list_with_spaces_quotes_elements() {
+        let json = std::fs::read_to_string("testdata/args_with_spaces.json").unwrap();
+        let wrapper: ArgsWrapper = serde_json::from_str(&json).unwrap();
+        let serialized = serde_json::to_value(&wrapper).unwrap();
+        assert_eq!(
+            serialized["args"],
+            r#""C:\path with spaces\some file.txt" arg2"#
+        );
+    }
+
+    #[test]
+    fn test_args_single_string_preserved_as_is() {
+        let json = std::fs::read_to_string("testdata/args_single_string.json").unwrap();
+        let wrapper: ArgsWrapper = serde_json::from_str(&json).unwrap();
+        let serialized = serde_json::to_value(&wrapper).unwrap();
+        assert_eq!(serialized["args"], r#"C:\path with spaces\some file.txt"#);
+    }
+
+    #[test]
+    fn test_args_list_no_spaces_not_quoted() {
+        let json = std::fs::read_to_string("testdata/args_list_no_spaces.json").unwrap();
+        let wrapper: ArgsWrapper = serde_json::from_str(&json).unwrap();
+        let serialized = serde_json::to_value(&wrapper).unwrap();
+        assert_eq!(serialized["args"], "arg1 arg2");
+    }
+
+    #[test]
+    fn test_args_single_element_with_spaces_quoted() {
+        let json =
+            std::fs::read_to_string("testdata/args_single_element_with_spaces.json").unwrap();
+        let wrapper: ArgsWrapper = serde_json::from_str(&json).unwrap();
+        let serialized = serde_json::to_value(&wrapper).unwrap();
+        assert_eq!(serialized["args"], r#""path with spaces""#);
+    }
+
+    #[test]
+    fn test_args_empty_list() {
+        let json = std::fs::read_to_string("testdata/args_empty_list.json").unwrap();
+        let wrapper: ArgsWrapper = serde_json::from_str(&json).unwrap();
+        let serialized = serde_json::to_value(&wrapper).unwrap();
+        assert_eq!(serialized["args"], "");
     }
 }
