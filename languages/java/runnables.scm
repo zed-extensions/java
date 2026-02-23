@@ -42,7 +42,7 @@
     (#set! tag java-main)
 )
 
-; Run test function
+; Run test function (marker annotation, e.g. @Test)
 (
     (package_declaration
         (scoped_identifier) @java_package_name
@@ -52,12 +52,15 @@
         body: (class_body
             (method_declaration
                 (modifiers
-                    (marker_annotation
+                    [(marker_annotation
                         name: (identifier) @annotation_name
                     )
+                    (annotation
+                        name: (identifier) @annotation_name
+                    )]
                 )
                 name: (identifier) @run @java_method_name
-                (#eq? @annotation_name "Test")
+                (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
             )
         )
     ) @_
@@ -82,12 +85,15 @@
                 body: (class_body
                     (method_declaration
                         (modifiers
-                            (marker_annotation
+                            [(marker_annotation
                                 name: (identifier) @annotation_name
                                 )
+                            (annotation
+                                name: (identifier) @annotation_name
+                                )]
                             )
                         name: (identifier) @run @java_method_name
-                        (#eq? @annotation_name "Test")
+                        (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
                     )
                 )
                 (#eq? @nested_annotation "Nested")
@@ -107,11 +113,14 @@
         body: (class_body
             (method_declaration
                 (modifiers
-                    (marker_annotation
+                    [(marker_annotation
                         name: (identifier) @annotation_name
                     )
+                    (annotation
+                        name: (identifier) @annotation_name
+                    )]
                 )
-                (#eq? @annotation_name "Test")
+                (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
             )
         )
     ) @_
@@ -136,11 +145,14 @@
                 body: (class_body
                     (method_declaration
                         (modifiers
-                            (marker_annotation
+                            [(marker_annotation
                                 name: (identifier) @annotation_name
                                 )
+                            (annotation
+                                name: (identifier) @annotation_name
+                                )]
                             )
-                        (#eq? @annotation_name "Test")
+                        (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
                     )
                 )
                 (#eq? @nested_annotation "Nested")
