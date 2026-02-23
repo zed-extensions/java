@@ -544,30 +544,13 @@ impl Extension for Java {
         let name = &symbol.name;
 
         match symbol.kind {
-            SymbolKind::Class => {
-                // code: "class Name {}" → Tree-sitter: class_declaration
-                // display: "class Name"
-                let keyword = "class ";
-                let code = format!("{keyword}{name} {{}}");
-
-                Some(CodeLabel {
-                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
-                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
-                    code,
-                })
-            }
-            SymbolKind::Interface => {
-                let keyword = "interface ";
-                let code = format!("{keyword}{name} {{}}");
-
-                Some(CodeLabel {
-                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
-                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
-                    code,
-                })
-            }
-            SymbolKind::Enum => {
-                let keyword = "enum ";
+            SymbolKind::Class | SymbolKind::Interface | SymbolKind::Enum => {
+                let keyword = match symbol.kind {
+                    SymbolKind::Class => "class ",
+                    SymbolKind::Interface => "interface ",
+                    SymbolKind::Enum => "enum ",
+                    _ => unreachable!(),
+                };
                 let code = format!("{keyword}{name} {{}}");
 
                 Some(CodeLabel {
@@ -660,8 +643,8 @@ impl Extension for Java {
                         code,
                     })
                 } else {
-                    // No type info, just show the name
-                    let class_open = "class _ { int ";
+                    // No type info — use placeholder type for valid tree-sitter parse (not displayed)
+                    let class_open = "class _ { Object ";
                     let code = format!("{class_open}{name}; }}");
                     let name_start = class_open.len();
 
@@ -676,7 +659,8 @@ impl Extension for Java {
             }
             SymbolKind::Constant => {
                 // Wrap in class; ALL_CAPS names get @constant from highlights.scm regex
-                let class_open = "class _ { static final int ";
+                // Placeholder type for valid tree-sitter parse (not displayed)
+                let class_open = "class _ { static final Object ";
                 let code = format!("{class_open}{name}; }}");
                 let name_start = class_open.len();
 
@@ -693,19 +677,6 @@ impl Extension for Java {
                 let prefix = "enum _ { ";
                 let code = format!("{prefix}{name} }}");
                 let name_start = prefix.len();
-
-                Some(CodeLabel {
-                    spans: vec![CodeLabelSpan::code_range(
-                        name_start..name_start + name.len(),
-                    )],
-                    filter_range: (0..name.len()).into(),
-                    code,
-                })
-            }
-            SymbolKind::Variable => {
-                let class_open = "class _ { int ";
-                let code = format!("{class_open}{name}; }}");
-                let name_start = class_open.len();
 
                 Some(CodeLabel {
                     spans: vec![CodeLabelSpan::code_range(
