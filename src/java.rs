@@ -559,28 +559,6 @@ impl Extension for Java {
                     code,
                 })
             }
-            SymbolKind::Constructor => {
-                // jdtls: "ClassName(Type, Type)"
-                let ctor_name = name.split('(').next().unwrap_or(name);
-                let rest = &name[ctor_name.len()..];
-                // Wrap in matching class for constructor_declaration AST node
-                let prefix = format!("class {ctor_name} {{ ");
-                let code = format!("{prefix}{ctor_name}() {{}} }}");
-                let ctor_start = prefix.len();
-
-                let mut spans = vec![CodeLabelSpan::code_range(
-                    ctor_start..ctor_start + ctor_name.len(),
-                )];
-                if !rest.is_empty() {
-                    spans.push(CodeLabelSpan::literal(rest.to_string(), None));
-                }
-
-                Some(CodeLabel {
-                    spans,
-                    filter_range: (0..name.len()).into(),
-                    code,
-                })
-            }
             SymbolKind::Method | SymbolKind::Function => {
                 // jdtls: "methodName(Type, Type) : ReturnType" or "methodName(Type)"
                 // display: "ReturnType methodName(Type, Type)" (Java declaration order)
@@ -616,83 +594,6 @@ impl Extension for Java {
                 Some(CodeLabel {
                     spans,
                     filter_range: (type_prefix_len..filter_end).into(),
-                    code,
-                })
-            }
-            SymbolKind::Field | SymbolKind::Property => {
-                // jdtls: "fieldName : Type" or just "fieldName"
-                // display: "Type fieldName" (Java declaration order)
-                if let Some((field_name, field_type)) = name.split_once(" : ") {
-                    let class_open = "class _ { ";
-                    let code = format!("{class_open}{field_type} {field_name}; }}");
-
-                    let type_start = class_open.len();
-                    let name_start = type_start + field_type.len() + 1;
-
-                    // Display: "String fieldName"
-                    let spans = vec![
-                        CodeLabelSpan::code_range(type_start..type_start + field_type.len()),
-                        CodeLabelSpan::literal(" ".to_string(), None),
-                        CodeLabelSpan::code_range(name_start..name_start + field_name.len()),
-                    ];
-
-                    let type_prefix_len = field_type.len() + 1; // "String "
-                    Some(CodeLabel {
-                        spans,
-                        filter_range: (type_prefix_len..type_prefix_len + field_name.len()).into(),
-                        code,
-                    })
-                } else {
-                    // No type info — use placeholder type for valid tree-sitter parse (not displayed)
-                    let class_open = "class _ { Object ";
-                    let code = format!("{class_open}{name}; }}");
-                    let name_start = class_open.len();
-
-                    Some(CodeLabel {
-                        spans: vec![CodeLabelSpan::code_range(
-                            name_start..name_start + name.len(),
-                        )],
-                        filter_range: (0..name.len()).into(),
-                        code,
-                    })
-                }
-            }
-            SymbolKind::Constant => {
-                // Wrap in class; ALL_CAPS names get @constant from highlights.scm regex
-                // Placeholder type for valid tree-sitter parse (not displayed)
-                let class_open = "class _ { static final Object ";
-                let code = format!("{class_open}{name}; }}");
-                let name_start = class_open.len();
-
-                Some(CodeLabel {
-                    spans: vec![CodeLabelSpan::code_range(
-                        name_start..name_start + name.len(),
-                    )],
-                    filter_range: (0..name.len()).into(),
-                    code,
-                })
-            }
-            SymbolKind::EnumMember => {
-                // Wrap in enum for enum_constant AST node → @constant highlight
-                let prefix = "enum _ { ";
-                let code = format!("{prefix}{name} }}");
-                let name_start = prefix.len();
-
-                Some(CodeLabel {
-                    spans: vec![CodeLabelSpan::code_range(
-                        name_start..name_start + name.len(),
-                    )],
-                    filter_range: (0..name.len()).into(),
-                    code,
-                })
-            }
-            SymbolKind::Package | SymbolKind::Module | SymbolKind::Namespace => {
-                let keyword = "package ";
-                let code = format!("{keyword}{name};");
-
-                Some(CodeLabel {
-                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
-                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
                     code,
                 })
             }
