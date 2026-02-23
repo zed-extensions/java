@@ -60,7 +60,7 @@
                     )]
                 )
                 name: (identifier) @run @java_method_name
-                (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
+                (#match? @annotation_name "Test$")
             )
         )
     ) @_
@@ -93,7 +93,7 @@
                                 )]
                             )
                         name: (identifier) @run @java_method_name
-                        (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
+                        (#match? @annotation_name "Test$")
                     )
                 )
                 (#eq? @nested_annotation "Nested")
@@ -120,7 +120,7 @@
                         name: (identifier) @annotation_name
                     )]
                 )
-                (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
+                (#match? @annotation_name "Test$")
             )
         )
     ) @_
@@ -152,7 +152,7 @@
                                 name: (identifier) @annotation_name
                                 )]
                             )
-                        (#match? @annotation_name "^(Test|ParameterizedTest|RepeatedTest)$")
+                        (#match? @annotation_name "Test$")
                     )
                 )
                 (#eq? @nested_annotation "Nested")
