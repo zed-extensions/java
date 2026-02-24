@@ -16,7 +16,7 @@ use zed_extension_api::{
     self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition, Extension,
     LanguageServerId, LanguageServerInstallationStatus, StartDebuggingRequestArguments,
     StartDebuggingRequestArgumentsRequest, Worktree,
-    lsp::{Completion, CompletionKind},
+    lsp::{Completion, CompletionKind, Symbol, SymbolKind},
     register_extension,
     serde_json::{Value, json},
     set_language_server_installation_status,
@@ -534,6 +534,71 @@ impl Extension for Java {
             }
             _ => None,
         })
+    }
+
+    fn label_for_symbol(
+        &self,
+        _language_server_id: &LanguageServerId,
+        symbol: Symbol,
+    ) -> Option<CodeLabel> {
+        let name = &symbol.name;
+
+        match symbol.kind {
+            SymbolKind::Class | SymbolKind::Interface | SymbolKind::Enum => {
+                let keyword = match symbol.kind {
+                    SymbolKind::Class => "class ",
+                    SymbolKind::Interface => "interface ",
+                    SymbolKind::Enum => "enum ",
+                    _ => unreachable!(),
+                };
+                let code = format!("{keyword}{name} {{}}");
+
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..keyword.len() + name.len())],
+                    filter_range: (keyword.len()..keyword.len() + name.len()).into(),
+                    code,
+                })
+            }
+            SymbolKind::Method | SymbolKind::Function => {
+                // jdtls: "methodName(Type, Type) : ReturnType" or "methodName(Type)"
+                // display: "ReturnType methodName(Type, Type)" (Java declaration order)
+                let method_name = name.split('(').next().unwrap_or(name);
+                let after_name = &name[method_name.len()..];
+
+                let (params, return_type) = if let Some((p, r)) = after_name.split_once(" : ") {
+                    (p, Some(r))
+                } else {
+                    (after_name, None)
+                };
+
+                let ret = return_type.unwrap_or("void");
+                let class_open = "class _ { ";
+                let code = format!("{class_open}{ret} {method_name}() {{}} }}");
+
+                let ret_start = class_open.len();
+                let name_start = ret_start + ret.len() + 1;
+
+                // Display: "void methodName(String, int)"
+                let mut spans = vec![
+                    CodeLabelSpan::code_range(ret_start..ret_start + ret.len()),
+                    CodeLabelSpan::literal(" ".to_string(), None),
+                    CodeLabelSpan::code_range(name_start..name_start + method_name.len()),
+                ];
+                if !params.is_empty() {
+                    spans.push(CodeLabelSpan::literal(params.to_string(), None));
+                }
+
+                // filter on "methodName(params)" portion of displayed text
+                let type_prefix_len = ret.len() + 1; // "void "
+                let filter_end = type_prefix_len + method_name.len() + params.len();
+                Some(CodeLabel {
+                    spans,
+                    filter_range: (type_prefix_len..filter_end).into(),
+                    code,
+                })
+            }
+            _ => None,
+        }
     }
 }
 
