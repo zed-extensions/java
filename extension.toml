@@ -12,6 +12,10 @@ repository = "https://github.com/zed-extensions/java"
 repository = "https://github.com/tree-sitter/tree-sitter-java"
 commit = "94703d5a6bed02b98e438d7cad1136c01a60ba2c"
 
+[grammars.doxygen]
+repository = "https://github.com/da-r-k/tree-sitter-doxygen"
+commit = "4523f899192571744a9bb064c69594a157fa4a7d"
+
 [grammars.properties]
 repository = "https://github.com/tree-sitter-grammars/tree-sitter-properties"
 commit = "579b62f5ad8d96c2bb331f07d1408c92767531d9"
