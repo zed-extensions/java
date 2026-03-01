@@ -75,6 +75,32 @@ To get started with Java, click the `edit debug.json` button in the Debug menu, 
 
 You should then be able to start a new Debug Session with the "Launch Debugger" scenario from the debug menu.
 
+### Single-File Debugging
+
+If you're working a lot with single file debugging, you can use the following `debug.json` config instead:
+```jsonc
+[
+  {
+    "label": "Debug $ZED_STEM",
+    "adapter": "Java",
+    "request": "launch",
+    "mainClass": "$ZED_STEM",
+    "build": {
+      "command": "javac -d . $ZED_FILE",
+      "shell": {
+        "with_arguments": {
+          "program": "/bin/sh",
+          "args": ["-c"]
+        }
+      }
+    }
+  }
+]
+```
+This will compile and launch the debugger using the currently selected file as the entry point. 
+Ideally, we would implement a run/debug option directly in the runnables (similar to how the Rust extension does it), which would allow you to easily start a debugging session without explicitly updating the entry point.
+Note that integrating the debugger with runnables is currently limited to core languages in Zed, so this is the best workaround for now. 
+
 ## Launch Scripts (aka Tasks) in Windows
 
 This extension provides tasks for running your application and tests from within Zed via little play buttons next to tests/entry points. However, due to current limitiations of Zed's extension interface, we can not provide scripts that will work across Maven and Gradle on both Windows and Unix-compatible systems, so out of the box the launch scripts only work on Mac and Linux.
