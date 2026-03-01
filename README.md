@@ -115,7 +115,7 @@ JDTLS provides many configuration options that can be passed via the `initialize
               "protobufSupport": {
                 "enabled": true
               },
-              "javac": {
+              "groovySupport": {
                 "enabled": true
               }
             }
