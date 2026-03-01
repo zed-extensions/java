@@ -131,7 +131,7 @@ JDTLS provides many configuration options that can be passed via the `initialize
             "enabled": true
           },
           "maxConcurrentBuilds": 1,
-          "inlayhints": {
+          "inlayHints": {
             "parameterNames": {
               "enabled": "all"
             }
