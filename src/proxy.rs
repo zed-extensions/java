@@ -3,15 +3,15 @@ use std::{fs::metadata, path::PathBuf};
 use serde_json::Value;
 use zed_extension_api::{
     self as zed, DownloadedFileType, GithubReleaseOptions, LanguageServerId,
-    LanguageServerInstallationStatus, Worktree, set_language_server_installation_status,
-    serde_json,
+    LanguageServerInstallationStatus, Worktree, serde_json,
+    set_language_server_installation_status,
 };
 
 use crate::util::{mark_checked_once, remove_all_files_except, should_use_local_or_download};
 
 const PROXY_BINARY: &str = "java-lsp-proxy";
 const PROXY_INSTALL_PATH: &str = "proxy-bin";
-const GITHUB_REPO: &str = "tartarughina/java";
+const GITHUB_REPO: &str = "zed-extensions/java";
 
 fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
     let (os, arch) = zed::current_platform();
@@ -30,7 +30,10 @@ fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
     } else {
         "tar.gz"
     };
-    Ok((format!("java-lsp-proxy-{os_str}-{arch_str}.{ext}"), file_type))
+    Ok((
+        format!("java-lsp-proxy-{os_str}-{arch_str}.{ext}"),
+        file_type,
+    ))
 }
 
 fn find_latest_local() -> Option<PathBuf> {
@@ -39,7 +42,7 @@ fn find_latest_local() -> Option<PathBuf> {
         return Some(local_binary);
     }
 
-    // Check versioned downloads (e.g. proxy-bin/v1.0.0/java-lsp-proxy)
+    // Check versioned downloads (e.g. proxy-bin/v6.8.12/java-lsp-proxy)
     std::fs::read_dir(PROXY_INSTALL_PATH)
         .ok()?
         .filter_map(Result::ok)
@@ -94,13 +97,7 @@ pub fn binary_path(
                     &LanguageServerInstallationStatus::Downloading,
                 );
 
-                if zed::download_file(
-                    &asset.download_url,
-                    &version_dir,
-                    file_type,
-                )
-                .is_ok()
-                {
+                if zed::download_file(&asset.download_url, &version_dir, file_type).is_ok() {
                     let _ = zed::make_file_executable(&bin_path);
                     set_language_server_installation_status(
                         language_server_id,
@@ -115,22 +112,24 @@ pub fn binary_path(
         }
     }
 
-    // 3. Fallback: binary on $PATH
+    // 3. Fallback: local install (covers "always" mode when download fails)
+    if let Some(path) = find_latest_local() {
+        let s = path.to_string_lossy().to_string();
+        *cached = Some(s.clone());
+        return Ok(s);
+    }
+
+    // 4. Fallback: binary on $PATH
     if let Some(path) = worktree.which(PROXY_BINARY) {
         return Ok(path);
     }
 
-    // 4. Stale cache fallback
+    // 5. Stale cache fallback
     if let Some(path) = cached.as_deref() {
         if metadata(path).is_ok() {
             return Ok(path.to_string());
         }
     }
 
-    Err(format!(
-        "'{PROXY_BINARY}' not found. Either: \
-         (a) add it to $PATH, or \
-         (b) place it at <extension-dir>/{PROXY_INSTALL_PATH}/{PROXY_BINARY}. \
-         Build with: cd proxy && cargo build --release --target $(rustc -vV | grep host | awk '{{print $2}}')"
-    ))
+    Err(format!("'{PROXY_BINARY}' not found"))
 }

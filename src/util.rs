@@ -434,7 +434,7 @@ impl Serialize for ArgsStringOrList {
                     .iter()
                     .map(|s| {
                         if s.contains(' ') {
-                            format!("\"{}\"", s)
+                            format!("\"{s}\"")
                         } else {
                             s.clone()
                         }
@@ -449,7 +449,6 @@ impl Serialize for ArgsStringOrList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
 
     #[derive(Deserialize, Serialize)]
     struct ArgsWrapper {

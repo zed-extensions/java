@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    env,
-    fs,
+    env, fs,
     io::{self, BufRead, BufReader, Read, Write},
     net::TcpListener,
+    path::Path,
     process::{self, Command, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc, Arc, Mutex,
     },
     thread,
@@ -30,7 +30,12 @@ fn main() {
     let bin = &args[1];
     let child_args = &args[2..];
 
-    let proxy_id = hex_encode(env::current_dir().unwrap().to_string_lossy().trim_end_matches('/'));
+    let proxy_id = hex_encode(
+        env::current_dir()
+            .unwrap()
+            .to_string_lossy()
+            .trim_end_matches('/'),
+    );
 
     // Spawn JDTLS (use shell on Windows for .bat files)
     let mut cmd = Command::new(bin);
@@ -59,22 +64,17 @@ fn main() {
     let child_stdout = child.stdout.take().unwrap();
     let alive = Arc::new(AtomicBool::new(true));
 
-    // Pending HTTP requests: id -> sender
     let pending: Arc<Mutex<HashMap<Value, mpsc::Sender<Value>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
-    // HTTP server on random port
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
 
-    let port_file = std::path::Path::new(workdir)
-        .join("proxy")
-        .join(&proxy_id);
+    let port_file = Path::new(workdir).join("proxy").join(&proxy_id);
     fs::create_dir_all(port_file.parent().unwrap()).unwrap();
     fs::write(&port_file, port.to_string()).unwrap();
 
-    // ID generator for HTTP-originated requests
-    let id_counter = Arc::new(std::sync::atomic::AtomicU64::new(1));
+    let id_counter = Arc::new(AtomicU64::new(1));
 
     // --- Thread 1: Zed stdin -> JDTLS stdin (passthrough) ---
     let stdin_writer = Arc::clone(&child_stdin);
@@ -90,8 +90,7 @@ fn main() {
                         break;
                     }
                 }
-                Ok(None) => break,
-                Err(_) => break,
+                Ok(None) | Err(_) => break,
             }
         }
         alive_stdin.store(false, Ordering::Relaxed);
@@ -106,29 +105,29 @@ fn main() {
         while alive_out.load(Ordering::Relaxed) {
             match reader.read_message() {
                 Ok(Some(raw)) => {
-                    let parsed: Option<Value> = parse_lsp_content(&raw);
+                    let Some(mut msg) = parse_lsp_content(&raw) else {
+                        let mut w = stdout.lock();
+                        let _ = w.write_all(&raw);
+                        let _ = w.flush();
+                        continue;
+                    };
 
-                    // Check if this is a response to a pending HTTP request
-                    if let Some(ref msg) = parsed {
-                        if let Some(id) = msg.get("id") {
-                            let sender = pending_out.lock().unwrap().remove(id);
-                            if let Some(tx) = sender {
-                                let _ = tx.send(msg.clone());
-                                continue;
-                            }
+                    // Route responses to pending HTTP requests
+                    if let Some(id) = msg.get("id") {
+                        if let Some(tx) = pending_out.lock().unwrap().remove(id) {
+                            let _ = tx.send(msg);
+                            continue;
                         }
                     }
 
-                    // Modify completion responses
-                    if let Some(mut msg) = parsed {
-                        if should_sort_completions(&msg) {
-                            sort_completions_by_param_count(&mut msg);
-                            let out = encode_lsp(&msg);
-                            let mut w = stdout.lock();
-                            let _ = w.write_all(out.as_bytes());
-                            let _ = w.flush();
-                            continue;
-                        }
+                    // Sort completion responses by param count
+                    if should_sort_completions(&msg) {
+                        sort_completions_by_param_count(&mut msg);
+                        let out = encode_lsp(&msg);
+                        let mut w = stdout.lock();
+                        let _ = w.write_all(out.as_bytes());
+                        let _ = w.flush();
+                        continue;
                     }
 
                     // Passthrough
@@ -136,8 +135,7 @@ fn main() {
                     let _ = w.write_all(&raw);
                     let _ = w.flush();
                 }
-                Ok(None) => break,
-                Err(_) => break,
+                Ok(None) | Err(_) => break,
             }
         }
         alive_out.store(false, Ordering::Relaxed);
@@ -150,15 +148,11 @@ fn main() {
     let http_id_counter = Arc::clone(&id_counter);
     let http_proxy_id = proxy_id.clone();
     thread::spawn(move || {
-        listener.set_nonblocking(false).unwrap();
         for stream in listener.incoming() {
             if !http_alive.load(Ordering::Relaxed) {
                 break;
             }
-            let stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
+            let Ok(stream) = stream else { continue };
             let writer = Arc::clone(&http_writer);
             let pend = Arc::clone(&http_pending);
             let counter = Arc::clone(&http_id_counter);
@@ -171,15 +165,11 @@ fn main() {
     });
 
     // --- Thread 4: Parent process monitor ---
-    let alive_monitor = Arc::clone(&alive);
-    let child_pid = child.id();
-    spawn_parent_monitor(alive_monitor, child_pid);
+    spawn_parent_monitor(Arc::clone(&alive), child.id());
 
     // Wait for child to exit
     let _ = child.wait();
     alive.store(false, Ordering::Relaxed);
-
-    // Cleanup port file
     let _ = fs::remove_file(&port_file);
 }
 
@@ -210,14 +200,11 @@ fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
         System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE},
     };
 
-    // Get parent PID via environment or OS API
     let ppid = parent_pid_windows();
 
     thread::spawn(move || {
-        // Open a handle to the parent process
         let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, ppid) };
         if handle.is_null() {
-            // Can't monitor parent — fall back to polling
             return;
         }
 
@@ -226,11 +213,8 @@ fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
             if !alive.load(Ordering::Relaxed) {
                 break;
             }
-            // WaitForSingleObject with 0 timeout = non-blocking check
-            // Returns 0 (WAIT_OBJECT_0) if process has exited
             if unsafe { WaitForSingleObject(handle, 0) } == 0 {
                 alive.store(false, Ordering::Relaxed);
-                // taskkill /T /F kills the process tree
                 let _ = Command::new("taskkill")
                     .args(["/pid", &child_pid.to_string(), "/T", "/F"])
                     .spawn();
@@ -244,7 +228,7 @@ fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
 #[cfg(windows)]
 fn parent_pid_windows() -> u32 {
     use windows_sys::Win32::System::Threading::{
-        GetCurrentProcessId, CreateToolhelp32Snapshot, Process32First, Process32Next,
+        CreateToolhelp32Snapshot, GetCurrentProcessId, Process32First, Process32Next,
         PROCESSENTRY32, TH32CS_SNAPPROCESS,
     };
 
@@ -285,7 +269,6 @@ impl<R: Read> LspReader<R> {
 
     fn read_message(&mut self) -> io::Result<Option<Vec<u8>>> {
         let mut header_buf = Vec::new();
-
         loop {
             let mut byte = [0u8; 1];
             match self.reader.read(&mut byte) {
@@ -324,8 +307,7 @@ impl<R: Read> LspReader<R> {
 
 fn parse_lsp_content(raw: &[u8]) -> Option<Value> {
     let sep_pos = raw.windows(4).position(|w| w == HEADER_SEP)?;
-    let content = &raw[sep_pos + 4..];
-    serde_json::from_slice(content).ok()
+    serde_json::from_slice(&raw[sep_pos + 4..]).ok()
 }
 
 fn encode_lsp(value: &Value) -> String {
@@ -333,14 +315,17 @@ fn encode_lsp(value: &Value) -> String {
     format!("{CONTENT_LENGTH}: {}\r\n\r\n{json}", json.len())
 }
 
+fn encode_lsp_serializable(value: &impl Serialize) -> String {
+    let json = serde_json::to_string(value).unwrap();
+    format!("{CONTENT_LENGTH}: {}\r\n\r\n{json}", json.len())
+}
+
 // --- Completion sorting ---
 
 fn should_sort_completions(msg: &Value) -> bool {
-    if let Some(result) = msg.get("result") {
+    msg.get("result").is_some_and(|result| {
         result.get("items").is_some_and(|v| v.is_array()) || result.is_array()
-    } else {
-        false
-    }
+    })
 }
 
 fn sort_completions_by_param_count(msg: &mut Value) {
@@ -363,12 +348,8 @@ fn sort_completions_by_param_count(msg: &mut Value) {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let count = count_params(detail);
-                let prefix = format!("{count:02}");
-                let existing = item
-                    .get("sortText")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                item["sortText"] = Value::String(format!("{prefix}{existing}"));
+                let existing = item.get("sortText").and_then(|v| v.as_str()).unwrap_or("");
+                item["sortText"] = Value::String(format!("{count:02}{existing}"));
             }
         }
     }
@@ -419,7 +400,7 @@ fn handle_http(
     mut stream: std::net::TcpStream,
     writer: Arc<Mutex<impl Write>>,
     pending: Arc<Mutex<HashMap<Value, mpsc::Sender<Value>>>>,
-    counter: Arc<std::sync::atomic::AtomicU64>,
+    counter: Arc<AtomicU64>,
     proxy_id: &str,
 ) {
     let mut reader = BufReader::new(&stream);
@@ -476,7 +457,7 @@ fn handle_http(
         method: req.method,
         params: req.params,
     };
-    let encoded = encode_lsp(&serde_json::to_value(&lsp_req).unwrap());
+    let encoded = encode_lsp_serializable(&lsp_req);
     {
         let mut w = writer.lock().unwrap();
         let _ = w.write_all(encoded.as_bytes());

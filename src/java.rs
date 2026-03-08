@@ -14,9 +14,8 @@ use std::{
 };
 
 use zed_extension_api::{
-    self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition,
-    Extension, LanguageServerId,
-    LanguageServerInstallationStatus, StartDebuggingRequestArguments,
+    self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition, Extension,
+    LanguageServerId, LanguageServerInstallationStatus, StartDebuggingRequestArguments,
     StartDebuggingRequestArgumentsRequest, Worktree,
     lsp::{Completion, CompletionKind, Symbol, SymbolKind},
     register_extension,
