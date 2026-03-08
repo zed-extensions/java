@@ -3,6 +3,7 @@ mod debugger;
 mod jdk;
 mod jdtls;
 mod lsp;
+mod proxy;
 mod util;
 
 use std::{
@@ -13,8 +14,9 @@ use std::{
 };
 
 use zed_extension_api::{
-    self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition, Extension,
-    LanguageServerId, LanguageServerInstallationStatus, StartDebuggingRequestArguments,
+    self as zed, CodeLabel, CodeLabelSpan, DebugAdapterBinary, DebugTaskDefinition,
+    Extension, LanguageServerId,
+    LanguageServerInstallationStatus, StartDebuggingRequestArguments,
     StartDebuggingRequestArgumentsRequest, Worktree,
     lsp::{Completion, CompletionKind, Symbol, SymbolKind},
     register_extension,
@@ -35,13 +37,13 @@ use crate::{
     util::path_to_string,
 };
 
-const PROXY_FILE: &str = include_str!("proxy.mjs");
 const DEBUG_ADAPTER_NAME: &str = "Java";
 const LSP_INIT_ERROR: &str = "Lsp client is not initialized yet";
 
 struct Java {
     cached_binary_path: Option<PathBuf>,
     cached_lombok_path: Option<PathBuf>,
+    cached_proxy_path: Option<String>,
     integrations: Option<(LspWrapper, Debugger)>,
 }
 
@@ -151,6 +153,7 @@ impl Extension for Java {
         Self {
             cached_binary_path: None,
             cached_lombok_path: None,
+            cached_proxy_path: None,
             integrations: None,
         }
     }
@@ -289,11 +292,16 @@ impl Extension for Java {
             env.push(("JAVA_HOME".to_string(), java_home));
         }
 
-        // our proxy takes workdir, bin, argv
+        let proxy_path = proxy::binary_path(
+            &mut self.cached_proxy_path,
+            &configuration,
+            language_server_id,
+            worktree,
+        )
+        .map_err(|err| format!("Failed to get proxy binary path: {err}"))?;
+
+        // proxy takes: workdir, bin, [args...]
         let mut args = vec![
-            "--input-type=module".to_string(),
-            "-e".to_string(),
-            PROXY_FILE.to_string(),
             path_to_string(current_dir.clone())
                 .map_err(|err| format!("Failed to convert current directory to string: {err}"))?,
         ];
@@ -354,8 +362,7 @@ impl Extension for Java {
             .map_err(|err| format!("Failed to switch LSP workspace: {err}"))?;
 
         Ok(zed::Command {
-            command: zed::node_binary_path()
-                .map_err(|err| format!("Failed to get Node.js binary path: {err}"))?,
+            command: proxy_path,
             args,
             env,
         })
