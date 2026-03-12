@@ -36,8 +36,17 @@ fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
     ))
 }
 
+fn proxy_exec() -> String {
+    let (os, _arch) = zed::current_platform();
+
+    match os {
+        zed::Os::Linux | zed::Os::Mac => PROXY_BINARY.to_string(),
+        zed::Os::Windows => format!("{PROXY_BINARY}.exe"),
+    }
+}
+
 fn find_latest_local() -> Option<PathBuf> {
-    let local_binary = PathBuf::from(PROXY_INSTALL_PATH).join(PROXY_BINARY);
+    let local_binary = PathBuf::from(PROXY_INSTALL_PATH).join(proxy_exec());
     if metadata(&local_binary).is_ok_and(|m| m.is_file()) {
         return Some(local_binary);
     }
@@ -46,7 +55,7 @@ fn find_latest_local() -> Option<PathBuf> {
     std::fs::read_dir(PROXY_INSTALL_PATH)
         .ok()?
         .filter_map(Result::ok)
-        .map(|e| e.path().join(PROXY_BINARY))
+        .map(|e| e.path().join(proxy_exec()))
         .filter(|p| metadata(p).is_ok_and(|m| m.is_file()))
         .last()
 }
@@ -82,7 +91,7 @@ pub fn binary_path(
                 pre_release: false,
             },
         ) {
-            let bin_path = format!("{PROXY_INSTALL_PATH}/{}/java-lsp-proxy", release.version);
+            let bin_path = format!("{PROXY_INSTALL_PATH}/{}/{}", release.version, proxy_exec());
 
             if metadata(&bin_path).is_ok() {
                 *cached = Some(bin_path.clone());
@@ -120,7 +129,7 @@ pub fn binary_path(
     }
 
     // 4. Fallback: binary on $PATH
-    if let Some(path) = worktree.which(PROXY_BINARY) {
+    if let Some(path) = worktree.which(proxy_exec().as_str()) {
         return Ok(path);
     }
 
@@ -131,5 +140,5 @@ pub fn binary_path(
         }
     }
 
-    Err(format!("'{PROXY_BINARY}' not found"))
+    Err(format!("'{}' not found", proxy_exec()))
 }
