@@ -176,106 +176,120 @@ fn main() {
 // --- Platform-specific parent process monitoring ---
 
 #[cfg(unix)]
-fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
-    thread::spawn(move || {
-        let ppid = unsafe { libc::getppid() };
-        loop {
-            thread::sleep(Duration::from_secs(5));
-            if !alive.load(Ordering::Relaxed) {
-                break;
-            }
-            if unsafe { libc::kill(ppid, 0) } != 0 {
-                alive.store(false, Ordering::Relaxed);
-                unsafe { libc::kill(child_pid as i32, libc::SIGTERM) };
-                break;
-            }
-        }
-    });
-}
-
-#[cfg(windows)]
-fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
-    use windows_sys::Win32::{
-        Foundation::CloseHandle,
-        System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE},
+mod platform {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
     };
+    use std::thread;
+    use std::time::Duration;
 
-    let ppid = parent_pid_windows();
-
-    thread::spawn(move || {
-        let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, ppid) };
-        if handle.is_null() {
-            return;
-        }
-
-        loop {
-            thread::sleep(Duration::from_secs(5));
-            if !alive.load(Ordering::Relaxed) {
-                break;
-            }
-            if unsafe { WaitForSingleObject(handle, 0) } == 0 {
-                alive.store(false, Ordering::Relaxed);
-                let _ = Command::new("taskkill")
-                    .args(["/pid", &child_pid.to_string(), "/T", "/F"])
-                    .spawn();
-                break;
-            }
-        }
-        unsafe { CloseHandle(handle) };
-    });
-}
-
-#[cfg(windows)]
-use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
-    System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
-    },
-    System::Threading::GetCurrentProcessId,
-};
-
-#[cfg(windows)]
-struct ScopedSnapshot(HANDLE);
-#[cfg(windows)]
-impl Drop for ScopedSnapshot {
-    fn drop(&mut self) {
-        if self.0 != INVALID_HANDLE_VALUE {
-            unsafe { CloseHandle(self.0) };
-        }
-    }
-}
-#[cfg(windows)]
-pub fn parent_pid_windows() -> u32 {
-    unsafe {
-        let pid = GetCurrentProcessId();
-        let snap_handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-        if snap_handle == INVALID_HANDLE_VALUE {
-            return 0;
-        }
-
-        // Wrap the handle. It will now automatically be closed when the function ends
-        let _snap = ScopedSnapshot(snap_handle);
-
-        let mut entry: PROCESSENTRY32 = std::mem::zeroed();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
-
-        if Process32First(snap_handle, &mut entry) != 0 {
+    pub fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
+        thread::spawn(move || {
+            let ppid = unsafe { libc::getppid() };
             loop {
-                if entry.th32ProcessID == pid {
-                    // No need to manually call CloseHandle anymore!
-                    return entry.th32ParentProcessID;
+                thread::sleep(Duration::from_secs(5));
+                if !alive.load(Ordering::Relaxed) {
+                    break;
                 }
-
-                if Process32Next(snap_handle, &mut entry) == 0 {
+                if unsafe { libc::kill(ppid, 0) } != 0 {
+                    alive.store(false, Ordering::Relaxed);
+                    unsafe { libc::kill(child_pid as i32, libc::SIGTERM) };
                     break;
                 }
             }
-        }
-
-        0
+        });
     }
 }
+
+#[cfg(windows)]
+mod platform {
+    use std::process::Command;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use std::thread;
+    use std::time::Duration;
+
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
+        System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32,
+            TH32CS_SNAPPROCESS,
+        },
+        System::Threading::{
+            GetCurrentProcessId, OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+        },
+    };
+
+    struct ScopedSnapshot(HANDLE);
+
+    impl Drop for ScopedSnapshot {
+        fn drop(&mut self) {
+            if self.0 != INVALID_HANDLE_VALUE {
+                unsafe { CloseHandle(self.0) };
+            }
+        }
+    }
+
+    fn parent_pid() -> u32 {
+        unsafe {
+            let pid = GetCurrentProcessId();
+            let snap_handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+            if snap_handle == INVALID_HANDLE_VALUE {
+                return 0;
+            }
+
+            let _snap = ScopedSnapshot(snap_handle);
+
+            let mut entry: PROCESSENTRY32 = std::mem::zeroed();
+            entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
+
+            if Process32First(snap_handle, &mut entry) != 0 {
+                loop {
+                    if entry.th32ProcessID == pid {
+                        return entry.th32ParentProcessID;
+                    }
+                    if Process32Next(snap_handle, &mut entry) == 0 {
+                        break;
+                    }
+                }
+            }
+
+            0
+        }
+    }
+
+    pub fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
+        let ppid = parent_pid();
+
+        thread::spawn(move || {
+            let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, ppid) };
+            if handle.is_null() {
+                return;
+            }
+
+            loop {
+                thread::sleep(Duration::from_secs(5));
+                if !alive.load(Ordering::Relaxed) {
+                    break;
+                }
+                if unsafe { WaitForSingleObject(handle, 0) } == 0 {
+                    alive.store(false, Ordering::Relaxed);
+                    let _ = Command::new("taskkill")
+                        .args(["/pid", &child_pid.to_string(), "/T", "/F"])
+                        .spawn();
+                    break;
+                }
+            }
+            unsafe { CloseHandle(handle) };
+        });
+    }
+}
+
+use platform::spawn_parent_monitor;
 
 // --- LSP message reader ---
 
