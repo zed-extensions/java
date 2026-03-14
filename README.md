@@ -75,6 +75,32 @@ To get started with Java, click the `edit debug.json` button in the Debug menu, 
 
 You should then be able to start a new Debug Session with the "Launch Debugger" scenario from the debug menu.
 
+### Single-File Debugging
+
+If you're working a lot with single file debugging, you can use the following `debug.json` config instead:
+```jsonc
+[
+  {
+    "label": "Debug $ZED_STEM",
+    "adapter": "Java",
+    "request": "launch",
+    "mainClass": "$ZED_STEM",
+    "build": {
+      "command": "javac -d . $ZED_FILE",
+      "shell": {
+        "with_arguments": {
+          "program": "/bin/sh",
+          "args": ["-c"]
+        }
+      }
+    }
+  }
+]
+```
+This will compile and launch the debugger using the currently selected file as the entry point. 
+Ideally, we would implement a run/debug option directly in the runnables (similar to how the Rust extension does it), which would allow you to easily start a debugging session without explicitly updating the entry point.
+Note that integrating the debugger with runnables is currently limited to core languages in Zed, so this is the best workaround for now. 
+
 ## Launch Scripts (aka Tasks) in Windows
 
 This extension provides tasks for running your application and tests from within Zed via little play buttons next to tests/entry points. However, due to current limitiations of Zed's extension interface, we can not provide scripts that will work across Maven and Gradle on both Windows and Unix-compatible systems, so out of the box the launch scripts only work on Mac and Linux.
@@ -82,78 +108,132 @@ This extension provides tasks for running your application and tests from within
 There is a fairly straightforward fix that you can apply to make it work on Windows by supplying your own task scripts. Please see [this Issue](https://github.com/zed-extensions/java/issues/94) for information on how to do that and read the [Tasks section in Zeds documentation](https://zed.dev/docs/tasks) for more information.
 
 ## Advanced Configuration/JDTLS initialization Options
-JDTLS provides many configuration options that can be passed via the `initialize` LSP-request. The extension will pass the JSON-object from `lsp.jdtls.settings.initialization_options` in your settings on to JDTLS. Please refer to the [JDTLS Configuration Wiki Page](https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request) for the available options and values. Below is an example `settings.json` that would pass on the example configuration from the above wiki page to JDTLS:
+JDTLS provides many configuration options that can be passed via the `initialize` LSP-request. The extension will pass the JSON-object from `lsp.jdtls.initialization_options` in your settings on to JDTLS. Please refer to the [JDTLS Configuration Wiki Page](https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request) for the available options and values. Below is an opinionated example configuration for JDTLS with most options enabled:
 
 ```jsonc
-{
-  "lsp": {
-    "jdtls": {
+"lsp": {
+  "jdtls": {
+    "initialization_options": {
+      "bundles": [],
+      "workspaceFolders": [
+        "file:///home/snjeza/Project"
+      ],
       "settings": {
-          // this will be sent to JDTLS as initializationOptions:
-        "initialization_options": {
-          "bundles": [],
-          // use this if your zed project root folder is not the same as the java project root:
-          "workspaceFolders": ["file:///home/snjeza/Project"],
-          "settings": {
-            "java": {
-              "home": "/usr/local/jdk-9.0.1",
-              "errors": {
-                "incompleteClasspath": {
-                  "severity": "warning"
-                }
-              },
-              "configuration": {
-                "updateBuildConfiguration": "interactive",
-                "maven": {
-                  "userSettings": null
-                }
-              },
-              "import": {
-                "gradle": {
-                  "enabled": true
-                },
-                "maven": {
-                  "enabled": true
-                },
-                "exclusions": [
-                  "**/node_modules/**",
-                  "**/.metadata/**",
-                  "**/archetype-resources/**",
-                  "**/META-INF/maven/**",
-                  "/**/test/**"
-                ]
-              },
-              "referencesCodeLens": {
-                "enabled": false
-              },
-              "signatureHelp": {
-                "enabled": false
-              },
-              "implementationCodeLens": "all",
-              "format": {
+        "java": {
+          "configuration": {
+            "updateBuildConfiguration": "automatic",
+            "runtimes": []
+          },
+          "saveActions": {
+            "organizeImports": true
+          },
+          "compile": {
+            "nullAnalysis": {
+              "mode": "automatic"
+            }
+          },
+          "references": {
+            "includeAccessors": true,
+            "includeDecompiledSources": true
+          },
+          "jdt": {
+            "ls": {
+              "protobufSupport": {
                 "enabled": true
               },
-              "saveActions": {
-                "organizeImports": false
-              },
-              "contentProvider": {
-                "preferred": null
-              },
-              "autobuild": {
-                "enabled": false
-              },
-              "completion": {
-                "favoriteStaticMembers": [
-                  "org.junit.Assert.*",
-                  "org.junit.Assume.*",
-                  "org.junit.jupiter.api.Assertions.*",
-                  "org.junit.jupiter.api.Assumptions.*",
-                  "org.junit.jupiter.api.DynamicContainer.*",
-                  "org.junit.jupiter.api.DynamicTest.*"
-                ],
-                "importOrder": ["java", "javax", "com", "org"]
+              "groovySupport": {
+                "enabled": true
               }
             }
+          },
+          "eclipse": {
+            "downloadSources": true
+          },
+          "maven": {
+            "downloadSources": true,
+            "updateSnapshots": true
+          },
+          "autobuild": {
+            "enabled": true
+          },
+          "maxConcurrentBuilds": 1,
+          "inlayHints": {
+            "parameterNames": {
+              "enabled": "all"
+            }
+          },
+          "signatureHelp": {
+            "enabled": true,
+            "description": {
+              "enabled": true
+            }
+          },
+          "format": {
+            "enabled": true,
+            "settings": {
+              // The formatter config to use
+              "url": "~/.config/jdtls/palantir_java_jdtls.xml"
+            },
+            "onType": {
+              "enabled": true
+            }
+          },
+          "contentProvider": {
+            "preferred": null
+          },
+          "import": {
+            "gradle": {
+              "enabled": true,
+              "wrapper": {
+                "enabled": true
+              }
+            },
+            "maven": {
+              "enabled": true
+            },
+            "exclusions": [
+              "**/node_modules/**",
+              "**/.metadata/**",
+              "**/archetype-resources/**",
+              "**/META-INF/maven/**",
+              "/**/test/**"
+            ]
+          },
+          "completion": {
+            "enabled": true,
+            "favoriteStaticMembers": [
+              "org.junit.Assert.*",
+              "org.junit.Assume.*",
+              "org.junit.jupiter.api.Assertions.*",
+              "org.junit.jupiter.api.Assumptions.*",
+              "org.junit.jupiter.api.DynamicContainer.*",
+              "org.junit.jupiter.api.DynamicTest.*",
+              "org.mockito.Mockito.*",
+              "org.mockito.ArgumentMatchers.*"
+            ],
+            "importOrder": [
+              "java",
+              "javax",
+              "com",
+              "org"
+            ],
+            "postfix": {
+              "enabled": true
+            },
+            "chain": {
+              "enabled": true
+            },
+            "guessMethodArguments": "insertParameterNames",
+            "overwrite": true
+          },
+          "errors": {
+            "incompleteClasspath": {
+              "severity": "warning"
+            }
+          },
+          "implementationCodeLens": "all",
+          "referencesCodeLens": {
+            "enabled": true
           }
         }
       }
@@ -161,3 +241,28 @@ JDTLS provides many configuration options that can be passed via the `initialize
   }
 }
 ```
+
+If you're working without a Gradle or Maven project, and the following error `The declared package "Example" does not match the expected package ""` pops up, consider adding these settings under
+
+```
+MyProject/
+ ├── .zed/
+ │   └── settings.json
+ ```
+ 
+```jsonc
+"lsp": {
+  "jdtls": {
+    "initialization_options": {
+      "project": {
+        "sourcePaths": [
+          ".",
+          "src"
+        ]
+      },
+    }
+  }
+}
+```
+
+If changes are not picked up, clean JDTLS' cache (from a java file run the task `Clear JDTLS cache`) and restart the language server
