@@ -83,8 +83,8 @@ pub fn binary_path(
     }
 
     // 2. Auto-download from GitHub releases
-    if let Ok((name, file_type)) = asset_name() {
-        if let Ok(release) = zed::latest_github_release(
+    if let Ok((name, file_type)) = asset_name()
+        && let Ok(release) = zed::latest_github_release(
             GITHUB_REPO,
             GithubReleaseOptions {
                 require_assets: true,
@@ -118,7 +118,6 @@ pub fn binary_path(
                     return Ok(bin_path);
                 }
             }
-        }
     }
 
     // 3. Fallback: local install (covers "always" mode when download fails)
@@ -134,10 +133,9 @@ pub fn binary_path(
     }
 
     // 5. Stale cache fallback
-    if let Some(path) = cached.as_deref() {
-        if metadata(path).is_ok() {
+    if let Some(path) = cached.as_deref()
+        && metadata(path).is_ok() {
             return Ok(path.to_string());
-        }
     }
 
     Err(format!("'{}' not found", proxy_exec()))
