@@ -226,32 +226,53 @@ fn spawn_parent_monitor(alive: Arc<AtomicBool>, child_pid: u32) {
 }
 
 #[cfg(windows)]
-fn parent_pid_windows() -> u32 {
-    use windows_sys::Win32::System::Threading::{
-        CreateToolhelp32Snapshot, GetCurrentProcessId, Process32First, Process32Next,
-        PROCESSENTRY32, TH32CS_SNAPPROCESS,
-    };
+use windows_sys::Win32::{
+    Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
+    System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
+    },
+    System::Threading::GetCurrentProcessId,
+};
 
+#[cfg(windows)]
+struct ScopedSnapshot(HANDLE);
+#[cfg(windows)]
+impl Drop for ScopedSnapshot {
+    fn drop(&mut self) {
+        if self.0 != INVALID_HANDLE_VALUE {
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+}
+#[cfg(windows)]
+pub fn parent_pid_windows() -> u32 {
     unsafe {
         let pid = GetCurrentProcessId();
-        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snap.is_null() {
+        let snap_handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+        if snap_handle == INVALID_HANDLE_VALUE {
             return 0;
         }
+
+        // Wrap the handle. It will now automatically be closed when the function ends
+        let _snap = ScopedSnapshot(snap_handle);
+
         let mut entry: PROCESSENTRY32 = std::mem::zeroed();
         entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
-        if Process32First(snap, &mut entry) != 0 {
+
+        if Process32First(snap_handle, &mut entry) != 0 {
             loop {
                 if entry.th32ProcessID == pid {
-                    CloseHandle(snap);
+                    // No need to manually call CloseHandle anymore!
                     return entry.th32ParentProcessID;
                 }
-                if Process32Next(snap, &mut entry) == 0 {
+
+                if Process32Next(snap_handle, &mut entry) == 0 {
                     break;
                 }
             }
         }
-        CloseHandle(snap);
+
         0
     }
 }
