@@ -90,34 +90,35 @@ pub fn binary_path(
                 require_assets: true,
                 pre_release: false,
             },
-        ) {
-            let bin_path = format!("{PROXY_INSTALL_PATH}/{}/{}", release.version, proxy_exec());
+        )
+    {
+        let bin_path = format!("{PROXY_INSTALL_PATH}/{}/{}", release.version, proxy_exec());
 
-            if metadata(&bin_path).is_ok() {
+        if metadata(&bin_path).is_ok() {
+            *cached = Some(bin_path.clone());
+            return Ok(bin_path);
+        }
+
+        if let Some(asset) = release.assets.iter().find(|a| a.name == name) {
+            let version_dir = format!("{PROXY_INSTALL_PATH}/{}", release.version);
+
+            set_language_server_installation_status(
+                language_server_id,
+                &LanguageServerInstallationStatus::Downloading,
+            );
+
+            if zed::download_file(&asset.download_url, &version_dir, file_type).is_ok() {
+                let _ = zed::make_file_executable(&bin_path);
+                set_language_server_installation_status(
+                    language_server_id,
+                    &LanguageServerInstallationStatus::None,
+                );
+                let _ = remove_all_files_except(PROXY_INSTALL_PATH, &release.version);
+                let _ = mark_checked_once(PROXY_INSTALL_PATH, &release.version);
                 *cached = Some(bin_path.clone());
                 return Ok(bin_path);
             }
-
-            if let Some(asset) = release.assets.iter().find(|a| a.name == name) {
-                let version_dir = format!("{PROXY_INSTALL_PATH}/{}", release.version);
-
-                set_language_server_installation_status(
-                    language_server_id,
-                    &LanguageServerInstallationStatus::Downloading,
-                );
-
-                if zed::download_file(&asset.download_url, &version_dir, file_type).is_ok() {
-                    let _ = zed::make_file_executable(&bin_path);
-                    set_language_server_installation_status(
-                        language_server_id,
-                        &LanguageServerInstallationStatus::None,
-                    );
-                    let _ = remove_all_files_except(PROXY_INSTALL_PATH, &release.version);
-                    let _ = mark_checked_once(PROXY_INSTALL_PATH, &release.version);
-                    *cached = Some(bin_path.clone());
-                    return Ok(bin_path);
-                }
-            }
+        }
     }
 
     // 3. Fallback: local install (covers "always" mode when download fails)
@@ -134,8 +135,9 @@ pub fn binary_path(
 
     // 5. Stale cache fallback
     if let Some(path) = cached.as_deref()
-        && metadata(path).is_ok() {
-            return Ok(path.to_string());
+        && metadata(path).is_ok()
+    {
+        return Ok(path.to_string());
     }
 
     Err(format!("'{}' not found", proxy_exec()))

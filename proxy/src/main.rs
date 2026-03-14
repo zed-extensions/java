@@ -11,9 +11,8 @@ use std::{
     path::Path,
     process::{self, Command, Stdio},
     sync::{
-        Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc,
+        mpsc, Arc, Mutex,
     },
     thread,
     time::Duration,
