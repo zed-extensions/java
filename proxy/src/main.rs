@@ -1,3 +1,4 @@
+mod log;
 mod platform;
 
 use platform::spawn_parent_monitor;
@@ -25,13 +26,15 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() < 2 {
-        eprintln!("Usage: java-lsp-proxy <workdir> <bin> [args...]");
+        lsp_error!("Usage: java-lsp-proxy <workdir> <bin> [args...]");
         process::exit(1);
     }
 
     let workdir = &args[0];
     let bin = &args[1];
     let child_args = &args[2..];
+
+    lsp_info!("java-lsp-proxy starting: bin={bin}, workdir={workdir}");
 
     let proxy_id = hex_encode(
         env::current_dir()
@@ -59,9 +62,11 @@ fn main() {
     }
 
     let mut child = cmd.spawn().unwrap_or_else(|e| {
-        eprintln!("Failed to spawn {bin}: {e}");
+        lsp_error!("Failed to spawn {bin}: {e}");
         process::exit(1);
     });
+
+    lsp_info!("JDTLS process spawned (pid={})", child.id());
 
     let child_stdin = Arc::new(Mutex::new(child.stdin.take().unwrap()));
     let child_stdout = child.stdout.take().unwrap();
@@ -76,6 +81,8 @@ fn main() {
     let port_file = Path::new(workdir).join("proxy").join(&proxy_id);
     fs::create_dir_all(port_file.parent().unwrap()).unwrap();
     fs::write(&port_file, port.to_string()).unwrap();
+
+    lsp_info!("HTTP server listening on 127.0.0.1:{port}");
 
     let id_counter = Arc::new(AtomicU64::new(1));
 
@@ -171,7 +178,8 @@ fn main() {
     spawn_parent_monitor(Arc::clone(&alive), child.id());
 
     // Wait for child to exit
-    let _ = child.wait();
+    let status = child.wait();
+    lsp_info!("JDTLS process exited: {status:?}");
     alive.store(false, Ordering::Relaxed);
     let _ = fs::remove_file(&port_file);
 }
@@ -230,12 +238,7 @@ fn parse_lsp_content(raw: &[u8]) -> Option<Value> {
     serde_json::from_slice(&raw[sep_pos + 4..]).ok()
 }
 
-fn encode_lsp(value: &Value) -> String {
-    let json = serde_json::to_string(value).unwrap();
-    format!("{CONTENT_LENGTH}: {}\r\n\r\n{json}", json.len())
-}
-
-fn encode_lsp_serializable(value: &impl Serialize) -> String {
+fn encode_lsp(value: &impl Serialize) -> String {
     let json = serde_json::to_string(value).unwrap();
     format!("{CONTENT_LENGTH}: {}\r\n\r\n{json}", json.len())
 }
@@ -377,7 +380,7 @@ fn handle_http(
         method: req.method,
         params: req.params,
     };
-    let encoded = encode_lsp_serializable(&lsp_req);
+    let encoded = encode_lsp(&lsp_req);
     {
         let mut w = writer.lock().unwrap();
         let _ = w.write_all(encoded.as_bytes());
