@@ -26,6 +26,7 @@ use std::{
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() < 2 {
+        eprintln!("Usage: java-lsp-proxy <workdir> <bin> [args...]");
         lsp_error!("Usage: java-lsp-proxy <workdir> <bin> [args...]");
         process::exit(1);
     }
@@ -62,6 +63,7 @@ fn main() {
     }
 
     let mut child = cmd.spawn().unwrap_or_else(|e| {
+        eprintln!("Failed to spawn {bin}: {e}");
         lsp_error!("Failed to spawn {bin}: {e}");
         process::exit(1);
     });
