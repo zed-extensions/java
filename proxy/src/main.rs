@@ -84,13 +84,6 @@ fn main() {
 
     lsp_info!("HTTP server listening on 127.0.0.1:{port}");
 
-    // TODO: Remove after verifying Zed Server Logs displays all levels correctly
-    lsp_error!("[TEST] This is an error message (level 1)");
-    lsp_warn!("[TEST] This is a warning message (level 2)");
-    lsp_info!("[TEST] This is an info message (level 3)");
-    lsp_log!("[TEST] This is a log message (level 4)");
-    lsp_debug!("[TEST] This is a debug message (level 5)");
-
     let id_counter = Arc::new(AtomicU64::new(1));
 
     // --- Thread 1: Zed stdin -> JDTLS stdin (passthrough) ---
