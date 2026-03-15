@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::io::{self, Write};
 
-use crate::CONTENT_LENGTH;
+use crate::lsp::encode_lsp;
 
 /// LSP `MessageType` constants as defined in the specification.
 /// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#messageType
@@ -42,14 +42,11 @@ fn send_log_message(level: u8, message: &str) {
         },
     };
 
-    let json = match serde_json::to_string(&notification) {
-        Ok(json) => json,
-        Err(_) => return,
-    };
+    let encoded = encode_lsp(&notification);
 
     let stdout = io::stdout();
     let mut w = stdout.lock();
-    let _ = write!(w, "{CONTENT_LENGTH}: {}\r\n\r\n{json}", json.len());
+    let _ = w.write_all(encoded.as_bytes());
     let _ = w.flush();
 }
 
