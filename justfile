@@ -13,7 +13,7 @@ proxy-release:
 # Build proxy release and install to extension workdir for testing
 proxy-install: proxy-release
     mkdir -p "{{ ext_dir }}/proxy-bin"
-    cp "proxy/target/{{ native_target }}/release/java-lsp-proxy" "{{ proxy_bin }}"
+    cp "target/{{ native_target }}/release/java-lsp-proxy" "{{ proxy_bin }}"
     @echo "Installed to {{ proxy_bin }}"
 
 # Build WASM extension in release mode
@@ -23,7 +23,6 @@ ext-build:
 # Format all code
 fmt:
     cargo fmt --all
-    cd proxy && cargo fmt --all
 
 # Run clippy on both crates
 clippy:

@@ -1,3 +1,8 @@
+[workspace]
+members = [
+    ".",
+    "proxy"
+]
 
 [package]
 name = "zed_java"
