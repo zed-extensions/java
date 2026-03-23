@@ -4,12 +4,14 @@
 
 (value) @string
 
-(value (escape) @string.escape)
+(value
+  (escape) @string.escape)
 
 ((index) @number
   (#match? @number "^[0-9]+$"))
 
-((substitution (key) @constant)
+((substitution
+  (key) @constant)
   (#match? @constant "^[A-Z0-9_]+"))
 
 (substitution
@@ -17,12 +19,26 @@
   "::" @punctuation.special
   (secret) @embedded)
 
-(property [ "=" ":" ] @operator)
+(property
+  [
+    "="
+    ":"
+  ] @operator)
 
-[ "${" "}" ] @punctuation.special
+[
+  "${"
+  "}"
+] @punctuation.special
 
-(substitution ":" @punctuation.special)
+(substitution
+  ":" @punctuation.special)
 
-[ "[" "]" ] @punctuation.bracket
+[
+  "["
+  "]"
+] @punctuation.bracket
 
-[ "." "\\" ] @punctuation.delimiter
+[
+  "."
+  "\\"
+] @punctuation.delimiter

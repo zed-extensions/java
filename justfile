@@ -23,11 +23,15 @@ ext-build:
 # Format all code
 fmt:
     cargo fmt --all
+    ts_query_ls format languages
 
 # Run clippy on both crates
 clippy:
     cargo clippy --all-targets --fix --allow-dirty
     cd proxy && cargo clippy --all-targets --fix --allow-dirty --target {{ native_target }}
 
-# Build everything: fmt, clippy, extension, proxy install
-all: fmt clippy ext-build proxy-install
+# Format and lint all code
+lint: fmt clippy
+
+# Build everything: lint, extension, proxy install
+all: lint ext-build proxy-install
