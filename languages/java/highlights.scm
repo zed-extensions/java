@@ -117,9 +117,8 @@
 
 ; Fields
 (field_declaration
-  declarator:
-    (variable_declarator
-      name: (identifier) @property))
+  declarator: (variable_declarator
+    name: (identifier) @property))
 
 (field_access
   field: (identifier) @property)
