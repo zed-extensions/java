@@ -16,16 +16,16 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-15
             asset_name: java-lsp-proxy-darwin-aarch64.tar.gz
           - target: x86_64-apple-darwin
             runner: macos-15-intel
             asset_name: java-lsp-proxy-darwin-x86_64.tar.gz
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             asset_name: java-lsp-proxy-linux-x86_64.tar.gz
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-22.04-arm
             asset_name: java-lsp-proxy-linux-aarch64.tar.gz
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -62,7 +62,7 @@ jobs:
           Compress-Archive -Path target/${{ matrix.target }}/release/java-lsp-proxy.exe -DestinationPath ${{ matrix.asset_name }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset_name }}
           path: ${{ matrix.asset_name }}
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
