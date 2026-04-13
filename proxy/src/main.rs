@@ -1,16 +1,18 @@
 mod completions;
+mod decompile;
 mod http;
 mod log;
 mod lsp;
 mod platform;
 
 use completions::{should_sort_completions, sort_completions_by_param_count};
+use decompile::rewrite_jdt_locations;
 use http::handle_http;
 use lsp::{encode_lsp, parse_lsp_content, LspReader};
 use platform::spawn_parent_monitor;
 use serde_json::Value;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env, fs,
     io::{self, BufReader, Write},
     net::TcpListener,
@@ -88,15 +90,34 @@ fn main() {
 
     let id_counter = Arc::new(AtomicU64::new(1));
 
-    // --- Thread 1: Zed stdin -> JDTLS stdin (passthrough) ---
+    // Track definition/typeDefinition/implementation request IDs for jdt:// rewriting
+    let definition_ids: Arc<Mutex<HashSet<Value>>> = Arc::new(Mutex::new(HashSet::new()));
+
+    // --- Thread 1: Zed stdin -> JDTLS stdin (track definition requests) ---
     let stdin_writer = Arc::clone(&child_stdin);
     let alive_stdin = Arc::clone(&alive);
+    let def_ids_in = Arc::clone(&definition_ids);
     thread::spawn(move || {
         let stdin = io::stdin().lock();
         let mut reader = LspReader::new(stdin);
         while alive_stdin.load(Ordering::Relaxed) {
             match reader.read_message() {
                 Ok(Some(raw)) => {
+                    if let Some(msg) = parse_lsp_content(&raw) {
+                        if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
+                            if matches!(
+                                method,
+                                "textDocument/definition"
+                                    | "textDocument/typeDefinition"
+                                    | "textDocument/implementation"
+                            ) {
+                                if let Some(id) = msg.get("id").cloned() {
+                                    lsp_info!("[decompile] Tracking {method} request id={id}");
+                                    def_ids_in.lock().unwrap().insert(id);
+                                }
+                            }
+                        }
+                    }
                     let mut w = stdin_writer.lock().unwrap();
                     if w.write_all(&raw).is_err() || w.flush().is_err() {
                         break;
@@ -108,9 +129,14 @@ fn main() {
         alive_stdin.store(false, Ordering::Relaxed);
     });
 
-    // --- Thread 2: JDTLS stdout -> modify completions -> Zed stdout / resolve pending ---
+    // --- Thread 2: JDTLS stdout -> rewrite jdt:// URIs, modify completions -> Zed stdout / resolve pending ---
     let pending_out = Arc::clone(&pending);
     let alive_out = Arc::clone(&alive);
+    let def_ids_out = Arc::clone(&definition_ids);
+    let decompile_writer = Arc::clone(&child_stdin);
+    let decompile_pending = Arc::clone(&pending);
+    let decompile_counter = Arc::clone(&id_counter);
+    let decompile_proxy_id = proxy_id.clone();
     thread::spawn(move || {
         let mut reader = LspReader::new(BufReader::new(child_stdout));
         let stdout = io::stdout();
@@ -128,6 +154,37 @@ fn main() {
                     if let Some(id) = msg.get("id") {
                         if let Some(tx) = pending_out.lock().unwrap().remove(id) {
                             let _ = tx.send(msg);
+                            continue;
+                        }
+                    }
+
+                    // Rewrite jdt:// URIs in definition responses
+                    // Spawns a thread so this loop stays unblocked and can
+                    // route the java/classFileContents response back via `pending`.
+                    if let Some(id) = msg.get("id").cloned() {
+                        if def_ids_out.lock().unwrap().remove(&id) {
+                            lsp_info!("[decompile] Intercepted response id={id}, result: {}", 
+                                serde_json::to_string(msg.get("result").unwrap_or(&Value::Null)).unwrap_or_default());
+                            let writer = Arc::clone(&decompile_writer);
+                            let pending = Arc::clone(&decompile_pending);
+                            let pid = decompile_proxy_id.clone();
+                            let counter = Arc::clone(&decompile_counter);
+                            thread::spawn(move || {
+                                let mut next_id = move || {
+                                    let seq = counter.fetch_add(1, Ordering::Relaxed);
+                                    Value::String(format!("{pid}-decompile-{seq}"))
+                                };
+                                rewrite_jdt_locations(
+                                    &mut msg,
+                                    &writer,
+                                    &pending,
+                                    &mut next_id,
+                                );
+                                let out = encode_lsp(&msg);
+                                let mut w = io::stdout().lock();
+                                let _ = w.write_all(out.as_bytes());
+                                let _ = w.flush();
+                            });
                             continue;
                         }
                     }
