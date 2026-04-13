@@ -8,7 +8,7 @@ mod platform;
 use completions::{should_sort_completions, sort_completions_by_param_count};
 use decompile::rewrite_jdt_locations;
 use http::handle_http;
-use lsp::{encode_lsp, parse_lsp_content, LspReader};
+use lsp::{parse_lsp_content, write_raw, write_to_stdout, LspReader};
 use platform::spawn_parent_monitor;
 use serde_json::Value;
 use std::{
@@ -138,14 +138,11 @@ fn main() {
     let decompile_proxy_id = proxy_id.clone();
     thread::spawn(move || {
         let mut reader = LspReader::new(BufReader::new(child_stdout));
-        let stdout = io::stdout();
         while alive_out.load(Ordering::Relaxed) {
             match reader.read_message() {
                 Ok(Some(raw)) => {
                     let Some(mut msg) = parse_lsp_content(&raw) else {
-                        let mut w = stdout.lock();
-                        let _ = w.write_all(&raw);
-                        let _ = w.flush();
+                        write_raw(&mut io::stdout().lock(), &raw);
                         continue;
                     };
 
@@ -171,16 +168,8 @@ fn main() {
                                     let seq = counter.fetch_add(1, Ordering::Relaxed);
                                     Value::String(format!("{pid}-decompile-{seq}"))
                                 };
-                                rewrite_jdt_locations(
-                                    &mut msg,
-                                    &writer,
-                                    &pending,
-                                    &mut next_id,
-                                );
-                                let out = encode_lsp(&msg);
-                                let mut w = io::stdout().lock();
-                                let _ = w.write_all(out.as_bytes());
-                                let _ = w.flush();
+                                rewrite_jdt_locations(&mut msg, &writer, &pending, &mut next_id);
+                                write_to_stdout(&msg);
                             });
                             continue;
                         }
@@ -189,17 +178,12 @@ fn main() {
                     // Sort completion responses by param count
                     if should_sort_completions(&msg) {
                         sort_completions_by_param_count(&mut msg);
-                        let out = encode_lsp(&msg);
-                        let mut w = stdout.lock();
-                        let _ = w.write_all(out.as_bytes());
-                        let _ = w.flush();
+                        write_to_stdout(&msg);
                         continue;
                     }
 
                     // Passthrough
-                    let mut w = stdout.lock();
-                    let _ = w.write_all(&raw);
-                    let _ = w.flush();
+                    write_raw(&mut io::stdout().lock(), &raw);
                 }
                 Ok(None) | Err(_) => break,
             }

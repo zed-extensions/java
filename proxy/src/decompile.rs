@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use std::{
-    collections::{HashMap, hash_map::DefaultHasher},
+    collections::{hash_map::DefaultHasher, HashMap},
     env, fs,
     hash::{Hash, Hasher},
     io::Write,

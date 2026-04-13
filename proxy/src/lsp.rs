@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 
 pub const CONTENT_LENGTH: &str = "Content-Length";
 pub const HEADER_SEP: &[u8] = b"\r\n\r\n";
@@ -57,4 +57,18 @@ pub fn parse_lsp_content(raw: &[u8]) -> Option<serde_json::Value> {
 pub fn encode_lsp(value: &impl Serialize) -> String {
     let json = serde_json::to_string(value).unwrap();
     format!("{CONTENT_LENGTH}: {}\r\n\r\n{json}", json.len())
+}
+
+/// Write raw LSP bytes to a writer, flushing afterward.
+pub fn write_raw(w: &mut impl Write, raw: &[u8]) {
+    let _ = w.write_all(raw);
+    let _ = w.flush();
+}
+
+/// Encode a value as an LSP message and write it to stdout.
+pub fn write_to_stdout(value: &impl Serialize) {
+    let out = encode_lsp(value);
+    let mut w = io::stdout().lock();
+    let _ = w.write_all(out.as_bytes());
+    let _ = w.flush();
 }
