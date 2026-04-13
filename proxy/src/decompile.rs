@@ -8,7 +8,7 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use crate::{lsp::encode_lsp, lsp_error, lsp_info, lsp_warn};
+use crate::{lsp::encode_lsp, lsp_error, lsp_warn};
 
 const DECOMPILED_DIR: &str = "jdtls-decompiled";
 
@@ -20,10 +20,20 @@ fn cache_path(uri: &str) -> PathBuf {
     let mut hasher = DefaultHasher::new();
     uri.hash(&mut hasher);
     let hex = format!("{:016x}", hasher.finish());
+
+    // jdt://contents/java.base/java.util/ArrayList.java?=.../%3Cjava.util%28ArrayList.class
+    // The class name is between the last %28 (URL-encoded '(') and .class at the end
     let name = uri
-        .rsplit('/')
-        .find_map(|seg| seg.strip_suffix(".java?").or(seg.strip_suffix(".class?")))
+        .rsplit_once("%28")
+        .and_then(|(_, rest)| rest.strip_suffix(".class"))
+        .or_else(|| {
+            uri.split('?')
+                .next()
+                .and_then(|path| path.rsplit('/').next())
+                .and_then(|seg| seg.strip_suffix(".java").or(seg.strip_suffix(".class")))
+        })
         .unwrap_or("Decompiled");
+
     cache_dir().join(format!("{name}-{hex}.java"))
 }
 
@@ -55,7 +65,7 @@ fn fetch_class_contents(
             Some(content.to_string())
         }
         Err(_) => {
-            lsp_warn!("[decompile] Timed out waiting for java/classFileContents response");
+            lsp_warn!("[decompile] Timed out fetching class contents for {uri}");
             None
         }
     }
@@ -69,21 +79,18 @@ fn resolve_jdt_uri(
 ) -> Option<String> {
     let path = cache_path(uri);
     if path.exists() {
-        lsp_info!("[decompile] Cache hit: {}", path.display());
         return Some(format!("file://{}", path.display()));
     }
 
-    lsp_info!("[decompile] Cache miss, fetching: {uri}");
     let content = fetch_class_contents(uri, writer, pending, request_id)?;
     let _ = fs::create_dir_all(cache_dir());
     match fs::write(&path, &content) {
-        Ok(_) => lsp_info!("[decompile] Wrote {} bytes to {}", content.len(), path.display()),
+        Ok(_) => Some(format!("file://{}", path.display())),
         Err(e) => {
             lsp_error!("[decompile] Failed to write {}: {e}", path.display());
-            return None;
+            None
         }
     }
-    Some(format!("file://{}", path.display()))
 }
 
 /// Rewrite any `jdt://` URIs in a definition/typeDefinition/implementation response.

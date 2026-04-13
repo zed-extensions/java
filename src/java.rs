@@ -380,21 +380,36 @@ impl Extension for Java {
                 })?;
         }
 
-        let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+        let mut options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
             .map(|lsp_settings| lsp_settings.initialization_options)
-            .map_err(|err| format!("Failed to get LSP settings for worktree: {err}"))?;
+            .map_err(|err| format!("Failed to get LSP settings for worktree: {err}"))?
+            .unwrap_or_else(|| json!({}));
+
+        // Inject extendedClientCapabilities defaults if not already set by the user
+        let caps = options
+            .as_object_mut()
+            .unwrap()
+            .entry("extendedClientCapabilities")
+            .or_insert_with(|| json!({}));
+        let caps_obj = caps.as_object_mut().unwrap();
+        caps_obj
+            .entry("classFileContentsSupport")
+            .or_insert(json!(true));
+        caps_obj
+            .entry("resolveAdditionalTextEditsSupport")
+            .or_insert(json!(true));
 
         if self.debugger().is_ok_and(|v| v.loaded()) {
             return Ok(Some(
                 self.debugger()?
-                    .inject_plugin_into_options(options)
+                    .inject_plugin_into_options(Some(options))
                     .map_err(|err| {
                         format!("Failed to inject debugger plugin into options: {err}")
                     })?,
             ));
         }
 
-        Ok(options)
+        Ok(Some(options))
     }
 
     fn language_server_workspace_configuration(

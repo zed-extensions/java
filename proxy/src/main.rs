@@ -112,7 +112,6 @@ fn main() {
                                     | "textDocument/implementation"
                             ) {
                                 if let Some(id) = msg.get("id").cloned() {
-                                    lsp_info!("[decompile] Tracking {method} request id={id}");
                                     def_ids_in.lock().unwrap().insert(id);
                                 }
                             }
@@ -163,8 +162,6 @@ fn main() {
                     // route the java/classFileContents response back via `pending`.
                     if let Some(id) = msg.get("id").cloned() {
                         if def_ids_out.lock().unwrap().remove(&id) {
-                            lsp_info!("[decompile] Intercepted response id={id}, result: {}", 
-                                serde_json::to_string(msg.get("result").unwrap_or(&Value::Null)).unwrap_or_default());
                             let writer = Arc::clone(&decompile_writer);
                             let pending = Arc::clone(&decompile_pending);
                             let pid = decompile_proxy_id.clone();
