@@ -4,13 +4,31 @@ use std::{
     env, fs,
     hash::{Hash, Hasher},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{mpsc, Arc, Mutex},
 };
 
 use crate::{lsp::encode_lsp, lsp_error, lsp_warn};
 
 const DECOMPILED_DIR: &str = "jdtls-decompiled";
+
+/// Convert a `PathBuf` to a proper `file://` URI.
+///
+/// On Unix the path already starts with `/`, so `file://` + path gives us
+/// the correct `file:///…` form with no extra work.
+///
+/// On Windows we must replace `\` with `/` and prepend `file:///` before the
+/// drive letter so that we get `file:///C:/…` instead of `file://C:\…`.
+#[cfg(unix)]
+fn path_to_file_uri(path: &Path) -> String {
+    format!("file://{}", path.display())
+}
+
+#[cfg(windows)]
+fn path_to_file_uri(path: &Path) -> String {
+    let s = path.display().to_string().replace('\\', "/");
+    format!("file:///{s}")
+}
 
 fn cache_dir() -> PathBuf {
     env::temp_dir().join(DECOMPILED_DIR)
@@ -79,13 +97,13 @@ fn resolve_jdt_uri(
 ) -> Option<String> {
     let path = cache_path(uri);
     if path.exists() {
-        return Some(format!("file://{}", path.display()));
+        return Some(path_to_file_uri(&path));
     }
 
     let content = fetch_class_contents(uri, writer, pending, request_id)?;
     let _ = fs::create_dir_all(cache_dir());
     match fs::write(&path, &content) {
-        Ok(_) => Some(format!("file://{}", path.display())),
+        Ok(_) => Some(path_to_file_uri(&path)),
         Err(e) => {
             lsp_error!("[decompile] Failed to write {}: {e}", path.display());
             None
