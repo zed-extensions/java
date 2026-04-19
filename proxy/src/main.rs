@@ -6,13 +6,13 @@ mod lsp;
 mod platform;
 
 use completions::{should_sort_completions, sort_completions_by_param_count};
-use decompile::rewrite_jdt_locations;
+use decompile::{rewrite_jdt_in_strings, rewrite_jdt_locations};
 use http::handle_http;
-use lsp::{parse_lsp_content, write_raw, write_to_stdout, LspReader};
+use lsp::{parse_lsp_content, raw_has_id, write_raw, write_to_stdout, LspReader};
 use platform::spawn_parent_monitor;
 use serde_json::Value;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     env, fs,
     io::{self, BufReader, Write},
     net::TcpListener,
@@ -24,6 +24,12 @@ use std::{
     },
     thread,
 };
+
+#[derive(Clone, Copy)]
+enum TrackedKind {
+    Definition,
+    Doc,
+}
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -90,29 +96,41 @@ fn main() {
 
     let id_counter = Arc::new(AtomicU64::new(1));
 
-    // Track definition/typeDefinition/implementation request IDs for jdt:// rewriting
-    let definition_ids: Arc<Mutex<HashSet<Value>>> = Arc::new(Mutex::new(HashSet::new()));
+    // Track definition/typeDefinition/implementation and documentation request IDs
+    // so their responses can be intercepted and rewritten.
+    let tracked_ids: Arc<Mutex<HashMap<Value, TrackedKind>>> = Arc::new(Mutex::new(HashMap::new()));
 
     // --- Thread 1: Zed stdin -> JDTLS stdin (track definition requests) ---
     let stdin_writer = Arc::clone(&child_stdin);
     let alive_stdin = Arc::clone(&alive);
-    let def_ids_in = Arc::clone(&definition_ids);
+    let tracked_in = Arc::clone(&tracked_ids);
     thread::spawn(move || {
         let stdin = io::stdin().lock();
-        let mut reader = LspReader::new(stdin);
+        let mut reader = LspReader::new(BufReader::new(stdin));
         while alive_stdin.load(Ordering::Relaxed) {
             match reader.read_message() {
                 Ok(Some(raw)) => {
-                    if let Some(msg) = parse_lsp_content(&raw) {
-                        if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
-                            if matches!(
-                                method,
-                                "textDocument/definition"
+                    // Only requests (not notifications) carry an `id`; skip the
+                    // JSON parse entirely for high-volume notifications like
+                    // textDocument/didChange.
+                    if raw_has_id(&raw) {
+                        if let Some(msg) = parse_lsp_content(&raw) {
+                            if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
+                                let kind = match method {
+                                    "textDocument/definition"
                                     | "textDocument/typeDefinition"
-                                    | "textDocument/implementation"
-                            ) {
-                                if let Some(id) = msg.get("id").cloned() {
-                                    def_ids_in.lock().unwrap().insert(id);
+                                    | "textDocument/implementation" => {
+                                        Some(TrackedKind::Definition)
+                                    }
+                                    "textDocument/hover"
+                                    | "textDocument/signatureHelp"
+                                    | "completionItem/resolve" => Some(TrackedKind::Doc),
+                                    _ => None,
+                                };
+                                if let Some(kind) = kind {
+                                    if let Some(id) = msg.get("id").cloned() {
+                                        tracked_in.lock().unwrap().insert(id, kind);
+                                    }
                                 }
                             }
                         }
@@ -131,7 +149,7 @@ fn main() {
     // --- Thread 2: JDTLS stdout -> rewrite jdt:// URIs, modify completions -> Zed stdout / resolve pending ---
     let pending_out = Arc::clone(&pending);
     let alive_out = Arc::clone(&alive);
-    let def_ids_out = Arc::clone(&definition_ids);
+    let tracked_out = Arc::clone(&tracked_ids);
     let decompile_writer = Arc::clone(&child_stdin);
     let decompile_pending = Arc::clone(&pending);
     let decompile_counter = Arc::clone(&id_counter);
@@ -141,6 +159,13 @@ fn main() {
         while alive_out.load(Ordering::Relaxed) {
             match reader.read_message() {
                 Ok(Some(raw)) => {
+                    // Fast path: notifications (no `id`) can't be responses we
+                    // need to intercept. Forward the raw bytes without parsing.
+                    if !raw_has_id(&raw) {
+                        write_raw(&mut io::stdout().lock(), &raw);
+                        continue;
+                    }
+
                     let Some(mut msg) = parse_lsp_content(&raw) else {
                         write_raw(&mut io::stdout().lock(), &raw);
                         continue;
@@ -154,11 +179,11 @@ fn main() {
                         }
                     }
 
-                    // Rewrite jdt:// URIs in definition responses
-                    // Spawns a thread so this loop stays unblocked and can
-                    // route the java/classFileContents response back via `pending`.
+                    // Rewrite jdt:// URIs in definition or documentation responses.
+                    // Spawns a thread so this loop stays unblocked and can route
+                    // the java/classFileContents response back via `pending`.
                     if let Some(id) = msg.get("id").cloned() {
-                        if def_ids_out.lock().unwrap().remove(&id) {
+                        if let Some(kind) = tracked_out.lock().unwrap().remove(&id) {
                             let writer = Arc::clone(&decompile_writer);
                             let pending = Arc::clone(&decompile_pending);
                             let pid = decompile_proxy_id.clone();
@@ -168,7 +193,24 @@ fn main() {
                                     let seq = counter.fetch_add(1, Ordering::Relaxed);
                                     Value::String(format!("{pid}-decompile-{seq}"))
                                 };
-                                rewrite_jdt_locations(&mut msg, &writer, &pending, &mut next_id);
+                                match kind {
+                                    TrackedKind::Definition => {
+                                        rewrite_jdt_locations(
+                                            &mut msg,
+                                            &writer,
+                                            &pending,
+                                            &mut next_id,
+                                        );
+                                    }
+                                    TrackedKind::Doc => {
+                                        rewrite_jdt_in_strings(
+                                            &mut msg,
+                                            &writer,
+                                            &pending,
+                                            &mut next_id,
+                                        );
+                                    }
+                                }
                                 write_to_stdout(&msg);
                             });
                             continue;

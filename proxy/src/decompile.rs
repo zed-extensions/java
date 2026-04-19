@@ -141,3 +141,80 @@ pub fn rewrite_jdt_locations(
     }
     rewritten
 }
+
+/// A jdt:// URI in embedded markdown/text terminates at whitespace or any of these
+/// delimiters commonly used in markdown links and JSON strings. The URI itself only
+/// contains URL-encoded forms of these characters, so scanning until we hit one of
+/// them is safe.
+fn jdt_uri_end(s: &str) -> usize {
+    s.find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '"' | '>' | '`' | '\''))
+        .unwrap_or(s.len())
+}
+
+/// Extract all unique `jdt://` URIs appearing inside any string in `value`.
+fn collect_jdt_uris(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(s) => {
+            let mut rest = s.as_str();
+            while let Some(pos) = rest.find("jdt://") {
+                let tail = &rest[pos..];
+                let end = jdt_uri_end(tail);
+                let uri = tail[..end].to_string();
+                if !out.contains(&uri) {
+                    out.push(uri);
+                }
+                rest = &tail[end..];
+            }
+        }
+        Value::Array(arr) => arr.iter().for_each(|v| collect_jdt_uris(v, out)),
+        Value::Object(obj) => obj.values().for_each(|v| collect_jdt_uris(v, out)),
+        _ => {}
+    }
+}
+
+/// Replace all occurrences of any key in `map` with its value, inside every string
+/// contained in `value` (recursively).
+fn replace_in_strings(value: &mut Value, map: &HashMap<String, String>) {
+    match value {
+        Value::String(s) => {
+            for (from, to) in map {
+                if s.contains(from.as_str()) {
+                    *s = s.replace(from.as_str(), to);
+                }
+            }
+        }
+        Value::Array(arr) => arr.iter_mut().for_each(|v| replace_in_strings(v, map)),
+        Value::Object(obj) => obj.values_mut().for_each(|v| replace_in_strings(v, map)),
+        _ => {}
+    }
+}
+
+/// Scan a documentation response (hover, signatureHelp, completionItem/resolve, …)
+/// for embedded `jdt://` URIs, resolve each one to a `file://` URI backed by a temp
+/// file, and replace the URIs in-place in every string of `msg.result`.
+pub fn rewrite_jdt_in_strings(
+    msg: &mut Value,
+    writer: &Arc<Mutex<impl Write>>,
+    pending: &Arc<Mutex<HashMap<Value, mpsc::Sender<Value>>>>,
+    next_id: &mut impl FnMut() -> Value,
+) {
+    let Some(result) = msg.get_mut("result") else {
+        return;
+    };
+
+    let mut uris = Vec::new();
+    collect_jdt_uris(result, &mut uris);
+    if uris.is_empty() {
+        return;
+    }
+
+    let mut map = HashMap::new();
+    for uri in uris {
+        if let Some(file_uri) = resolve_jdt_uri(&uri, writer, pending, next_id()) {
+            map.insert(uri, file_uri);
+        }
+    }
+    if !map.is_empty() {
+        replace_in_strings(result, &map);
+    }
+}
