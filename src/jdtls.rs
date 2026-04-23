@@ -14,6 +14,8 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
+use crate::util::download_and_extract_tar_gz;
+
 use crate::{
     config::is_java_autodownload,
     jdk::try_to_fetch_and_install_latest_jdk,
@@ -210,12 +212,11 @@ pub fn try_to_fetch_and_install_latest_jdtls(
         let download_url = format!(
             "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
         );
-        download_file(
+        download_and_extract_tar_gz(
             &download_url,
             path_to_string(build_path.clone())
                 .map_err(|err| format!("Invalid JDTLS build path {build_path:?}: {err}"))?
                 .as_str(),
-            DownloadedFileType::GzipTar,
         )
         .map_err(|err| format!("Failed to download JDTLS from {download_url}: {err}"))?;
         make_file_executable(

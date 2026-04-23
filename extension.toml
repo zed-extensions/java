@@ -26,3 +26,8 @@ language = "Java"
 kind = "process:exec"
 command = "*"
 args = ["-version"]
+
+[[capabilities]]
+kind = "process:exec"
+command = "tar"
+args = ["**"]

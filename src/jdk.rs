@@ -7,8 +7,8 @@ use zed_extension_api::{
 };
 
 use crate::util::{
-    get_curr_dir, mark_checked_once, path_to_string, remove_all_files_except,
-    should_use_local_or_download,
+    download_and_extract_tar_gz, get_curr_dir, mark_checked_once, path_to_string,
+    remove_all_files_except, should_use_local_or_download,
 };
 
 // Errors
@@ -113,17 +113,27 @@ pub fn try_to_fetch_and_install_latest_jdk(
             .map_err(|err| format!("Failed to detect architecture for JDK download: {err}"))?;
 
         let download_url = build_corretto_url(&version, &platform, &arch);
-        download_file(
-            download_url.as_str(),
-            path_to_string(install_path.clone())
-                .map_err(|err| format!("Invalid JDK install path {install_path:?}: {err}"))?
-                .as_str(),
-            match zed::current_platform().0 {
-                Os::Windows => DownloadedFileType::Zip,
-                _ => DownloadedFileType::GzipTar,
-            },
-        )
-        .map_err(|err| format!("Failed to download Corretto JDK from {download_url}: {err}"))?;
+        let install_path_str = path_to_string(install_path.clone())
+            .map_err(|err| format!("Invalid JDK install path {install_path:?}: {err}"))?;
+
+        match zed::current_platform().0 {
+            Os::Windows => {
+                download_file(
+                    download_url.as_str(),
+                    install_path_str.as_str(),
+                    DownloadedFileType::Zip,
+                )
+                .map_err(|err| {
+                    format!("Failed to download Corretto JDK from {download_url}: {err}")
+                })?;
+            }
+            _ => {
+                download_and_extract_tar_gz(download_url.as_str(), install_path_str.as_str())
+                    .map_err(|err| {
+                        format!("Failed to download Corretto JDK from {download_url}: {err}")
+                    })?;
+            }
+        }
 
         // Remove older versions
         let _ = remove_all_files_except(&jdk_path, version.as_str());

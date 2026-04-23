@@ -6,7 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use zed_extension_api::{
-    self as zed, Command, LanguageServerId, Os, Worktree, current_platform,
+    self as zed, Command, DownloadedFileType, LanguageServerId, Os, Worktree, current_platform,
+    download_file,
     http_client::{HttpMethod, HttpRequest, fetch},
     serde_json::Value,
 };
@@ -314,6 +315,73 @@ pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
         .into_os_string()
         .into_string()
         .map_err(|_| PATH_TO_STR_ERROR.to_string())
+}
+
+/// Downloads a `.tar.gz` archive to disk and then extracts it via the system `tar` command.
+///
+/// This is a two-step replacement for `download_file(..., DownloadedFileType::GzipTar)`:
+/// the full archive is written to disk first, avoiding premature-EOF issues with streaming
+/// extraction, and then `tar` handles the decompression and unpacking.
+///
+/// # Arguments
+///
+/// * `url` – URL of the `.tar.gz` file to download.
+/// * `destination_dir` – Directory into which the archive contents will be extracted.
+///   Created automatically if it does not exist.
+///
+/// # Errors
+///
+/// Returns an error if the download, directory creation, `tar` invocation, or cleanup fails.
+pub fn download_and_extract_tar_gz(url: &str, destination_dir: &str) -> zed::Result<()> {
+    let archive_path = format!("{destination_dir}.tar.gz");
+
+    // 1. Ensure the parent directory of the archive file exists
+    if let Some(parent) = Path::new(&archive_path).parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create parent directory for archive: {e}"))?;
+    }
+
+    // 2. Download the raw .tar.gz bytes as an uncompressed file
+    download_file(url, &archive_path, DownloadedFileType::Uncompressed)
+        .map_err(|e| format!("failed to download archive from {url}: {e}"))?;
+
+    // 3. Create the destination directory if it doesn't already exist
+    std::fs::create_dir_all(destination_dir)
+        .map_err(|e| format!("failed to create destination directory '{destination_dir}': {e}"))?;
+
+    // 4. Resolve to absolute paths for the host `tar` command.
+    //    `download_file` works with paths relative to the WASI sandbox (extension work dir),
+    //    but `Command::new("tar")` runs on the host and needs absolute paths.
+    let workdir =
+        current_dir().map_err(|e| format!("failed to get extension working directory: {e}"))?;
+    let abs_archive = workdir.join(&archive_path);
+    let abs_destination = workdir.join(destination_dir);
+
+    let abs_archive_str = abs_archive
+        .to_str()
+        .ok_or_else(|| format!("archive path is not valid UTF-8: {abs_archive:?}"))?;
+    let abs_destination_str = abs_destination
+        .to_str()
+        .ok_or_else(|| format!("destination path is not valid UTF-8: {abs_destination:?}"))?;
+
+    // 5. Extract via the system `tar` command
+    let output = Command::new("tar")
+        .args(["-xzf", abs_archive_str, "-C", abs_destination_str])
+        .output()
+        .map_err(|e| format!("failed to run tar: {e}"))?;
+
+    if output.status != Some(0) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Clean up the archive even on failure (best-effort)
+        let _ = std::fs::remove_file(&archive_path);
+        return Err(format!("tar extraction failed: {stderr}"));
+    }
+
+    // 6. Clean up the archive
+    std::fs::remove_file(&archive_path)
+        .map_err(|e| format!("failed to remove archive '{archive_path}': {e}"))?;
+
+    Ok(())
 }
 
 /// Remove all files or directories that aren't equal to [`filename`].

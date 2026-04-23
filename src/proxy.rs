@@ -7,33 +7,32 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
-use crate::util::{mark_checked_once, remove_all_files_except, should_use_local_or_download};
+use crate::util::{
+    download_and_extract_tar_gz, mark_checked_once, remove_all_files_except,
+    should_use_local_or_download,
+};
 
 const PROXY_BINARY: &str = "java-lsp-proxy";
 const PROXY_INSTALL_PATH: &str = "proxy-bin";
 const GITHUB_REPO: &str = "zed-extensions/java";
 
-fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
+fn asset_name() -> zed::Result<String> {
     let (os, arch) = zed::current_platform();
-    let (os_str, file_type) = match os {
-        zed::Os::Mac => ("darwin", DownloadedFileType::GzipTar),
-        zed::Os::Linux => ("linux", DownloadedFileType::GzipTar),
-        zed::Os::Windows => ("windows", DownloadedFileType::Zip),
+    let os_str = match os {
+        zed::Os::Mac => "darwin",
+        zed::Os::Linux => "linux",
+        zed::Os::Windows => "windows",
     };
     let arch_str = match arch {
         zed::Architecture::Aarch64 => "aarch64",
         zed::Architecture::X8664 => "x86_64",
         _ => return Err("Unsupported architecture".into()),
     };
-    let ext = if matches!(file_type, DownloadedFileType::Zip) {
-        "zip"
-    } else {
-        "tar.gz"
+    let ext = match os {
+        zed::Os::Windows => "zip",
+        _ => "tar.gz",
     };
-    Ok((
-        format!("java-lsp-proxy-{os_str}-{arch_str}.{ext}"),
-        file_type,
-    ))
+    Ok(format!("java-lsp-proxy-{os_str}-{arch_str}.{ext}"))
 }
 
 fn proxy_exec() -> String {
@@ -83,7 +82,7 @@ pub fn binary_path(
     }
 
     // 2. Auto-download from GitHub releases
-    if let Ok((name, file_type)) = asset_name()
+    if let Ok(name) = asset_name()
         && let Ok(release) = zed::latest_github_release(
             GITHUB_REPO,
             GithubReleaseOptions {
@@ -107,7 +106,15 @@ pub fn binary_path(
                 &LanguageServerInstallationStatus::Downloading,
             );
 
-            if zed::download_file(&asset.download_url, &version_dir, file_type).is_ok() {
+            let download_ok = match zed::current_platform().0 {
+                zed::Os::Windows => {
+                    zed::download_file(&asset.download_url, &version_dir, DownloadedFileType::Zip)
+                        .is_ok()
+                }
+                _ => download_and_extract_tar_gz(&asset.download_url, &version_dir).is_ok(),
+            };
+
+            if download_ok {
                 let _ = zed::make_file_executable(&bin_path);
                 set_language_server_installation_status(
                     language_server_id,
