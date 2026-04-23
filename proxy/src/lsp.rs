@@ -54,6 +54,17 @@ pub fn parse_lsp_content(raw: &[u8]) -> Option<serde_json::Value> {
     serde_json::from_slice(&raw[sep_pos + 4..]).ok()
 }
 
+/// Cheap check for the presence of an `"id"` key in the JSON body of a raw LSP
+/// message. Used to skip full JSON parsing for notifications, which carry no
+/// `id` and therefore cannot be responses or completion results.
+pub fn raw_has_id(raw: &[u8]) -> bool {
+    let Some(sep_pos) = raw.windows(4).position(|w| w == HEADER_SEP) else {
+        return false;
+    };
+    let body = &raw[sep_pos + 4..];
+    body.windows(5).any(|w| w == b"\"id\":")
+}
+
 pub fn encode_lsp(value: &impl Serialize) -> String {
     let json = serde_json::to_string(value).unwrap();
     format!("{CONTENT_LENGTH}: {}\r\n\r\n{json}", json.len())
