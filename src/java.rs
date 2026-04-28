@@ -385,10 +385,20 @@ impl Extension for Java {
             .map_err(|err| format!("Failed to get LSP settings for worktree: {err}"))?
             .unwrap_or_else(|| json!({}));
 
+        // Inject workspaceFolders default if not already set by the user
+        let options_obj = options.as_object_mut().unwrap();
+        if !options_obj.contains_key("workspaceFolders") {
+            let root = worktree.root_path();
+            let uri = if root.starts_with('/') {
+                format!("file://{root}")
+            } else {
+                format!("file:///{}", root.replace('\\', "/"))
+            };
+            options_obj.insert("workspaceFolders".to_string(), json!([uri]));
+        }
+
         // Inject extendedClientCapabilities defaults if not already set by the user
-        let caps = options
-            .as_object_mut()
-            .unwrap()
+        let caps = options_obj
             .entry("extendedClientCapabilities")
             .or_insert_with(|| json!({}));
         let caps_obj = caps.as_object_mut().unwrap();
