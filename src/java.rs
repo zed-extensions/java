@@ -388,12 +388,7 @@ impl Extension for Java {
         // Inject workspaceFolders default if not already set by the user
         let options_obj = options.as_object_mut().unwrap();
         if !options_obj.contains_key("workspaceFolders") {
-            let root = worktree.root_path();
-            let uri = if root.starts_with('/') {
-                format!("file://{root}")
-            } else {
-                format!("file:///{}", root.replace('\\', "/"))
-            };
+            let uri = util::path_to_file_uri(&worktree.root_path());
             options_obj.insert("workspaceFolders".to_string(), json!([uri]));
         }
 

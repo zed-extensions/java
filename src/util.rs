@@ -1,3 +1,4 @@
+use percent_encoding::utf8_percent_encode;
 use regex::Regex;
 use serde::{Deserialize, Serialize, Serializer};
 use std::{
@@ -316,6 +317,38 @@ pub fn path_to_string<P: AsRef<Path>>(path: P) -> zed::Result<String> {
         .map_err(|_| PATH_TO_STR_ERROR.to_string())
 }
 
+/// Characters to percent-encode in the path component of a file:// URI.
+/// Encodes everything except characters that are valid unencoded in URI paths per RFC 3986.
+const PATH_ENCODE_SET: percent_encoding::AsciiSet = percent_encoding::NON_ALPHANUMERIC
+    .remove(b'/')
+    .remove(b':')
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~')
+    .remove(b'@');
+
+/// Converts a filesystem path to a `file://` URI with proper percent-encoding.
+///
+/// Handles both Unix (`/home/user/project`) and Windows (`C:\Users\user\project`) paths.
+///
+/// # Arguments
+///
+/// * `path` - The filesystem path to convert.
+///
+/// # Returns
+///
+/// A properly encoded `file://` URI string.
+pub fn path_to_file_uri(path: &str) -> String {
+    let normalized = if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{}", path.replace('\\', "/"))
+    };
+    let encoded = utf8_percent_encode(&normalized, &PATH_ENCODE_SET).to_string();
+    format!("file://{encoded}")
+}
+
 /// Remove all files or directories that aren't equal to [`filename`].
 ///
 /// This function scans the directory given by [`prefix`] and removes any
@@ -497,5 +530,37 @@ mod tests {
         let wrapper: ArgsWrapper = serde_json::from_str(&json).unwrap();
         let serialized = serde_json::to_value(&wrapper).unwrap();
         assert_eq!(serialized["args"], "");
+    }
+
+    #[test]
+    fn test_file_uri_unix_path() {
+        assert_eq!(
+            path_to_file_uri("/home/user/project"),
+            "file:///home/user/project"
+        );
+    }
+
+    #[test]
+    fn test_file_uri_unix_path_with_spaces() {
+        assert_eq!(
+            path_to_file_uri("/my/path with/spaces"),
+            "file:///my/path%20with/spaces"
+        );
+    }
+
+    #[test]
+    fn test_file_uri_windows_path() {
+        assert_eq!(
+            path_to_file_uri(r"C:\Users\user\project"),
+            "file:///C:/Users/user/project"
+        );
+    }
+
+    #[test]
+    fn test_file_uri_windows_path_with_spaces() {
+        assert_eq!(
+            path_to_file_uri(r"C:\Users\My User\project"),
+            "file:///C:/Users/My%20User/project"
+        );
     }
 }

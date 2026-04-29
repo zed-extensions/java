@@ -961,6 +961,7 @@ name = "zed_java"
 version = "6.8.15"
 dependencies = [
  "hex",
+ "percent-encoding",
  "regex",
  "serde",
  "serde_json",
