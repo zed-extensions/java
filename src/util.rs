@@ -340,13 +340,17 @@ const PATH_ENCODE_SET: percent_encoding::AsciiSet = percent_encoding::NON_ALPHAN
 ///
 /// A properly encoded `file://` URI string.
 pub fn path_to_file_uri(path: &str) -> String {
-    let normalized = if path.starts_with('/') {
-        path.to_string()
+    let mut uri = String::with_capacity(path.len() + 8);
+    uri.push_str("file://");
+    if path.starts_with('/') {
+        uri.extend(utf8_percent_encode(path, &PATH_ENCODE_SET));
     } else {
-        format!("/{}", path.replace('\\', "/"))
-    };
-    let encoded = utf8_percent_encode(&normalized, &PATH_ENCODE_SET).to_string();
-    format!("file://{encoded}")
+        for chunk in path.split('\\') {
+            uri.push('/');
+            uri.extend(utf8_percent_encode(chunk, &PATH_ENCODE_SET));
+        }
+    }
+    uri
 }
 
 /// Remove all files or directories that aren't equal to [`filename`].
