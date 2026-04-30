@@ -6,7 +6,7 @@ This extension adds support for the Java language to [Zed](https://zed.dev). It 
 
 Install the extension via Zeds extension manager. It should work out of the box for most people. However, there are some things to know:
 
-- It is generally recommended to open projects with the Zed-project root at the Java project root folder (where you would commonly have your `pom.xml` or `build.gradle` file).
+- It is generally recommended to open projects with the Zed-project root at the Java project root folder (where you would commonly have your `pom.xml` or `build.gradle` file). The extension will automatically detect Maven and Gradle projects in subdirectories, but opening at the project root provides the best experience.
 
 - By default the extension will download and run the latest official version of JDTLS for you, but this requires Java version 21 to be available on your system via either the `$JAVA_HOME` environment variable or as a `java(.exe)` executable on your `$PATH`. If your project requires a lower Java version in the environment, you can specify a different JDK to use for running JDTLS via the `java_home` configuration option.
 
@@ -115,9 +115,9 @@ JDTLS provides many configuration options that can be passed via the `initialize
   "jdtls": {
     "initialization_options": {
       "bundles": [],
-      "workspaceFolders": [
-        "file:///home/snjeza/Project"
-      ],
+      // The extension automatically sets this to the worktree root.
+      // Override only if your Java project root differs from the opened folder:
+      // "workspaceFolders": ["file:///path/to/your/java/project"],
       "settings": {
         "java": {
           "configuration": {
