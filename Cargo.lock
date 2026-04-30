@@ -958,7 +958,7 @@ dependencies = [
 
 [[package]]
 name = "zed_java"
-version = "6.8.15"
+version = "6.8.16"
 dependencies = [
  "hex",
  "percent-encoding",
