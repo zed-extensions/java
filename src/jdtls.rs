@@ -105,9 +105,10 @@ pub fn build_jdtls_launch_args(
         if let Some(ref max_val) = max
             && let (Some(min_bytes), Some(max_bytes)) =
                 (parse_memory_value(&min), parse_memory_value(max_val))
-                && min_bytes > max_bytes {
-                    std::mem::swap(&mut min, max.as_mut().unwrap());
-                }
+            && min_bytes > max_bytes
+        {
+            std::mem::swap(&mut min, max.as_mut().unwrap());
+        }
         args.push(format!("-Xms{min}"));
         if let Some(max_val) = max {
             args.push(format!("-Xmx{max_val}"));
