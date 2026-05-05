@@ -5,7 +5,7 @@ mod log;
 mod lsp;
 mod platform;
 
-use completions::{should_sort_completions, sort_completions_by_param_count};
+use completions::{is_completion_response, process_completions, sanitize_resolved_completion};
 use decompile::{rewrite_jdt_in_strings, rewrite_jdt_locations};
 use http::handle_http;
 use lsp::{parse_lsp_content, raw_has_id, write_raw, write_to_stdout, LspReader};
@@ -209,6 +209,7 @@ fn main() {
                                             &pending,
                                             &mut next_id,
                                         );
+                                        sanitize_resolved_completion(&mut msg);
                                     }
                                 }
                                 write_to_stdout(&msg);
@@ -217,9 +218,9 @@ fn main() {
                         }
                     }
 
-                    // Sort completion responses by param count
-                    if should_sort_completions(&msg) {
-                        sort_completions_by_param_count(&mut msg);
+                    // Process completion responses (sort + sanitize) in a single pass
+                    if is_completion_response(&msg) {
+                        process_completions(&mut msg);
                         write_to_stdout(&msg);
                         continue;
                     }
