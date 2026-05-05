@@ -34,6 +34,18 @@ const LOMBOK_REPO: &str = "projectlombok/lombok";
 const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java version 21 to run. You can either specify a different JDK to use by configuring lsp.jdtls.settings.java_home to point to a different JDK, or set lsp.jdtls.settings.jdk_auto_download to true to let the extension automatically download one for you.";
 const JDTLS_VERION_ERROR: &str = "No version to fallback to";
 
+/// Parse a JVM memory string (e.g. "2G", "512m", "1024k") into bytes.
+fn parse_memory_value(s: &str) -> Option<u64> {
+    let s = s.trim();
+    let (num, multiplier) = match s.as_bytes().last()? {
+        b'g' | b'G' => (&s[..s.len() - 1], 1024 * 1024 * 1024),
+        b'm' | b'M' => (&s[..s.len() - 1], 1024 * 1024),
+        b'k' | b'K' => (&s[..s.len() - 1], 1024),
+        _ => (s, 1),
+    };
+    num.parse::<u64>().ok().map(|n| n * multiplier)
+}
+
 pub fn build_jdtls_launch_args(
     jdtls_path: &PathBuf,
     configuration: &Option<Value>,
@@ -85,13 +97,29 @@ pub fn build_jdtls_launch_args(
         "-Dosgi.sharedConfiguration.area.readOnly=true".to_string(),
         "-Dosgi.configuration.cascaded=true".to_string(),
         "-Djava.import.generatesMetadataFilesAtProjectRoot=false".to_string(),
-        "-Xms1G".to_string(),
+    ];
+    {
+        let mut min = crate::config::get_min_memory(configuration).unwrap_or_else(|| "1G".to_string());
+        let mut max = crate::config::get_max_memory(configuration);
+        if let Some(ref max_val) = max {
+            if let (Some(min_bytes), Some(max_bytes)) = (parse_memory_value(&min), parse_memory_value(max_val)) {
+                if min_bytes > max_bytes {
+                    std::mem::swap(&mut min, max.as_mut().unwrap());
+                }
+            }
+        }
+        args.push(format!("-Xms{min}"));
+        if let Some(max_val) = max {
+            args.push(format!("-Xmx{max_val}"));
+        }
+    }
+    args.extend(vec![
         "--add-modules=ALL-SYSTEM".to_string(),
         "--add-opens".to_string(),
         "java.base/java.util=ALL-UNNAMED".to_string(),
         "--add-opens".to_string(),
         "java.base/java.lang=ALL-UNNAMED".to_string(),
-    ];
+    ]);
     args.extend(jvm_args);
     args.extend(vec![
         "-jar".to_string(),
