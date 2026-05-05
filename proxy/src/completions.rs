@@ -53,7 +53,9 @@ fn strip_tm_selected_text(item: &mut Value, key: &str) {
 
 /// Sanitize a single resolved completion item (completionItem/resolve response).
 pub fn sanitize_resolved_completion(msg: &mut Value) {
-    let Some(result) = msg.get_mut("result") else { return };
+    let Some(result) = msg.get_mut("result") else {
+        return;
+    };
     strip_tm_selected_text(result, "textEditText");
     strip_tm_selected_text(result, "insertText");
     // Also check inside textEdit.newText
