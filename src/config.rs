@@ -94,6 +94,24 @@ pub fn get_jdtls_launcher(configuration: &Option<Value>, worktree: &Worktree) ->
     None
 }
 
+/// Returns the max heap size for jdtls (e.g. "2G", "4096m").
+/// Maps to the `-Xmx` JVM argument.
+pub fn get_max_memory(configuration: &Option<Value>) -> Option<String> {
+    configuration
+        .as_ref()
+        .and_then(|c| c.pointer("/max_memory").and_then(|v| v.as_str()))
+        .map(|s| s.to_string())
+}
+
+/// Returns the initial heap size for jdtls (e.g. "512m", "1G").
+/// Maps to the `-Xms` JVM argument. Defaults to "1G".
+pub fn get_min_memory(configuration: &Option<Value>) -> Option<String> {
+    configuration
+        .as_ref()
+        .and_then(|c| c.pointer("/min_memory").and_then(|v| v.as_str()))
+        .map(|s| s.to_string())
+}
+
 pub fn get_lombok_jar(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
     if let Some(configuration) = configuration
         && let Some(jar_path) = configuration
