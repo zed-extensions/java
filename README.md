@@ -392,3 +392,125 @@ If changes are not picked up, clean JDTLS' cache (from a java file run the task 
 ## Architecture Note
 
 The extension uses a native binary (`java-lsp-proxy`) that wraps the JDTLS process. This proxy enables the extension to communicate with JDTLS for features like debug class resolution and classpath queries. It is automatically downloaded from the [extension repository releases](https://github.com/zed-extensions/java/releases) and requires no user configuration.
+
+## Developing Locally
+
+If you want to contribute to this extension or test local changes, you can install it as a dev extension. Refer to the [Zed documentation on developing extensions](https://zed.dev/docs/extensions/developing-extensions) for full details.
+
+### Prerequisites
+
+- [Rust](https://rustup.rs/) toolchain
+- The `wasm32-wasip1` target: `rustup target add wasm32-wasip1`
+- [just](https://github.com/casey/just) command runner (optional but recommended)
+
+### Installing as a Dev Extension
+
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/zed-extensions/java.git
+   cd java
+   ```
+
+2. Make sure you are on the branch that contains the feature or fix you want to test:
+   ```sh
+   git branch --show-current
+   # Switch if needed:
+   git checkout <feature-branch>
+   ```
+
+3. In Zed, open the extensions panel (`zed: extensions` in the command palette), click the **Install Dev Extension** button, and select the cloned repository folder.
+
+   Zed will build the WASM extension automatically and load it. After making changes to the extension source, use **Rebuild Dev Extension** from the command palette to pick them up.
+
+### Using the `justfile`
+
+The project includes a `justfile` with common development tasks:
+
+| Recipe | Description |
+|--------|-------------|
+| `just proxy-build` | Build the proxy binary in debug mode |
+| `just proxy-release` | Build the proxy binary in release mode |
+| `just proxy-install` | Build release proxy and copy it to the extension workdir |
+| `just ext-build` | Build the WASM extension in release mode |
+| `just fmt` | Format all code (Rust + tree-sitter queries) |
+| `just clippy` | Run clippy on both crates |
+| `just lint` | Format and lint all code |
+| `just all` | Lint, build extension, and install proxy |
+
+### Updating the `java-lsp-proxy` Binary
+
+The proxy is a separate native Rust binary (in the `proxy/` directory) that runs alongside the WASM extension. Because it's a native binary, it is **not** rebuilt when you use "Rebuild Dev Extension" — you need to build and install it manually.
+
+> **Important:** When testing a manually built proxy, set `"check_updates": "never"` in your `lsp.jdtls.settings` to prevent the extension from downloading a release binary and overwriting your local build.
+
+```sh
+# Build the proxy in release mode and copy it to the extension workdir
+just proxy-install
+```
+
+This compiles the proxy for your native target and copies it to the appropriate Zed extension working directory:
+- **macOS**: `~/Library/Application Support/Zed/extensions/work/java/proxy-bin/`
+- **Linux**: `~/.local/share/zed/extensions/work/java/proxy-bin/`
+- **Windows**: `%LOCALAPPDATA%/Zed/extensions/work/java/proxy-bin/`
+
+After installing the proxy, restart the language server in Zed for the changes to take effect.
+
+If you prefer not to use `just`, you can build and copy manually:
+
+```sh
+cd proxy
+cargo build --release --target $(rustc -vV | grep host | awk '{print $2}')
+# Then copy the binary from target/<your-target>/release/java-lsp-proxy
+# to the appropriate extension workdir shown above
+```
+
+### Remote Development (SSH)
+
+When using [Zed's remote development](https://zed.dev/docs/remote-development) over SSH, extensions installed locally are automatically propagated to the remote server. The language server and the proxy binary run on the **remote host**, not your local machine.
+
+For standard use, the proxy binary is auto-downloaded from GitHub releases for the remote server's platform — no action is needed.
+
+However, if you're **testing local proxy changes** against a remote host, you need to get the binary onto the remote server yourself. The key thing to be aware of is that on remote hosts, extensions are stored under a **different path** than on your local machine — typically:
+
+```
+~/.local/share/zed/remote_extensions/work/java/proxy-bin/
+```
+
+> **Tip:** If you're unsure of the exact path, SSH into the remote and look for it:
+> ```sh
+> find ~/.local/share/zed -type d -name "proxy-bin" 2>/dev/null
+> ```
+
+#### Option A: Build on the remote directly
+
+If you have Rust installed on the remote server, you can clone the repo there and build natively:
+
+```sh
+# On the remote host
+git clone https://github.com/zed-extensions/java.git
+cd java/proxy
+cargo build --release
+
+# Copy to the remote extensions workdir
+mkdir -p ~/.local/share/zed/remote_extensions/work/java/proxy-bin
+cp target/release/java-lsp-proxy ~/.local/share/zed/remote_extensions/work/java/proxy-bin/
+```
+
+#### Option B: Cross-compile locally and copy
+
+If you prefer to build on your local machine:
+
+1. Cross-compile the proxy for the remote target (typically Linux x86_64 or aarch64):
+   ```sh
+   cd proxy
+   cargo build --release --target x86_64-unknown-linux-gnu
+   ```
+   > You may need to install the target first: `rustup target add x86_64-unknown-linux-gnu` and configure a linker in `.cargo/config.toml`.
+
+2. Copy the binary to the remote server:
+   ```sh
+   scp target/x86_64-unknown-linux-gnu/release/java-lsp-proxy \
+     user@remote:~/.local/share/zed/remote_extensions/work/java/proxy-bin/java-lsp-proxy
+   ```
+
+After either option, restart the language server in Zed for the changes to take effect.
