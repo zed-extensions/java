@@ -6,8 +6,8 @@ use std::{
 
 use sha1::{Digest, Sha1};
 use zed_extension_api::{
-    self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Os,
-    Worktree, current_platform, download_file,
+    self as zed, Architecture, DownloadedFileType, LanguageServerId,
+    LanguageServerInstallationStatus, Os, Worktree, current_platform, download_file,
     http_client::{HttpMethod, HttpRequest, fetch},
     make_file_executable,
     serde_json::Value,
@@ -425,12 +425,12 @@ fn get_sha1_hex(input: &str) -> String {
 }
 
 fn get_shared_config_path(jdtls_base_directory: &Path) -> PathBuf {
-    // Note: JDTLS also provides config_linux_arm and config_mac_arm (and others),
-    // but does not use them in their own launch script. It may be worth investigating if we should use them when appropriate.
-    let config_to_use = match current_platform().0 {
-        Os::Linux => "config_linux",
-        Os::Mac => "config_mac",
-        Os::Windows => "config_win",
+    let config_to_use = match current_platform() {
+        (Os::Mac, Architecture::Aarch64) => "config_mac_arm",
+        (Os::Mac, _) => "config_mac",
+        (Os::Linux, Architecture::Aarch64) => "config_linux_arm",
+        (Os::Linux, _) => "config_linux",
+        (Os::Windows, _) => "config_win",
     };
     jdtls_base_directory.join(config_to_use)
 }
