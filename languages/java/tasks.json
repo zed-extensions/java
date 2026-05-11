@@ -43,6 +43,7 @@
     "command": "f=\"$ZED_FILE\"; p=\"$PWD\"; d=$(dirname \"${f#$p/}\"); if [ -f pom.xml ]; then m=\".\"; md=\"$d\"; while [ \"$md\" != \".\" ] && [ \"$md\" != \"/\" ]; do if [ -f \"$md/pom.xml\" ]; then m=\"$md\"; break; fi; md=$(dirname \"$md\"); done; [ -f ./mvnw ] && CMD=\"./mvnw\" || CMD=\"mvn\"; if [ \"$m\" = \".\" ]; then $CMD clean test; else $CMD clean test-compile -pl \"$m\" -am && $CMD test -pl \"$m\"; fi; elif [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then m=\".\"; md=\"$d\"; while [ \"$md\" != \".\" ] && [ \"$md\" != \"/\" ]; do if [ -f \"$md/build.gradle\" ] || [ -f \"$md/build.gradle.kts\" ]; then m=\"$md\"; break; fi; md=$(dirname \"$md\"); done; if [ \"$m\" = \".\" ]; then mp=\"\"; else mp=\":$(echo \"$m\" | tr '/' ':')\"; fi; [ -f ./gradlew ] && CMD=\"./gradlew\" || CMD=\"gradle\"; $CMD ${mp}:test; else >&2 echo 'No build tool found'; exit 1; fi;",
     "use_new_terminal": false,
     "reveal": "always",
+    "tags": ["java-test-all"],
     "shell": {
       "with_arguments": {
         "program": "/bin/sh",
@@ -55,6 +56,7 @@
     "command": "cache_dir=\"\"; if [ -n \"$XDG_CACHE_HOME\" ]; then cache_dir=\"$XDG_CACHE_HOME\"; elif [ \"$(uname)\" = \"Darwin\" ]; then cache_dir=\"$HOME/Library/Caches\"; else cache_dir=\"$HOME/.cache\"; fi; found=$(find \"$cache_dir\" -maxdepth 1 -type d -name 'jdtls-*' 2>/dev/null); if [ -n \"$found\" ]; then echo \"$found\" | xargs rm -rf && echo 'JDTLS cache cleared. Restart the language server'; else echo 'No JDTLS cache found'; fi",
     "use_new_terminal": false,
     "reveal": "always",
+    "tags": ["java-clear-cache"],
     "shell": {
       "with_arguments": {
         "program": "/bin/sh",
