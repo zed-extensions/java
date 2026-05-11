@@ -14,7 +14,7 @@
   },
   {
     "label": "$ZED_CUSTOM_java_class_name.${ZED_CUSTOM_java_outer_class_name:}.$ZED_CUSTOM_java_method_name",
-    "command": "package=\"$ZED_CUSTOM_java_package_name\"; outer=\"${ZED_CUSTOM_java_outer_class_name:}\"; inner=\"$ZED_CUSTOM_java_class_name\"; method=\"$ZED_CUSTOM_java_method_name\"; sep=\"$\"; if [ -n \"$outer\" ]; then c=\"$outer$sep$inner\"; else c=\"$inner\"; fi; if [ -f pom.xml ]; then [ -f ./mvnw ] && CMD=\"./mvnw\" || CMD=\"mvn\"; $CMD clean test -Dtest=\"$package.$c#$method\"; elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then [ -f ./gradlew ] && CMD=\"./gradlew\" || CMD=\"gradle\"; $CMD test --tests \"$package.$c.$method\"; else >&2 echo 'No build tool found'; exit 1; fi;",
+    "command": "package=\"${ZED_CUSTOM_java_package_name:}\"; outer=\"${ZED_CUSTOM_java_outer_class_name:}\"; inner=\"$ZED_CUSTOM_java_class_name\"; method=\"$ZED_CUSTOM_java_method_name\"; sep=\"$\"; if [ -n \"$outer\" ]; then c=\"$outer$sep$inner\"; else c=\"$inner\"; fi; if [ -n \"$package\" ]; then fqc=\"$package.$c\"; else fqc=\"$c\"; fi; if [ -f pom.xml ]; then [ -f ./mvnw ] && CMD=\"./mvnw\" || CMD=\"mvn\"; $CMD clean test -Dtest=\"$fqc#$method\"; elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then [ -f ./gradlew ] && CMD=\"./gradlew\" || CMD=\"gradle\"; $CMD test --tests \"$fqc.$method\"; else >&2 echo 'No build tool found'; exit 1; fi;",
     "use_new_terminal": false,
     "reveal": "always",
     "tags": ["java-test-method", "java-test-method-nested"],
@@ -27,7 +27,7 @@
   },
   {
     "label": "Test class $ZED_CUSTOM_java_class_name",
-    "command": "package=\"$ZED_CUSTOM_java_package_name\"; outer=\"${ZED_CUSTOM_java_outer_class_name:}\"; inner=\"$ZED_CUSTOM_java_class_name\"; sep=\"$\"; if [ -n \"$outer\" ]; then c=\"$outer$sep$inner\"; else c=\"$inner\"; fi; if [ -f pom.xml ]; then [ -f ./mvnw ] && CMD=\"./mvnw\" || CMD=\"mvn\"; $CMD clean test -Dtest=\"$package.$c\"; elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then [ -f ./gradlew ] && CMD=\"./gradlew\" || CMD=\"gradle\"; $CMD test --tests \"$package.$c\"; else >&2 echo 'No build tool found'; exit 1; fi;",
+    "command": "package=\"${ZED_CUSTOM_java_package_name:}\"; outer=\"${ZED_CUSTOM_java_outer_class_name:}\"; inner=\"$ZED_CUSTOM_java_class_name\"; sep=\"$\"; if [ -n \"$outer\" ]; then c=\"$outer$sep$inner\"; else c=\"$inner\"; fi; if [ -n \"$package\" ]; then fqc=\"$package.$c\"; else fqc=\"$c\"; fi; if [ -f pom.xml ]; then [ -f ./mvnw ] && CMD=\"./mvnw\" || CMD=\"mvn\"; $CMD clean test -Dtest=\"$fqc\"; elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then [ -f ./gradlew ] && CMD=\"./gradlew\" || CMD=\"gradle\"; $CMD test --tests \"$fqc\"; else >&2 echo 'No build tool found'; exit 1; fi;",
     "use_new_terminal": false,
     "reveal": "always",
     "tags": ["java-test-class", "java-test-class-nested"],
