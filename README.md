@@ -221,6 +221,30 @@ JDTLS will automatically pick the appropriate runtime based on your project's so
 >
 > **Windows paths** typically look like `C:\Program Files\Java\jdk-17`
 
+> **Important:** If your default runtime is below Java 17 and you're working with Gradle projects, the Gradle daemon will fail to start because modern Gradle requires JVM 17+. In this case, set `java.import.gradle.java.home` to a JDK 17+ path so that the Gradle daemon uses a compatible JVM independently of your project's compilation runtime. See the [Advanced Configuration](#advanced-configurationjdtls-initialization-options) section below for details.
+
+## Maven Configuration
+
+If your project uses custom or internal Maven repositories, you should point JDTLS at your Maven `settings.xml` so it can resolve dependencies:
+
+```jsonc
+"initialization_options": {
+  "settings": {
+    "java": {
+      "configuration": {
+        "maven": {
+          "userSettings": "~/.m2/settings.xml",
+          // Optional: global settings for system-wide configuration
+          "globalSettings": "/path/to/global/settings.xml"
+        }
+      }
+    }
+  }
+}
+```
+
+Without this, JDTLS's embedded Maven will only resolve artifacts from Maven Central, which will cause unresolved dependency errors for projects using internal or private repositories.
+
 ## Advanced Configuration/JDTLS initialization Options
 
 JDTLS provides many configuration options that can be passed via the `initialize` LSP-request. The extension will pass the JSON-object from `lsp.jdtls.initialization_options` in your settings on to JDTLS. Please refer to the [JDTLS Configuration Wiki Page](https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request) for the available options and values.
@@ -244,7 +268,11 @@ Below is an opinionated example configuration for JDTLS with most options enable
         "java": {
           "configuration": {
             "updateBuildConfiguration": "automatic",
-            "runtimes": []
+            "runtimes": [],
+            // Path to your Maven settings.xml (for custom/internal repositories)
+            "maven": {
+              "userSettings": "~/.m2/settings.xml"
+            }
           },
           "saveActions": {
             "organizeImports": true
@@ -307,6 +335,14 @@ Below is an opinionated example configuration for JDTLS with most options enable
             "gradle": {
               "enabled": true,
               "wrapper": {
+                "enabled": true
+              },
+              // JVM used by the Gradle daemon (must be JVM 17+ for modern Gradle).
+              // Set this if your default runtime is a lower version.
+              "java": {
+                "home": "/path/to/your/JDK17+"
+              },
+              "annotationProcessing": {
                 "enabled": true
               }
             },
