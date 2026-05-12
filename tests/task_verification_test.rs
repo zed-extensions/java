@@ -6,7 +6,7 @@ fn setup_mock_project(
     temp_dir: &Path,
     project_type: &str,
     module_path: Option<&str>,
-) -> (PathBuf, PathBuf) {
+) -> (PathBuf, PathBuf, PathBuf) {
     let module_dir = if let Some(path) = module_path {
         let d = temp_dir.join(path);
         fs::create_dir_all(&d).unwrap();
@@ -14,23 +14,20 @@ fn setup_mock_project(
     } else {
         temp_dir.to_path_buf()
     };
-    
-    let is_multi = module_path.is_some();
-    let package_dir = if project_type == "maven" && is_multi {
-         module_dir.join("src/test/java/com/example")
-    } else {
-         module_dir.join("src/main/java/com/example")
-    };
-    
-    fs::create_dir_all(&package_dir).unwrap();
+
+    let main_package_dir = module_dir.join("src/main/java/com/example");
+    let test_package_dir = module_dir.join("src/test/java/com/example");
+
+    fs::create_dir_all(&main_package_dir).unwrap();
+    fs::create_dir_all(&test_package_dir).unwrap();
 
     let bin_dir = temp_dir.join("bin");
     fs::create_dir_all(&bin_dir).unwrap();
 
     if project_type == "maven" {
         fs::File::create(temp_dir.join("pom.xml")).unwrap();
-        if is_multi {
-            fs::File::create(module_dir.join("pom.xml")).unwrap();
+        if let Some(path) = module_path {
+            fs::File::create(temp_dir.join(path).join("pom.xml")).unwrap();
         }
         let mvn_mock = bin_dir.join("mvn");
         fs::write(&mvn_mock, "#!/bin/sh\necho \"MVN_CALLED: $@\"").unwrap();
@@ -41,8 +38,8 @@ fn setup_mock_project(
         }
     } else if project_type == "gradle" {
         fs::File::create(temp_dir.join("settings.gradle")).unwrap();
-        if is_multi {
-            fs::File::create(module_dir.join("build.gradle")).unwrap();
+        if let Some(path) = module_path {
+            fs::File::create(temp_dir.join(path).join("build.gradle")).unwrap();
         }
         let gradle_mock = bin_dir.join("gradle");
         fs::write(&gradle_mock, "#!/bin/sh\necho \"GRADLE_CALLED: $@\"").unwrap();
@@ -53,12 +50,13 @@ fn setup_mock_project(
         }
     }
 
-    let zed_file = package_dir.join("Main.java");
+    let zed_file = main_package_dir.join("Main.java");
+    let zed_test_file = test_package_dir.join("MainTest.java");
     fs::File::create(&zed_file).unwrap();
+    fs::File::create(&zed_test_file).unwrap();
 
-    (zed_file, bin_dir)
+    (zed_file, zed_test_file, bin_dir)
 }
-
 fn get_task_command_by_tag(tag: &str) -> String {
     let tasks_json = fs::read_to_string("languages/java/tasks.json").expect("Failed to read tasks.json");
     let tasks: Value = serde_json::from_str(&tasks_json).expect("Failed to parse tasks.json");
@@ -74,438 +72,411 @@ fn get_task_command_by_tag(tag: &str) -> String {
     panic!("Task with tag '{}' not found", tag);
 }
 
-#[test]
-fn test_maven_multi_module_command_logic() {
-    use std::process::Command as StdCommand;
-
-    let mut run_command = get_task_command_by_tag("java-main");
-
-    run_command = run_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_maven_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "maven", Some("module-a"));
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"), "Should build submodule with dependencies. Got: {}", stdout);
-    assert!(stdout.contains("MVN_CALLED: exec:java -pl module-a"), "Should run only the submodule. Got: {}", stdout);
-    assert!(stdout.contains("-Dexec.classpathScope=test"), "Should use test classpath scope. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
+struct TestProject {
+    temp_dir: PathBuf,
+    bin_dir: PathBuf,
+    zed_file: PathBuf,
+    zed_test_file: PathBuf,
+    new_path: String,
 }
+
+impl TestProject {
+    fn new(name: &str, project_type: &str, module_path: Option<&str>) -> Self {
+        let temp_dir = std::env::temp_dir().join(name);
+        if temp_dir.exists() {
+            fs::remove_dir_all(&temp_dir).unwrap();
+        }
+        fs::create_dir_all(&temp_dir).unwrap();
+        let (zed_file, zed_test_file, bin_dir) = setup_mock_project(&temp_dir, project_type, module_path);
+        let old_path = std::env::var("PATH").unwrap_or_default();
+        let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
+        Self {
+            temp_dir,
+            bin_dir,
+            zed_file,
+            zed_test_file,
+            new_path,
+        }
+    }
+
+    fn task(&self, tag: &str) -> TaskRunner {
+        let command = get_task_command_by_tag(tag)
+            .replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
+        TaskRunner {
+            project: self,
+            command,
+            zed_file: self.zed_file.clone(),
+            package: "com.example".to_string(),
+            class: "Main".to_string(),
+            extra_env: Vec::new(),
+        }
+    }
+
+    fn mock_bin(&self, name: &str, content: &str) {
+        let bin_path = self.bin_dir.join(name);
+        fs::write(&bin_path, content).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&bin_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+}
+
+impl Drop for TestProject {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.temp_dir);
+    }
+}
+struct TaskRunner<'a> {
+    project: &'a TestProject,
+    command: String,
+    zed_file: PathBuf,
+    package: String,
+    class: String,
+    extra_env: Vec<(&'static str, String)>,
+}
+
+impl<'a> TaskRunner<'a> {
+    fn zed_file(mut self, path: PathBuf) -> Self {
+        self.zed_file = path;
+        self
+    }
+    fn class(mut self, c: &str) -> Self {
+        self.class = c.to_string();
+        self
+    }
+    fn method(mut self, m: &str) -> Self {
+        self.extra_env.push(("ZED_CUSTOM_java_method_name", m.to_string()));
+        self
+    }
+    fn outer_class(mut self, o: &str) -> Self {
+        self.extra_env.push(("ZED_CUSTOM_java_outer_class_name", o.to_string()));
+        self
+    }
+
+    fn run(self) -> String {
+        let mut cmd = std::process::Command::new("sh");
+        cmd.arg("-c")
+            .arg(&self.command)
+            .env("ZED_FILE", self.zed_file.to_string_lossy().to_string())
+            .env("PWD", self.project.temp_dir.to_string_lossy().to_string())
+            .env("ZED_CUSTOM_java_package_name", &self.package)
+            .env("ZED_CUSTOM_java_class_name", &self.class)
+            .env("PATH", &self.project.new_path)
+            .current_dir(&self.project.temp_dir);
+
+        for (k, v) in self.extra_env {
+            cmd.env(k, v);
+        }
+
+        let output = cmd.output().expect("Failed to execute shell command");
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
+}
+
+// --- Maven Tests ---
 
 #[test]
 fn test_maven_single_module_command_logic() {
-    use std::process::Command as StdCommand;
+    let project = TestProject::new("maven_single", "maven", None);
 
-    let mut run_command = get_task_command_by_tag("java-main");
+    let stdout = project.task("java-main").run();
+    let stdout_test = project
+        .task("java-main")
+        .zed_file(project.zed_test_file.clone())
+        .run();
 
-    run_command = run_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
+    assert!(
+        stdout.contains("MVN_CALLED: clean compile exec:java -Dexec.mainClass=com.example.Main"),
+        "Should run as single module. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("-Dexec.classpathScope=runtime"),
+        "Should use runtime classpath scope. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout_test.contains("MVN_CALLED: clean test-compile exec:java -Dexec.mainClass=com.example.Main"),
+        "Should run as single module. Got: {}",
+        stdout_test
+    );
+    assert!(
+        stdout_test.contains("-Dexec.classpathScope=test"),
+        "Should use test classpath scope. Got: {}",
+        stdout_test
+    );
+}
 
-    let temp_dir = std::env::temp_dir().join("zed_java_test_maven_single_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "maven", None);
+#[test]
+fn test_maven_multi_module_command_logic() {
+    let project = TestProject::new("maven_multi", "maven", Some("module-a"));
 
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
+    let stdout = project.task("java-main").run();
+    let stdout_test = project
+        .task("java-main")
+        .zed_file(project.zed_test_file.clone())
+        .run();
 
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
+    assert!(
+        stdout.contains("MVN_CALLED: clean compile -pl module-a -am"),
+        "Should build submodule with dependencies. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("MVN_CALLED: exec:java -pl module-a"),
+        "Should run only the submodule. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("-Dexec.classpathScope=runtime"),
+        "Should use test classpath scope. Got: {}",
+        stdout
+    );
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("MVN_CALLED: clean test-compile exec:java -Dexec.mainClass=com.example.Main"), "Should run as single module. Got: {}", stdout);
-    assert!(stdout.contains("-Dexec.classpathScope=test"), "Should use test classpath scope. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
+    assert!(
+        stdout_test.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        "Should build submodule with dependencies. Got: {}",
+        stdout_test
+    );
+    assert!(
+        stdout_test.contains("MVN_CALLED: exec:java -pl module-a"),
+        "Should run only the submodule. Got: {}",
+        stdout_test
+    );
+     assert!(
+        stdout_test.contains("-Dexec.classpathScope=test"),
+        "Should use test classpath scope. Got: {}",
+        stdout_test
+    );
 }
 
 #[test]
 fn test_maven_nested_module_command_logic() {
-    use std::process::Command as StdCommand;
+    let project = TestProject::new("maven_nested", "maven", Some("nested/module-b"));
 
-    let mut run_command = get_task_command_by_tag("java-main");
+    let stdout = project
+        .task("java-main")
+        .zed_file(project.zed_test_file.clone())
+        .run();
 
-    run_command = run_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_maven_nested_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "maven", Some("nested/module-b"));
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("MVN_CALLED: clean test-compile -pl nested/module-b -am"), "Should build nested submodule with dependencies. Got: {}", stdout);
-    assert!(stdout.contains("MVN_CALLED: exec:java -pl nested/module-b"), "Should run only the nested submodule. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
+    assert!(
+        stdout.contains("MVN_CALLED: clean test-compile -pl nested/module-b -am"),
+        "Should build nested submodule with dependencies. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("MVN_CALLED: exec:java -pl nested/module-b"),
+        "Should run only the nested submodule. Got: {}",
+        stdout
+    );
 }
 
 #[test]
 fn test_maven_multi_module_test_method_logic() {
-    use std::process::Command as StdCommand;
+    let project = TestProject::new("maven_method", "maven", Some("module-a"));
 
-    let mut test_command = get_task_command_by_tag("java-test-method");
+    let stdout = project
+        .task("java-test-method")
+        .method("shouldPersist")
+        .run();
 
-    test_command = test_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_maven_method_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "maven", Some("module-a"));
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&test_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("ZED_CUSTOM_java_method_name", "shouldPersist")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"), "Should build submodule with dependencies. Got: {}", stdout);
-    assert!(stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Main#shouldPersist"), "Should run only the submodule test. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
-}
-
-#[test]
-fn test_gradle_multi_module_command_logic() {
-    use std::process::Command as StdCommand;
-
-    let mut run_command = get_task_command_by_tag("java-main");
-
-    run_command = run_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_gradle_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "gradle", Some("module-a"));
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("GRADLE_CALLED: :module-a:run"), "Should run with correct module path. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
-}
-
-#[test]
-fn test_gradle_single_module_command_logic() {
-    use std::process::Command as StdCommand;
-
-    let mut run_command = get_task_command_by_tag("java-main");
-
-    run_command = run_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_gradle_single_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "gradle", None);
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("GRADLE_CALLED: :run"), "Should run as single module. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
-}
-
-#[test]
-fn test_gradle_nested_module_command_logic() {
-    use std::process::Command as StdCommand;
-
-    let mut run_command = get_task_command_by_tag("java-main");
-
-    run_command = run_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_gradle_nested_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "gradle", Some("nested/module-b"));
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("GRADLE_CALLED: :nested:module-b:run"), "Should run with correct nested module path. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
-}
-
-#[test]
-fn test_gradle_multi_module_test_method_logic() {
-    use std::process::Command as StdCommand;
-
-    let mut test_command = get_task_command_by_tag("java-test-method");
-
-    test_command = test_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_gradle_method_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "gradle", Some("module-a"));
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&test_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("ZED_CUSTOM_java_method_name", "shouldPersist")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("GRADLE_CALLED: :module-a:test --tests com.example.Main.shouldPersist"), "Should run submodule test with correct path. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
-}
-
-#[test]
-fn test_no_build_tool_command_logic() {
-    use std::process::Command as StdCommand;
-
-    let mut run_command = get_task_command_by_tag("java-main");
-
-    run_command = run_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
-
-    let temp_dir = std::env::temp_dir().join("zed_java_test_no_build_tool_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "none", None);
-
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
-
-    // Mock javac and java
-    let javac_mock = bin_dir.join("javac");
-    fs::write(&javac_mock, "#!/bin/sh\necho \"JAVAC_CALLED: $@\"").unwrap();
-    let java_mock = bin_dir.join("java");
-    fs::write(&java_mock, "#!/bin/sh\necho \"JAVA_CALLED: $@\"").unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&javac_mock, fs::Permissions::from_mode(0o755)).unwrap();
-        fs::set_permissions(&java_mock, fs::Permissions::from_mode(0o755)).unwrap();
-    }
-
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Main")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("JAVAC_CALLED: -d bin ./src/main/java/com/example/Main.java"), "Should compile with javac. Got: {}", stdout);
-    assert!(stdout.contains("JAVA_CALLED: -cp bin com.example.Main"), "Should run with java. Got: {}", stdout);
-
-    fs::remove_dir_all(&temp_dir).unwrap();
+    assert!(
+        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        "Should build submodule with dependencies. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Main#shouldPersist"),
+        "Should run only the submodule test. Got: {}",
+        stdout
+    );
 }
 
 #[test]
 fn test_maven_nested_class_test_method_logic() {
-    use std::process::Command as StdCommand;
+    let project = TestProject::new("maven_nested_class", "maven", Some("module-a"));
 
-    let mut test_command = get_task_command_by_tag("java-test-method");
+    let stdout = project
+        .task("java-test-method")
+        .class("Inner")
+        .outer_class("Outer")
+        .method("testMe")
+        .run();
 
-    test_command = test_command.replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
+    assert!(
+        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Outer$Inner#testMe"),
+        "Should run nested class test method correctly. Got: {}",
+        stdout
+    );
+}
 
-    let temp_dir = std::env::temp_dir().join("zed_java_test_maven_nested_class_logic_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "maven", Some("module-a"));
+#[test]
+fn test_maven_run_all_tests_logic() {
+    let project = TestProject::new("maven_all_tests", "maven", Some("module-a"));
 
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
+    let stdout = project.task("java-test-all").run();
 
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&test_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("ZED_CUSTOM_java_package_name", "com.example")
-        .env("ZED_CUSTOM_java_class_name", "Inner")
-        .env("ZED_CUSTOM_java_outer_class_name", "Outer")
-        .env("ZED_CUSTOM_java_method_name", "testMe")
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
+    assert!(
+        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        "Should build submodule with dependencies. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("MVN_CALLED: test -pl module-a"),
+        "Should run all tests in submodule. Got: {}",
+        stdout
+    );
+}
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Outer$Inner#testMe"), "Should run nested class test method correctly. Got: {}", stdout);
+#[test]
+fn test_maven_test_class_logic() {
+    let project = TestProject::new("maven_test_class", "maven", Some("module-a"));
 
-    fs::remove_dir_all(&temp_dir).unwrap();
+    let stdout = project.task("java-test-class").run();
+
+    assert!(
+        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        "Should build submodule with dependencies. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Main"),
+        "Should run only the submodule test class. Got: {}",
+        stdout
+    );
+}
+
+// --- Gradle Tests ---
+
+#[test]
+fn test_gradle_single_module_command_logic() {
+    let project = TestProject::new("gradle_single", "gradle", None);
+
+    let stdout = project.task("java-main").run();
+
+    assert!(
+        stdout.contains("GRADLE_CALLED: :run"),
+        "Should run as single module. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_multi_module_command_logic() {
+    let project = TestProject::new("gradle_multi", "gradle", Some("module-a"));
+
+    let stdout = project.task("java-main").run();
+
+    assert!(
+        stdout.contains("GRADLE_CALLED: :module-a:run"),
+        "Should run with correct module path. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_nested_module_command_logic() {
+    let project = TestProject::new("gradle_nested", "gradle", Some("nested/module-b"));
+
+    let stdout = project.task("java-main").run();
+
+    assert!(
+        stdout.contains("GRADLE_CALLED: :nested:module-b:run"),
+        "Should run with correct nested module path. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_multi_module_test_method_logic() {
+    let project = TestProject::new("gradle_method", "gradle", Some("module-a"));
+
+    let stdout = project
+        .task("java-test-method")
+        .method("shouldPersist")
+        .run();
+
+    assert!(
+        stdout.contains("GRADLE_CALLED: :module-a:test --tests com.example.Main.shouldPersist"),
+        "Should run submodule test with correct path. Got: {}",
+        stdout
+    );
 }
 
 #[test]
 fn test_gradle_run_all_tests_logic() {
-    use std::process::Command as StdCommand;
+    let project = TestProject::new("gradle_all_tests", "gradle", Some("module-a"));
 
-    let run_tests_command = get_task_command_by_tag("java-test-all");
+    let stdout = project.task("java-test-all").run();
 
-    let temp_dir = std::env::temp_dir().join("zed_java_test_gradle_run_tests_integration");
-    if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    fs::create_dir_all(&temp_dir).unwrap();
-    
-    let (zed_file, bin_dir) = setup_mock_project(&temp_dir, "gradle", Some("module-a"));
+    assert!(
+        stdout.contains("GRADLE_CALLED: :module-a:test"),
+        "Should run all tests in submodule. Got: {}",
+        stdout
+    );
+}
 
-    let old_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
+#[test]
+fn test_gradle_nested_class_test_method_logic() {
+    let project = TestProject::new("gradle_nested_class", "gradle", Some("module-a"));
 
-    let output = StdCommand::new("sh")
-        .arg("-c")
-        .arg(&run_tests_command)
-        .env("ZED_FILE", zed_file.to_string_lossy().to_string())
-        .env("PWD", temp_dir.to_string_lossy().to_string())
-        .env("PATH", new_path)
-        .current_dir(&temp_dir)
-        .output()
-        .expect("Failed to execute shell command");
+    let stdout = project
+        .task("java-test-method")
+        .class("Inner")
+        .outer_class("Outer")
+        .method("testMe")
+        .run();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    assert!(stdout.contains("GRADLE_CALLED: :module-a:test"), "Should run all tests in submodule. Got: {}", stdout);
+    assert!(
+        stdout.contains("GRADLE_CALLED: :module-a:test --tests com.example.Outer$Inner.testMe"),
+        "Should run nested class test method correctly for Gradle. Got: {}",
+        stdout
+    );
+}
 
-    fs::remove_dir_all(&temp_dir).unwrap();
+#[test]
+fn test_gradle_test_class_logic() {
+    let project = TestProject::new("gradle_test_class", "gradle", Some("module-a"));
+
+    let stdout = project.task("java-test-class").run();
+
+    assert!(
+        stdout.contains("GRADLE_CALLED: :module-a:test --tests com.example.Main"),
+        "Should run only the submodule test class for Gradle. Got: {}",
+        stdout
+    );
+}
+
+// --- Generic Tests ---
+
+#[test]
+fn test_no_build_tool_command_logic() {
+    let project = TestProject::new("no_build_tool", "none", None);
+    project.mock_bin("javac", "#!/bin/sh\necho \"JAVAC_CALLED: $@\"");
+    project.mock_bin("java", "#!/bin/sh\necho \"JAVA_CALLED: $@\"");
+
+    let stdout = project.task("java-main").run();
+
+    assert!(
+        stdout.contains("JAVAC_CALLED: -d bin"),
+        "Should compile with javac. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("./src/main/java/com/example/Main.java"),
+        "Should compile Main.java. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("./src/test/java/com/example/MainTest.java"),
+        "Should compile MainTest.java. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("JAVA_CALLED: -cp bin com.example.Main"),
+        "Should run with java. Got: {}",
+        stdout
+    );
 }
