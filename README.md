@@ -288,10 +288,33 @@ Below is an opinionated example configuration for JDTLS with most options enable
           },
           "jdt": {
             "ls": {
+              // Enables Protocol Buffer support for .proto files in the project
               "protobufSupport": {
                 "enabled": true
               },
+              // Enables Groovy support for mixed Java/Groovy projects
               "groovySupport": {
+                "enabled": true
+              },
+              // Enables Kotlin support so JDTLS can resolve Kotlin classes from Java code
+              // in mixed Kotlin/Java projects
+              "kotlinSupport": {
+                "enabled": true
+              },
+              // Enables Scala support for mixed Java/Scala projects
+              "scalaSupport": {
+                "enabled": true
+              },
+              // Enables AspectJ support for projects using aspect-oriented programming
+              "aspectjSupport": {
+                "enabled": true
+              },
+              // Enables Android project support
+              "androidSupport": {
+                "enabled": true
+              },
+              // Enables the javac-based compilation engine instead of the ECJ compiler
+              "javac": {
                 "enabled": true
               }
             }
