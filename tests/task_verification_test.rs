@@ -65,12 +65,13 @@ fn get_task_command_by_tag(tag: &str) -> String {
 
     for task in tasks_array {
         if let Some(tags) = task["tags"].as_array()
-            && tags.iter().any(|t| t.as_str() == Some(tag)) {
-                return task["command"]
-                    .as_str()
-                    .expect("Command is not a string")
-                    .to_string();
-            }
+            && tags.iter().any(|t| t.as_str() == Some(tag))
+        {
+            return task["command"]
+                .as_str()
+                .expect("Command is not a string")
+                .to_string();
+        }
     }
     panic!("Task with tag '{}' not found", tag);
 }
