@@ -58,16 +58,19 @@ fn setup_mock_project(
     (zed_file, zed_test_file, bin_dir)
 }
 fn get_task_command_by_tag(tag: &str) -> String {
-    let tasks_json = fs::read_to_string("languages/java/tasks.json").expect("Failed to read tasks.json");
+    let tasks_json =
+        fs::read_to_string("languages/java/tasks.json").expect("Failed to read tasks.json");
     let tasks: Value = serde_json::from_str(&tasks_json).expect("Failed to parse tasks.json");
     let tasks_array = tasks.as_array().expect("tasks.json is not an array");
 
     for task in tasks_array {
-        if let Some(tags) = task["tags"].as_array() {
-            if tags.iter().any(|t| t.as_str() == Some(tag)) {
-                return task["command"].as_str().expect("Command is not a string").to_string();
+        if let Some(tags) = task["tags"].as_array()
+            && tags.iter().any(|t| t.as_str() == Some(tag)) {
+                return task["command"]
+                    .as_str()
+                    .expect("Command is not a string")
+                    .to_string();
             }
-        }
     }
     panic!("Task with tag '{}' not found", tag);
 }
@@ -87,7 +90,8 @@ impl TestProject {
             fs::remove_dir_all(&temp_dir).unwrap();
         }
         fs::create_dir_all(&temp_dir).unwrap();
-        let (zed_file, zed_test_file, bin_dir) = setup_mock_project(&temp_dir, project_type, module_path);
+        let (zed_file, zed_test_file, bin_dir) =
+            setup_mock_project(&temp_dir, project_type, module_path);
         let old_path = std::env::var("PATH").unwrap_or_default();
         let new_path = format!("{}:{}", bin_dir.to_string_lossy(), old_path);
         Self {
@@ -99,9 +103,11 @@ impl TestProject {
         }
     }
 
-    fn task(&self, tag: &str) -> TaskRunner {
-        let command = get_task_command_by_tag(tag)
-            .replace("${ZED_CUSTOM_java_outer_class_name:}", "${ZED_CUSTOM_java_outer_class_name:-}");
+    fn task(&self, tag: &str) -> TaskRunner<'_> {
+        let command = get_task_command_by_tag(tag).replace(
+            "${ZED_CUSTOM_java_outer_class_name:}",
+            "${ZED_CUSTOM_java_outer_class_name:-}",
+        );
         TaskRunner {
             project: self,
             command,
@@ -147,11 +153,13 @@ impl<'a> TaskRunner<'a> {
         self
     }
     fn method(mut self, m: &str) -> Self {
-        self.extra_env.push(("ZED_CUSTOM_java_method_name", m.to_string()));
+        self.extra_env
+            .push(("ZED_CUSTOM_java_method_name", m.to_string()));
         self
     }
     fn outer_class(mut self, o: &str) -> Self {
-        self.extra_env.push(("ZED_CUSTOM_java_outer_class_name", o.to_string()));
+        self.extra_env
+            .push(("ZED_CUSTOM_java_outer_class_name", o.to_string()));
         self
     }
 
@@ -198,7 +206,8 @@ fn test_maven_single_module_command_logic() {
         stdout
     );
     assert!(
-        stdout_test.contains("MVN_CALLED: clean test-compile exec:java -Dexec.mainClass=com.example.Main"),
+        stdout_test
+            .contains("MVN_CALLED: clean test-compile exec:java -Dexec.mainClass=com.example.Main"),
         "Should run as single module. Got: {}",
         stdout_test
     );
@@ -231,7 +240,7 @@ fn test_maven_multi_module_command_logic() {
     );
     assert!(
         stdout.contains("-Dexec.classpathScope=runtime"),
-        "Should use test classpath scope. Got: {}",
+        "Should use runtime classpath scope. Got: {}",
         stdout
     );
 
@@ -245,7 +254,7 @@ fn test_maven_multi_module_command_logic() {
         "Should run only the submodule. Got: {}",
         stdout_test
     );
-     assert!(
+    assert!(
         stdout_test.contains("-Dexec.classpathScope=test"),
         "Should use test classpath scope. Got: {}",
         stdout_test
