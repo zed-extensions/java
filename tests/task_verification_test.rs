@@ -423,6 +423,41 @@ fn test_maven_default_package_test_class_logic() {
     );
 }
 
+#[test]
+fn test_maven_nested_test_method_logic() {
+    let project = TestProject::new("maven_nested_method", "maven", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .method("testMethod")
+        .run();
+
+    assert!(
+        stdout.contains("-Dtest=example.NestedTest$Inner#testMethod"),
+        "Should correctly format nested test method for Maven. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_maven_nested_test_class_logic() {
+    let project = TestProject::new("maven_nested_test_class", "maven", None);
+    let stdout = project
+        .task("java-test-class")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .run();
+
+    assert!(
+        stdout.contains("-Dtest=example.NestedTest$Inner"),
+        "Should correctly format nested test class for Maven. Got: {}",
+        stdout
+    );
+}
+
 // --- Gradle Tests ---
 
 #[test]
@@ -586,7 +621,7 @@ fn test_gradle_default_package_test_class_logic() {
 }
 
 #[test]
-fn test_gradle_nested_test_logic() {
+fn test_gradle_nested_test_method_logic() {
     let project = TestProject::new("gradle_nested_test", "gradle", None);
     let stdout = project
         .task("java-test-method")
@@ -598,6 +633,23 @@ fn test_gradle_nested_test_logic() {
 
     assert!(
         stdout.contains("--tests example.NestedTest$Inner.testMethod"),
+        "Should correctly format nested test for Gradle. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_nested_test_class_logic() {
+    let project = TestProject::new("gradle_nested_test_class", "gradle", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .run();
+
+    assert!(
+        stdout.contains("--tests example.NestedTest$Inner"),
         "Should correctly format nested test for Gradle. Got: {}",
         stdout
     );
