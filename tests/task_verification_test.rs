@@ -543,11 +543,7 @@ fn test_gradle_single_level_package_logic() {
 #[test]
 fn test_gradle_default_package_command_logic() {
     let project = TestProject::new("gradle_default_package", "gradle", None);
-    let stdout = project
-        .task("java-main")
-        .package("")
-        .class("Main")
-        .run();
+    let stdout = project.task("java-main").package("").class("Main").run();
 
     assert!(
         stdout.contains("-PmainClass=Main"),
@@ -572,7 +568,6 @@ fn test_gradle_default_package_test_method_logic() {
         stdout
     );
 }
-
 
 #[test]
 fn test_gradle_default_package_test_class_logic() {
