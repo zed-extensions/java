@@ -585,6 +585,24 @@ fn test_gradle_default_package_test_class_logic() {
     );
 }
 
+#[test]
+fn test_gradle_nested_test_logic() {
+    let project = TestProject::new("gradle_nested_test", "gradle", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .method("testMethod")
+        .run();
+
+    assert!(
+        stdout.contains("--tests example.NestedTest$Inner.testMethod"),
+        "Should correctly format nested test for Gradle. Got: {}",
+        stdout
+    );
+}
+
 // --- Generic Tests ---
 
 #[test]

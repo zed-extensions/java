@@ -61,3 +61,12 @@ fn runnables_default_package_test() {
         "languages/java/runnables.scm",
     );
 }
+
+#[test]
+fn runnables_nested_test() {
+    support::assert_query_snapshot(
+        "runnables_nested_test",
+        "tests/languages/java/example/NestedTest.java",
+        "languages/java/runnables.scm",
+    );
+}

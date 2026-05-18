@@ -1,0 +1,65 @@
+---
+source: tests/support/mod.rs
+assertion_line: 82
+expression: captures
+---
+- name: java_package_name
+  line: 1
+  column: 9
+  text: example
+- name: java_outer_class_name
+  line: 6
+  column: 14
+  text: NestedTest
+- name: _
+  line: 7
+  column: 5
+  text: "@Nested\n    class Inner {\n        @Test\n        void testMethod() {}\n    }"
+- name: nested_annotation
+  line: 7
+  column: 6
+  text: Nested
+- name: run
+  line: 8
+  column: 11
+  text: Inner
+- name: java_class_name
+  line: 8
+  column: 11
+  text: Inner
+- name: annotation_name
+  line: 9
+  column: 10
+  text: Test
+- name: java_package_name
+  line: 1
+  column: 9
+  text: example
+- name: java_outer_class_name
+  line: 6
+  column: 14
+  text: NestedTest
+- name: _
+  line: 7
+  column: 5
+  text: "@Nested\n    class Inner {\n        @Test\n        void testMethod() {}\n    }"
+- name: nested_annotation
+  line: 7
+  column: 6
+  text: Nested
+- name: java_class_name
+  line: 8
+  column: 11
+  text: Inner
+- name: annotation_name
+  line: 9
+  column: 10
+  text: Test
+- name: run
+  line: 10
+  column: 14
+  text: testMethod
+- name: java_method_name
+  line: 10
+  column: 14
+  text: testMethod
