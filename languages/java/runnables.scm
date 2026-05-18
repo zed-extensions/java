@@ -1,9 +1,7 @@
 ; Run the main function
-((package_declaration
-  [
-    (identifier)
-    (scoped_identifier)
-  ] @java_package_name)?
+(program
+  (package_declaration
+    [(identifier) (scoped_identifier)] @java_package_name)?
   (class_declaration
     (modifiers) @class-modifier
     (#match? @class-modifier "public")
@@ -18,11 +16,9 @@
   (#set! tag java-main))
 
 ; Run the main class
-((package_declaration
-  [
-    (identifier)
-    (scoped_identifier)
-  ] @java_package_name)?
+(program
+  (package_declaration
+    [(identifier) (scoped_identifier)] @java_package_name)?
   (class_declaration
     (modifiers) @class-modifier
     (#match? @class-modifier "public")
@@ -37,11 +33,9 @@
   (#set! tag java-main))
 
 ; Run test function (marker annotation, e.g. @Test)
-((package_declaration
-  [
-    (identifier)
-    (scoped_identifier)
-  ] @java_package_name)
+(program
+  (package_declaration
+    [(identifier) (scoped_identifier)] @java_package_name)?
   (class_declaration
     name: (identifier) @java_class_name
     body: (class_body
@@ -58,11 +52,9 @@
   (#set! tag java-test-method))
 
 ; Run nested test function
-((package_declaration
-  [
-    (identifier)
-    (scoped_identifier)
-  ] @java_package_name)
+(program
+  (package_declaration
+    [(identifier) (scoped_identifier)] @java_package_name)?
   (class_declaration
     name: (identifier) @java_outer_class_name
     body: (class_body
@@ -86,11 +78,9 @@
   (#set! tag java-test-method-nested))
 
 ; Run test class
-((package_declaration
-  [
-    (identifier)
-    (scoped_identifier)
-  ] @java_package_name)
+(program
+  (package_declaration
+    [(identifier) (scoped_identifier)] @java_package_name)?
   (class_declaration
     name: (identifier) @java_class_name @run
     body: (class_body
@@ -106,11 +96,9 @@
   (#set! tag java-test-class))
 
 ; Run nested test class
-((package_declaration
-  [
-    (identifier)
-    (scoped_identifier)
-  ] @java_package_name)
+(program
+  (package_declaration
+    [(identifier) (scoped_identifier)] @java_package_name)?
   (class_declaration
     name: (identifier) @java_outer_class_name
     body: (class_body

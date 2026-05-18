@@ -1,6 +1,6 @@
 ---
 source: tests/support/mod.rs
-assertion_line: 126
+assertion_line: 82
 expression: captures
 ---
 - name: java_package_name
@@ -10,7 +10,7 @@ expression: captures
 - name: _
   line: 3
   column: 1
-  text: "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello world!\");\n    }\n}"
+  text: "public class SingleLevelPackage {\n    public static void main(String[] args) {\n        System.out.println(\"Hello world!\");\n    }\n}"
 - name: class-modifier
   line: 3
   column: 1
@@ -18,7 +18,7 @@ expression: captures
 - name: java_class_name
   line: 3
   column: 14
-  text: Main
+  text: SingleLevelPackage
 - name: modifier
   line: 4
   column: 5
@@ -34,7 +34,7 @@ expression: captures
 - name: _
   line: 3
   column: 1
-  text: "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello world!\");\n    }\n}"
+  text: "public class SingleLevelPackage {\n    public static void main(String[] args) {\n        System.out.println(\"Hello world!\");\n    }\n}"
 - name: class-modifier
   line: 3
   column: 1
@@ -42,11 +42,11 @@ expression: captures
 - name: java_class_name
   line: 3
   column: 14
-  text: Main
+  text: SingleLevelPackage
 - name: run
   line: 3
   column: 14
-  text: Main
+  text: SingleLevelPackage
 - name: modifier
   line: 4
   column: 5

@@ -1,6 +1,6 @@
-package org.example;
+package example;
 
-public class Main {
+public class SingleLevelPackage {
     public static void main(String[] args) {
         System.out.println("Hello world!");
     }
