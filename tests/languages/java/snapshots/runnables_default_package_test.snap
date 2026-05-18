@@ -1,0 +1,41 @@
+---
+source: tests/support/mod.rs
+assertion_line: 82
+expression: captures
+---
+- name: _
+  line: 3
+  column: 1
+  text: "public class DefaultPackageTest {\n    @Test\n    void testMethod() {}\n}"
+- name: java_class_name
+  line: 3
+  column: 14
+  text: DefaultPackageTest
+- name: run
+  line: 3
+  column: 14
+  text: DefaultPackageTest
+- name: annotation_name
+  line: 4
+  column: 6
+  text: Test
+- name: _
+  line: 3
+  column: 1
+  text: "public class DefaultPackageTest {\n    @Test\n    void testMethod() {}\n}"
+- name: java_class_name
+  line: 3
+  column: 14
+  text: DefaultPackageTest
+- name: annotation_name
+  line: 4
+  column: 6
+  text: Test
+- name: run
+  line: 5
+  column: 10
+  text: testMethod
+- name: java_method_name
+  line: 5
+  column: 10
+  text: testMethod

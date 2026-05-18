@@ -1,0 +1,49 @@
+---
+source: tests/support/mod.rs
+assertion_line: 82
+expression: captures
+---
+- name: java_package_name
+  line: 1
+  column: 9
+  text: example
+- name: _
+  line: 5
+  column: 1
+  text: "public class SingleLevelTest {\n    @Test\n    void testMethod() {}\n}"
+- name: java_class_name
+  line: 5
+  column: 14
+  text: SingleLevelTest
+- name: run
+  line: 5
+  column: 14
+  text: SingleLevelTest
+- name: annotation_name
+  line: 6
+  column: 6
+  text: Test
+- name: java_package_name
+  line: 1
+  column: 9
+  text: example
+- name: _
+  line: 5
+  column: 1
+  text: "public class SingleLevelTest {\n    @Test\n    void testMethod() {}\n}"
+- name: java_class_name
+  line: 5
+  column: 14
+  text: SingleLevelTest
+- name: annotation_name
+  line: 6
+  column: 6
+  text: Test
+- name: run
+  line: 7
+  column: 10
+  text: testMethod
+- name: java_method_name
+  line: 7
+  column: 10
+  text: testMethod

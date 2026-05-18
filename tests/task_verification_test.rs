@@ -149,6 +149,10 @@ impl<'a> TaskRunner<'a> {
         self.zed_file = path;
         self
     }
+    fn package(mut self, p: &str) -> Self {
+        self.package = p.to_string();
+        self
+    }
     fn class(mut self, c: &str) -> Self {
         self.class = c.to_string();
         self
@@ -358,6 +362,102 @@ fn test_maven_test_class_logic() {
     );
 }
 
+#[test]
+fn test_maven_single_level_package_logic() {
+    let project = TestProject::new("maven_single_package", "maven", None);
+    let stdout = project
+        .task("java-main")
+        .package("example")
+        .class("Main")
+        .run();
+
+    assert!(
+        stdout.contains("-Dexec.mainClass=example.Main"),
+        "Should include the single-level package in Maven. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_maven_default_package_command_logic() {
+    let project = TestProject::new("maven_default_package", "maven", None);
+    let stdout = project.task("java-main").package("").class("Main").run();
+
+    assert!(
+        stdout.contains("-Dexec.mainClass=Main"),
+        "Should not include leading dot for default package in Maven. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_maven_default_package_test_method_logic() {
+    let project = TestProject::new("maven_default_test", "maven", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("")
+        .class("MyTest")
+        .method("testMethod")
+        .run();
+
+    assert!(
+        stdout.contains("-Dtest=MyTest#testMethod"),
+        "Should not include leading dot for test method in default package. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_maven_default_package_test_class_logic() {
+    let project = TestProject::new("maven_default_class", "maven", None);
+    let stdout = project
+        .task("java-test-class")
+        .package("")
+        .class("MyTest")
+        .run();
+
+    assert!(
+        stdout.contains("-Dtest=MyTest"),
+        "Should not include leading dot for test class in default package. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_maven_nested_test_method_logic() {
+    let project = TestProject::new("maven_nested_method", "maven", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .method("testMethod")
+        .run();
+
+    assert!(
+        stdout.contains("-Dtest=example.NestedTest$Inner#testMethod"),
+        "Should correctly format nested test method for Maven. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_maven_nested_test_class_logic() {
+    let project = TestProject::new("maven_nested_test_class", "maven", None);
+    let stdout = project
+        .task("java-test-class")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .run();
+
+    assert!(
+        stdout.contains("-Dtest=example.NestedTest$Inner"),
+        "Should correctly format nested test class for Maven. Got: {}",
+        stdout
+    );
+}
+
 // --- Gradle Tests ---
 
 #[test]
@@ -455,6 +555,102 @@ fn test_gradle_test_class_logic() {
     assert!(
         stdout.contains("GRADLE_CALLED: :module-a:test --tests com.example.Main"),
         "Should run only the submodule test class for Gradle. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_single_level_package_logic() {
+    let project = TestProject::new("gradle_single_package", "gradle", None);
+    let stdout = project
+        .task("java-main")
+        .package("example")
+        .class("Main")
+        .run();
+
+    assert!(
+        stdout.contains("-PmainClass=example.Main"),
+        "Should include the single-level package in Gradle. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_default_package_command_logic() {
+    let project = TestProject::new("gradle_default_package", "gradle", None);
+    let stdout = project.task("java-main").package("").class("Main").run();
+
+    assert!(
+        stdout.contains("-PmainClass=Main"),
+        "Should not include leading dot for default package in Gradle. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_default_package_test_method_logic() {
+    let project = TestProject::new("gradle_default_test", "gradle", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("")
+        .class("MyTest")
+        .method("testMethod")
+        .run();
+
+    assert!(
+        stdout.contains("--tests MyTest.testMethod"),
+        "Should not include leading dot for test method in default package (Gradle). Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_default_package_test_class_logic() {
+    let project = TestProject::new("gradle_default_class", "gradle", None);
+    let stdout = project
+        .task("java-test-class")
+        .package("")
+        .class("MyTest")
+        .run();
+
+    assert!(
+        stdout.contains("--tests MyTest"),
+        "Should not include leading dot for test class in default package (Gradle). Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_nested_test_method_logic() {
+    let project = TestProject::new("gradle_nested_test", "gradle", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .method("testMethod")
+        .run();
+
+    assert!(
+        stdout.contains("--tests example.NestedTest$Inner.testMethod"),
+        "Should correctly format nested test for Gradle. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_gradle_nested_test_class_logic() {
+    let project = TestProject::new("gradle_nested_test_class", "gradle", None);
+    let stdout = project
+        .task("java-test-method")
+        .package("example")
+        .outer_class("NestedTest")
+        .class("Inner")
+        .run();
+
+    assert!(
+        stdout.contains("--tests example.NestedTest$Inner"),
+        "Should correctly format nested test for Gradle. Got: {}",
         stdout
     );
 }
