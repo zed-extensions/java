@@ -1,0 +1,168 @@
+---
+source: tests/support/mod.rs
+expression: captures
+---
+- name: class.around
+  line: 6
+  column: 1
+  text: "public class TextObjects {\n    /*\n     * This is a block comment in the class\n     */\n    private String name;\n\n    public TextObjects(String name) {\n        this.name = name;\n    }\n\n    public String getName() {\n        return name;\n    }\n\n    public void runLambda() {\n        Runnable r1 = () -> {\n            System.out.println(\"Block lambda body\");\n        };\n\n        Runnable r2 = () -> System.out.println(\"Expression lambda body\");\n    }\n}"
+- name: comment.around
+  line: 3
+  column: 1
+  text: // This is a block comment
+- name: comment.around
+  line: 4
+  column: 1
+  text: // with multiple lines for testing
+- name: comment.around
+  line: 5
+  column: 1
+  text: // comment.around
+- name: comment.around
+  line: 7
+  column: 5
+  text: "/*\n     * This is a block comment in the class\n     */"
+- name: function.around
+  line: 12
+  column: 5
+  text: "public TextObjects(String name) {\n        this.name = name;\n    }"
+- name: function.inside
+  line: 13
+  column: 9
+  text: this.name = name;
+- name: function.around
+  line: 16
+  column: 5
+  text: "public String getName() {\n        return name;\n    }"
+- name: function.inside
+  line: 17
+  column: 9
+  text: return name;
+- name: function.around
+  line: 20
+  column: 5
+  text: "public void runLambda() {\n        Runnable r1 = () -> {\n            System.out.println(\"Block lambda body\");\n        };\n\n        Runnable r2 = () -> System.out.println(\"Expression lambda body\");\n    }"
+- name: function.around
+  line: 21
+  column: 23
+  text: "() -> {\n            System.out.println(\"Block lambda body\");\n        }"
+- name: function.inside
+  line: 21
+  column: 29
+  text: "{\n            System.out.println(\"Block lambda body\");\n        }"
+- name: function.inside
+  line: 22
+  column: 13
+  text: "System.out.println(\"Block lambda body\");"
+- name: function.around
+  line: 25
+  column: 23
+  text: "() -> System.out.println(\"Expression lambda body\")"
+- name: function.inside
+  line: 25
+  column: 29
+  text: "System.out.println(\"Expression lambda body\")"
+- name: function.inside
+  line: 21
+  column: 9
+  text: "Runnable r1 = () -> {\n            System.out.println(\"Block lambda body\");\n        };"
+- name: function.inside
+  line: 25
+  column: 9
+  text: "Runnable r2 = () -> System.out.println(\"Expression lambda body\");"
+- name: class.inside
+  line: 7
+  column: 5
+  text: "/*\n     * This is a block comment in the class\n     */"
+- name: class.inside
+  line: 10
+  column: 5
+  text: private String name;
+- name: class.inside
+  line: 12
+  column: 5
+  text: "public TextObjects(String name) {\n        this.name = name;\n    }"
+- name: class.inside
+  line: 16
+  column: 5
+  text: "public String getName() {\n        return name;\n    }"
+- name: class.inside
+  line: 20
+  column: 5
+  text: "public void runLambda() {\n        Runnable r1 = () -> {\n            System.out.println(\"Block lambda body\");\n        };\n\n        Runnable r2 = () -> System.out.println(\"Expression lambda body\");\n    }"
+- name: class.around
+  line: 29
+  column: 1
+  text: "interface TestInterface {\n    void process();\n\n    default void log() {\n        System.out.println(\"Interface log\");\n    }\n}"
+- name: function.around
+  line: 30
+  column: 5
+  text: void process();
+- name: function.around
+  line: 32
+  column: 5
+  text: "default void log() {\n        System.out.println(\"Interface log\");\n    }"
+- name: function.inside
+  line: 33
+  column: 9
+  text: "System.out.println(\"Interface log\");"
+- name: class.inside
+  line: 30
+  column: 5
+  text: void process();
+- name: class.inside
+  line: 32
+  column: 5
+  text: "default void log() {\n        System.out.println(\"Interface log\");\n    }"
+- name: class.around
+  line: 37
+  column: 1
+  text: "enum TestEnum {\n    A, B, C;\n\n    public void print() {\n        System.out.println(this.name());\n    }\n}"
+- name: function.around
+  line: 40
+  column: 5
+  text: "public void print() {\n        System.out.println(this.name());\n    }"
+- name: function.inside
+  line: 41
+  column: 9
+  text: System.out.println(this.name());
+- name: class.inside
+  line: 38
+  column: 5
+  text: A
+- name: class.inside
+  line: 38
+  column: 6
+  text: ","
+- name: class.inside
+  line: 38
+  column: 8
+  text: B
+- name: class.inside
+  line: 38
+  column: 9
+  text: ","
+- name: class.inside
+  line: 38
+  column: 11
+  text: C
+- name: class.inside
+  line: 38
+  column: 12
+  text: ";\n\n    public void print() {\n        System.out.println(this.name());\n    }"
+- name: class.around
+  line: 45
+  column: 1
+  text: "record TestRecord(int value) {\n    public TestRecord {\n        if (value < 0) {\n            throw new IllegalArgumentException();\n        }\n    }\n}"
+- name: class.inside
+  line: 46
+  column: 5
+  text: "public TestRecord {\n        if (value < 0) {\n            throw new IllegalArgumentException();\n        }\n    }"
+- name: class.around
+  line: 53
+  column: 1
+  text: "@interface TestAnnotation {\n    String value();\n}"
+- name: class.inside
+  line: 54
+  column: 5
+  text: String value();
