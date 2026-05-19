@@ -70,3 +70,42 @@ fn runnables_nested_test() {
         "languages/java/runnables.scm",
     );
 }
+
+// ============================================================================
+// Outline Tests
+// ============================================================================
+
+#[test]
+fn outline() {
+    support::assert_query_snapshot(
+        "outline",
+        "tests/languages/java/org/example/Outline.java",
+        "languages/java/outline.scm",
+    );
+}
+
+// ============================================================================
+// Textobjects Tests
+// ============================================================================
+
+#[test]
+fn textobjects() {
+    support::assert_query_snapshot(
+        "textobjects",
+        "tests/languages/java/org/example/TextObjects.java",
+        "languages/java/textobjects.scm",
+    );
+}
+
+// ============================================================================
+// Injections Tests
+// ============================================================================
+
+#[test]
+fn injections() {
+    support::assert_query_snapshot(
+        "injections",
+        "tests/languages/java/org/example/Injections.java",
+        "languages/java/injections.scm",
+    );
+}

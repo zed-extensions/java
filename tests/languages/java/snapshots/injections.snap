@@ -1,0 +1,48 @@
+---
+source: tests/support/mod.rs
+expression: captures
+---
+- name: injection.content
+  line: 3
+  column: 1
+  text: // This is a line comment injection content.
+- name: injection.content
+  line: 4
+  column: 1
+  text: /* This is a block comment injection content. */
+- name: injection.content
+  line: 4
+  column: 1
+  text: /* This is a block comment injection content. */
+- name: injection.content
+  line: 5
+  column: 1
+  text: "/**\n * This is a Javadoc comment matching doxygen-like rules.\n */"
+- name: injection.content
+  line: 5
+  column: 1
+  text: "/**\n * This is a Javadoc comment matching doxygen-like rules.\n */"
+- name: _method
+  line: 10
+  column: 20
+  text: printf
+- name: injection.content
+  line: 10
+  column: 28
+  text: "Printf format string: %s %d"
+- name: _method
+  line: 11
+  column: 16
+  text: format
+- name: injection.content
+  line: 11
+  column: 24
+  text: "Format string: %x"
+- name: injection.content
+  line: 12
+  column: 29
+  text: "Formatted string literal: %s"
+- name: _method
+  line: 12
+  column: 59
+  text: formatted
