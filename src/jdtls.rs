@@ -106,8 +106,9 @@ pub fn build_jdtls_launch_args(
             && let (Some(min_bytes), Some(max_bytes)) =
                 (parse_memory_value(&min), parse_memory_value(max_val))
             && min_bytes > max_bytes
+            && let Some(max) = max.as_mut()
         {
-            std::mem::swap(&mut min, max.as_mut().unwrap());
+            std::mem::swap(&mut min, max);
         }
         args.push(format!("-Xms{min}"));
         if let Some(max_val) = max {
@@ -214,10 +215,11 @@ pub fn try_to_fetch_and_install_latest_jdtls(
         .map_or_else(
             |_| {
                 second_last
-                    .as_ref()
                     .ok_or(JDTLS_VERION_ERROR.to_string())
-                    .and_then(|fallback| download_jdtls_milestone(fallback))
-                    .map(|milestone| (second_last.unwrap(), milestone.trim_end().to_string()))
+                    .and_then(|fallback| {
+                        download_jdtls_milestone(&fallback)
+                            .map(|milestone| (fallback, milestone.trim_end().to_string()))
+                    })
             },
             |milestone| Ok((last, milestone.trim_end().to_string())),
         )?;
@@ -396,11 +398,12 @@ fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
             .find(|(k, _)| k == "APPDATA")
             .map(|(_, v)| PathBuf::from(v)),
     }
+    .map(Ok)
     .unwrap_or_else(|| {
         current_dir()
-            .expect("should be able to get extension workdir")
-            .join("caches")
-    });
+            .map_err(|err| format!("Failed to get current directory: {err}"))
+            .map(|path| path.join("caches"))
+    })?;
 
     // caches are unique per worktree-root-path
     let cache_key = worktree.root_path();

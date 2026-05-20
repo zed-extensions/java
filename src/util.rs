@@ -275,12 +275,10 @@ pub fn get_latest_versions_from_tag(repo: &str) -> zed::Result<(String, Option<S
     let latest_version = get_tag_at(&tags_response_body, 0);
     let second_version = get_tag_at(&tags_response_body, 1);
 
-    if latest_version.is_none() {
-        return Err(TAG_UNEXPECTED_FORMAT_ERROR.to_string());
-    }
+    let latest_version = latest_version.ok_or_else(|| TAG_UNEXPECTED_FORMAT_ERROR.to_string())?;
 
     Ok((
-        latest_version.unwrap().to_string(),
+        latest_version.to_string(),
         second_version.map(|second| second.to_string()),
     ))
 }
