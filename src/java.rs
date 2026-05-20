@@ -386,7 +386,9 @@ impl Extension for Java {
             .unwrap_or_else(|| json!({}));
 
         // Inject workspaceFolders default if not already set by the user
-        let options_obj = options.as_object_mut().unwrap();
+        let options_obj = options
+            .as_object_mut()
+            .ok_or_else(|| "initialization_options is not a JSON object".to_string())?;
         if !options_obj.contains_key("workspaceFolders") {
             let uri = util::path_to_file_uri(&worktree.root_path());
             options_obj.insert("workspaceFolders".to_string(), json!([uri]));
@@ -396,7 +398,9 @@ impl Extension for Java {
         let caps = options_obj
             .entry("extendedClientCapabilities")
             .or_insert_with(|| json!({}));
-        let caps_obj = caps.as_object_mut().unwrap();
+        let caps_obj = caps
+            .as_object_mut()
+            .ok_or_else(|| "extendedClientCapabilities is not a JSON object".to_string())?;
         caps_obj
             .entry("classFileContentsSupport")
             .or_insert(json!(true));
@@ -575,7 +579,7 @@ impl Extension for Java {
                     SymbolKind::Class => "class ",
                     SymbolKind::Interface => "interface ",
                     SymbolKind::Enum => "enum ",
-                    _ => unreachable!(),
+                    _ => return None,
                 };
                 let code = format!("{keyword}{name} {{}}");
 
