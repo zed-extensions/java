@@ -377,12 +377,13 @@ MyProject/
 "lsp": {
   "jdtls": {
     "initialization_options": {
-      "project": {
-        "sourcePaths": [
-          ".",
-          "src"
-        ]
-      },
+      "settings": {
+        "java": {
+          "project": {
+            "sourcePaths": [".", "src"],
+          }
+        }
+      }
     }
   }
 }
