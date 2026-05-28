@@ -7,6 +7,7 @@ use zed_extension_api::{
     set_language_server_installation_status,
 };
 
+use crate::config::get_lsp_proxy_path;
 use crate::util::{mark_checked_once, remove_all_files_except, should_use_local_or_download};
 
 const PROXY_BINARY: &str = "java-lsp-proxy";
@@ -66,7 +67,13 @@ pub fn binary_path(
     language_server_id: &LanguageServerId,
     worktree: &Worktree,
 ) -> zed::Result<String> {
-    // 1. Respect check_updates setting (Never/Once/Always)
+    // 1. Prioritize explicitly configured custom proxy binary if it exists.
+    if let Some(path) = get_lsp_proxy_path(configuration, worktree) {
+        *cached = Some(path.clone());
+        return Ok(path);
+    }
+
+    // 2. Respect check_updates setting (Never/Once/Always)
     //    Returns Some(path) when local install exists and policy says use it.
     //    Returns None when policy allows downloading.
     //    Returns Err when policy is Never/Once-exhausted with no local install.
@@ -82,7 +89,7 @@ pub fn binary_path(
         }
     }
 
-    // 2. Auto-download from GitHub releases
+    // 3. Auto-download from GitHub releases
     if let Ok((name, file_type)) = asset_name()
         && let Ok(release) = zed::latest_github_release(
             GITHUB_REPO,
@@ -121,19 +128,19 @@ pub fn binary_path(
         }
     }
 
-    // 3. Fallback: local install (covers "always" mode when download fails)
+    // 4. Fallback: local install (covers "always" mode when download fails)
     if let Some(path) = find_latest_local() {
         let s = path.to_string_lossy().to_string();
         *cached = Some(s.clone());
         return Ok(s);
     }
 
-    // 4. Fallback: binary on $PATH
+    // 5. Fallback: binary on $PATH
     if let Some(path) = worktree.which(proxy_exec().as_str()) {
         return Ok(path);
     }
 
-    // 5. Stale cache fallback
+    // 6. Stale cache fallback
     if let Some(path) = cached.as_deref()
         && metadata(path).is_ok()
     {
