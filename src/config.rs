@@ -145,3 +145,20 @@ pub fn get_java_debug_jar(configuration: &Option<Value>, worktree: &Worktree) ->
 
     None
 }
+
+pub fn get_lsp_proxy_path(configuration: &Option<Value>, worktree: &Worktree) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(lsp_proxy_path) = configuration
+            .pointer("/lsp_proxy_path")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, lsp_proxy_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{err}");
+            }
+        }
+    }
+
+    None
+}

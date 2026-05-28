@@ -50,7 +50,8 @@ Here is a common `settings.json` including the above mentioned configurations:
       // When these are set, the extension will not download or manage these components
       "jdtls_launcher": "/path/to/your/jdt-language-server/bin/jdtls",
       "lombok_jar": "/path/to/your/lombok.jar",
-      "java_debug_jar": "/path/to/your/com.microsoft.java.debug.plugin.jar"
+      "java_debug_jar": "/path/to/your/com.microsoft.java.debug.plugin.jar",
+      "lsp_proxy_path": "/path/to/your/java-lsp-proxy"
     }
   }
 }
