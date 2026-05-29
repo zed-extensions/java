@@ -25,7 +25,11 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{get_java_home, get_jdtls_launcher, get_lombok_jar, is_lombok_enabled},
+    config::{
+        get_google_java_format_config, get_java_home, get_jdtls_launcher, get_lombok_jar,
+        get_palantir_java_format_config, is_google_java_format_enabled, is_lombok_enabled,
+        is_palantir_java_format_enabled,
+    },
     debugger::Debugger,
     jdtls::{
         build_jdtls_launch_args, find_latest_local_jdtls, find_latest_local_lombok,
@@ -141,6 +145,107 @@ impl Java {
                 }
             }
         }
+    }
+
+    fn google_java_format_env(
+        &mut self,
+        language_server_id: &LanguageServerId,
+        configuration: &Option<Value>,
+        worktree: &Worktree,
+        env: &mut Vec<(String, String)>,
+    ) -> zed::Result<()> {
+        let gjf_config = get_google_java_format_config(configuration, worktree);
+
+        env.push((
+            "GOOGLE_JAVA_FORMAT_ENABLED".to_string(),
+            gjf_config.enabled.to_string(),
+        ));
+        env.push(("GOOGLE_JAVA_FORMAT_STYLE".to_string(), gjf_config.style));
+
+        let path = if let Some(custom_path) = gjf_config.path {
+            PathBuf::from(custom_path)
+        } else {
+            let rel_path = match download_google_java_format(language_server_id, configuration) {
+                Ok(path) => path,
+                Err(err) => {
+                    if let Some(local_path) = find_latest_local_google_java_format() {
+                        local_path
+                    } else {
+                        return Err(err);
+                    }
+                }
+            };
+            if let Ok(current_dir) = env::current_dir() {
+                current_dir.join(rel_path)
+            } else {
+                rel_path
+            }
+        };
+
+        let path_str = path.to_string_lossy().to_string();
+        env.push(("GOOGLE_JAVA_FORMAT_BIN".to_string(), path_str.clone()));
+
+        if path_str.ends_with(".jar")
+            && let Ok(java_exe) =
+                crate::util::get_java_executable(configuration, worktree, language_server_id)
+        {
+            env.push((
+                "JAVA_EXECUTABLE".to_string(),
+                java_exe.to_string_lossy().to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn palantir_java_format_env(
+        &mut self,
+        language_server_id: &LanguageServerId,
+        configuration: &Option<Value>,
+        worktree: &Worktree,
+        env: &mut Vec<(String, String)>,
+    ) -> zed::Result<()> {
+        let pjf_config = get_palantir_java_format_config(configuration, worktree);
+
+        env.push((
+            "PALANTIR_JAVA_FORMAT_ENABLED".to_string(),
+            pjf_config.enabled.to_string(),
+        ));
+
+        let path = if let Some(custom_path) = pjf_config.path {
+            PathBuf::from(custom_path)
+        } else {
+            let rel_path = match download_palantir_java_format(language_server_id, configuration) {
+                Ok(path) => path,
+                Err(err) => {
+                    if let Some(local_path) = find_latest_local_palantir_java_format() {
+                        local_path
+                    } else {
+                        return Err(err);
+                    }
+                }
+            };
+            if let Ok(current_dir) = env::current_dir() {
+                current_dir.join(rel_path)
+            } else {
+                rel_path
+            }
+        };
+
+        let path_str = path.to_string_lossy().to_string();
+        env.push(("PALANTIR_JAVA_FORMAT_BIN".to_string(), path_str.clone()));
+
+        if path_str.ends_with(".jar")
+            && let Ok(java_exe) =
+                crate::util::get_java_executable(configuration, worktree, language_server_id)
+        {
+            env.push((
+                "JAVA_EXECUTABLE".to_string(),
+                java_exe.to_string_lossy().to_string(),
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -286,6 +391,14 @@ impl Extension for Java {
             self.language_server_workspace_configuration(language_server_id, worktree)?;
 
         let mut env = Vec::new();
+
+        if is_google_java_format_enabled(&configuration) {
+            self.google_java_format_env(language_server_id, &configuration, worktree, &mut env)?;
+        }
+
+        if is_palantir_java_format_enabled(&configuration) {
+            self.palantir_java_format_env(language_server_id, &configuration, worktree, &mut env)?;
+        }
 
         if let Some(java_home) = get_java_home(&configuration, worktree) {
             env.push(("JAVA_HOME".to_string(), java_home));
@@ -630,6 +743,214 @@ impl Extension for Java {
             _ => None,
         }
     }
+}
+
+fn find_latest_local_google_java_format() -> Option<PathBuf> {
+    let install_dir = PathBuf::from("google-java-format");
+    if !install_dir.exists() {
+        return None;
+    }
+    let mut entries = std::fs::read_dir(&install_dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.path())
+        .collect::<Vec<_>>();
+
+    entries.sort();
+    entries.into_iter().next_back()
+}
+
+fn download_google_java_format(
+    language_server_id: &LanguageServerId,
+    _configuration: &Option<Value>,
+) -> zed::Result<PathBuf> {
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::CheckingForUpdate,
+    );
+
+    let repo = "google/google-java-format";
+    let release = zed::latest_github_release(
+        repo,
+        zed::GithubReleaseOptions {
+            require_assets: true,
+            pre_release: false,
+        },
+    )?;
+
+    let install_dir = PathBuf::from("google-java-format");
+    let clean_version = release.version.trim_start_matches('v');
+
+    let (os, arch) = zed::current_platform();
+    let native_asset_name = match (os, arch) {
+        (zed::Os::Mac, zed::Architecture::Aarch64) => {
+            Some("google-java-format_darwin-arm64".to_string())
+        }
+        (zed::Os::Linux, zed::Architecture::X8664) => {
+            Some("google-java-format_linux-x86-64".to_string())
+        }
+        (zed::Os::Linux, zed::Architecture::Aarch64) => {
+            Some("google-java-format_linux-arm64".to_string())
+        }
+        (zed::Os::Windows, zed::Architecture::X8664) => {
+            Some("google-java-format_windows-x86-64.exe".to_string())
+        }
+        _ => None,
+    };
+
+    let (asset_name, target_file_name, is_jar) = if let Some(name) = native_asset_name {
+        let suffix = name.strip_prefix("google-java-format").unwrap_or(&name);
+        let target_name = format!("google-java-format-{}{}", release.version, suffix);
+        (name, target_name, false)
+    } else {
+        let name = format!("google-java-format-{clean_version}-all-deps.jar");
+        (name.clone(), name, true)
+    };
+
+    let target_path = install_dir.join(&target_file_name);
+
+    if target_path.exists() {
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::None,
+        );
+        return Ok(target_path);
+    }
+
+    let asset = release
+        .assets
+        .iter()
+        .find(|a| a.name == asset_name)
+        .ok_or_else(|| {
+            format!(
+                "Asset '{}' not found in release {}",
+                asset_name, release.version
+            )
+        })?;
+
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::Downloading,
+    );
+
+    fs::create_dir_all(&install_dir)
+        .map_err(|e| format!("Failed to create directory {:?}: {}", install_dir, e))?;
+
+    zed::download_file(
+        &asset.download_url,
+        &target_path.to_string_lossy(),
+        zed::DownloadedFileType::Uncompressed,
+    )
+    .map_err(|e| format!("Failed to download google-java-format: {}", e))?;
+
+    if !is_jar {
+        let _ = zed::make_file_executable(&target_path.to_string_lossy());
+    }
+
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::None,
+    );
+
+    let _ = crate::util::remove_all_files_except("google-java-format", &target_file_name);
+
+    Ok(target_path)
+}
+
+fn find_latest_local_palantir_java_format() -> Option<PathBuf> {
+    let install_dir = PathBuf::from("palantir-java-format");
+    if !install_dir.exists() {
+        return None;
+    }
+    let mut entries = std::fs::read_dir(&install_dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.path())
+        .collect::<Vec<_>>();
+
+    entries.sort();
+    entries.into_iter().next_back()
+}
+
+fn download_palantir_java_format(
+    language_server_id: &LanguageServerId,
+    _configuration: &Option<Value>,
+) -> zed::Result<PathBuf> {
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::CheckingForUpdate,
+    );
+
+    let repo = "palantir/palantir-java-format";
+    let release = zed::latest_github_release(
+        repo,
+        zed::GithubReleaseOptions {
+            require_assets: false,
+            pre_release: false,
+        },
+    )?;
+
+    let install_dir = PathBuf::from("palantir-java-format");
+    let clean_version = release.version.trim_start_matches('v');
+
+    let (os, arch) = zed::current_platform();
+    let native_suffix = match (os, arch) {
+        (zed::Os::Mac, zed::Architecture::Aarch64) => Some("macos_aarch64"),
+        (zed::Os::Linux, zed::Architecture::X8664) => Some("linux-glibc_x86-64"),
+        (zed::Os::Linux, zed::Architecture::Aarch64) => Some("linux-glibc_aarch64"),
+        _ => None,
+    };
+
+    let Some(suffix) = native_suffix else {
+        return Err(format!(
+            "No pre-built palantir-java-format binary available for platform {:?}/{:?}",
+            os, arch
+        ));
+    };
+
+    let target_file_name = format!("palantir-java-format-native-{}-{}", clean_version, suffix);
+    let target_path = install_dir.join(&target_file_name);
+
+    if target_path.exists() {
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::None,
+        );
+        return Ok(target_path);
+    }
+
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::Downloading,
+    );
+
+    fs::create_dir_all(&install_dir)
+        .map_err(|e| format!("Failed to create directory {:?}: {}", install_dir, e))?;
+
+    let download_url = format!(
+        "https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/{}/palantir-java-format-native-{}-nativeImage-{}.bin",
+        clean_version, clean_version, suffix
+    );
+
+    zed::download_file(
+        &download_url,
+        &target_path.to_string_lossy(),
+        zed::DownloadedFileType::Uncompressed,
+    )
+    .map_err(|e| format!("Failed to download palantir-java-format: {}", e))?;
+
+    let _ = zed::make_file_executable(&target_path.to_string_lossy());
+
+    set_language_server_installation_status(
+        language_server_id,
+        &LanguageServerInstallationStatus::None,
+    );
+
+    let _ = crate::util::remove_all_files_except("palantir-java-format", &target_file_name);
+
+    Ok(target_path)
 }
 
 register_extension!(Java);

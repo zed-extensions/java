@@ -1,5 +1,6 @@
 mod completions;
 mod decompile;
+mod formatter;
 mod http;
 mod log;
 mod lsp;
@@ -7,12 +8,13 @@ mod platform;
 
 use completions::{is_completion_response, process_completions, sanitize_resolved_completion};
 use decompile::{rewrite_jdt_in_strings, rewrite_jdt_locations};
+use formatter::{intercept_capabilities, FormatterState};
 use http::handle_http;
 use lsp::{parse_lsp_content, raw_has_id, write_raw, write_to_stdout, LspReader};
 use platform::spawn_parent_monitor;
 use serde_json::Value;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env, fs,
     io::{self, BufReader, Write},
     net::TcpListener,
@@ -100,22 +102,30 @@ fn main() {
     // so their responses can be intercepted and rewritten.
     let tracked_ids: Arc<Mutex<HashMap<Value, TrackedKind>>> = Arc::new(Mutex::new(HashMap::new()));
 
-    // --- Thread 1: Zed stdin -> JDTLS stdin (track definition requests) ---
+    let formatter = Arc::new(FormatterState::new(workdir));
+    let pending_config_ids = Arc::new(Mutex::new(HashSet::new()));
+
+    // --- Thread 1: Zed stdin -> JDTLS stdin (track definition requests, GJF redirection, doc cache) ---
     let stdin_writer = Arc::clone(&child_stdin);
     let alive_stdin = Arc::clone(&alive);
     let tracked_in = Arc::clone(&tracked_ids);
+    let formatter_in = Arc::clone(&formatter);
+    let pending_config_ids_in = Arc::clone(&pending_config_ids);
     thread::spawn(move || {
         let stdin = io::stdin().lock();
         let mut reader = LspReader::new(BufReader::new(stdin));
         while alive_stdin.load(Ordering::Relaxed) {
             match reader.read_message() {
                 Ok(Some(raw)) => {
-                    // Only requests (not notifications) carry an `id`; skip the
-                    // JSON parse entirely for high-volume notifications like
-                    // textDocument/didChange.
+                    let msg_parsed = parse_lsp_content(&raw);
                     if raw_has_id(&raw) {
-                        if let Some(msg) = parse_lsp_content(&raw) {
+                        if let Some(ref msg) = msg_parsed {
                             if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
+                                if method == "textDocument/formatting"
+                                    && formatter_in.handle_formatting_request(msg)
+                                {
+                                    continue;
+                                }
                                 let kind = match method {
                                     "textDocument/definition"
                                     | "textDocument/typeDefinition"
@@ -131,6 +141,39 @@ fn main() {
                                     if let Some(id) = msg.get("id").cloned() {
                                         tracked_in.lock().unwrap().insert(id, kind);
                                     }
+                                }
+                            }
+
+                            if let Some(id) = msg.get("id") {
+                                let is_config_resp =
+                                    { pending_config_ids_in.lock().unwrap().remove(id) };
+                                if is_config_resp {
+                                    if let Some(result) = msg.get("result") {
+                                        formatter_in.update_config(result);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Notifications.
+                        if let Some(ref msg) = msg_parsed {
+                            if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
+                                match method {
+                                    "textDocument/didOpen" => {
+                                        formatter_in.handle_did_open(msg);
+                                    }
+                                    "textDocument/didChange" => {
+                                        formatter_in.handle_did_change(msg);
+                                    }
+                                    "textDocument/didClose" => {
+                                        formatter_in.handle_did_close(msg);
+                                    }
+                                    "workspace/didChangeConfiguration" => {
+                                        if let Some(params) = msg.get("params") {
+                                            formatter_in.update_config(params);
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -154,6 +197,7 @@ fn main() {
     let decompile_pending = Arc::clone(&pending);
     let decompile_counter = Arc::clone(&id_counter);
     let decompile_proxy_id = proxy_id.clone();
+    let pending_config_ids_out = Arc::clone(&pending_config_ids);
     thread::spawn(move || {
         let mut reader = LspReader::new(BufReader::new(child_stdout));
         while alive_out.load(Ordering::Relaxed) {
@@ -170,6 +214,26 @@ fn main() {
                         write_raw(&mut io::stdout().lock(), &raw);
                         continue;
                     };
+
+                    // Check if JDTLS is requesting workspace configuration,
+                    if let Some(method) = msg.get("method").and_then(|m| m.as_str()) {
+                        if method == "workspace/configuration" {
+                            if let Some(id) = msg.get("id").cloned() {
+                                pending_config_ids_out.lock().unwrap().insert(id);
+                            }
+                        }
+                    }
+
+                    // Intercept initialize response to rewrite textDocumentSync capability.
+                    if msg
+                        .get("result")
+                        .and_then(|r| r.get("capabilities"))
+                        .is_some()
+                    {
+                        intercept_capabilities(&mut msg);
+                        write_to_stdout(&msg);
+                        continue;
+                    }
 
                     // Route responses to pending HTTP requests
                     if let Some(id) = msg.get("id") {

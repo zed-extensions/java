@@ -162,3 +162,126 @@ pub fn get_lsp_proxy_path(configuration: &Option<Value>, worktree: &Worktree) ->
 
     None
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GoogleJavaFormatConfig {
+    pub enabled: bool,
+    pub path: Option<String>,
+    pub style: String,
+}
+pub fn is_google_java_format_enabled(configuration: &Option<Value>) -> bool {
+    configuration
+        .as_ref()
+        .and_then(|c| {
+            c.pointer("/google_java_format")
+                .and_then(|gjf| gjf.get("enabled"))
+                .and_then(|v| v.as_bool())
+        })
+        .unwrap_or(false)
+}
+
+pub fn get_google_java_format_config(
+    configuration: &Option<Value>,
+    worktree: &Worktree,
+) -> GoogleJavaFormatConfig {
+    let mut config = GoogleJavaFormatConfig {
+        enabled: false,
+        path: None,
+        style: "GOOGLE".to_string(),
+    };
+
+    if let Some(configuration) = configuration
+        && let Some(gjf) = configuration.pointer("/google_java_format")
+    {
+        if let Some(enabled) = gjf.get("enabled").and_then(|v| v.as_bool()) {
+            config.enabled = enabled;
+        }
+        if let Some(path) = gjf.get("path").and_then(|v| v.as_str())
+            && let Ok(p) = expand_home_path(worktree, path.to_string())
+        {
+            config.path = Some(p);
+        }
+        if let Some(style) = gjf.get("style").and_then(|v| v.as_str()) {
+            config.style = style.to_string();
+        }
+    }
+
+    config
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PalantirJavaFormatConfig {
+    pub enabled: bool,
+    pub path: Option<String>,
+}
+pub fn is_palantir_java_format_enabled(configuration: &Option<Value>) -> bool {
+    configuration
+        .as_ref()
+        .and_then(|c| {
+            c.pointer("/palantir_java_format")
+                .and_then(|pjf| pjf.get("enabled"))
+                .and_then(|v| v.as_bool())
+        })
+        .unwrap_or(false)
+}
+
+pub fn get_palantir_java_format_config(
+    configuration: &Option<Value>,
+    worktree: &Worktree,
+) -> PalantirJavaFormatConfig {
+    let mut config = PalantirJavaFormatConfig {
+        enabled: false,
+        path: None,
+    };
+
+    if let Some(configuration) = configuration
+        && let Some(pjf) = configuration.pointer("/palantir_java_format")
+    {
+        if let Some(enabled) = pjf.get("enabled").and_then(|v| v.as_bool()) {
+            config.enabled = enabled;
+        }
+        if let Some(path) = pjf.get("path").and_then(|v| v.as_str())
+            && let Ok(p) = expand_home_path(worktree, path.to_string())
+        {
+            config.path = Some(p);
+        }
+    }
+
+    config
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_is_google_java_format_enabled() {
+        assert!(!is_google_java_format_enabled(&None));
+        assert!(!is_google_java_format_enabled(&Some(json!({}))));
+        assert!(!is_google_java_format_enabled(&Some(
+            json!({ "google_java_format": {} })
+        )));
+        assert!(!is_google_java_format_enabled(&Some(
+            json!({ "google_java_format": { "enabled": false } })
+        )));
+        assert!(is_google_java_format_enabled(&Some(
+            json!({ "google_java_format": { "enabled": true } })
+        )));
+    }
+
+    #[test]
+    fn test_is_palantir_java_format_enabled() {
+        assert!(!is_palantir_java_format_enabled(&None));
+        assert!(!is_palantir_java_format_enabled(&Some(json!({}))));
+        assert!(!is_palantir_java_format_enabled(&Some(
+            json!({ "palantir_java_format": {} })
+        )));
+        assert!(!is_palantir_java_format_enabled(&Some(
+            json!({ "palantir_java_format": { "enabled": false } })
+        )));
+        assert!(is_palantir_java_format_enabled(&Some(
+            json!({ "palantir_java_format": { "enabled": true } })
+        )));
+    }
+}

@@ -83,3 +83,16 @@ pub fn write_to_stdout(value: &impl Serialize) {
     let _ = w.write_all(out.as_bytes());
     let _ = w.flush();
 }
+
+/// Send a window/showMessage LSP notification to display a pop-up in the client.
+pub fn show_message_to_user(msg: &str) {
+    let notification = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "window/showMessage",
+        "params": {
+            "type": 1, // Error
+            "message": msg
+        }
+    });
+    write_to_stdout(&notification);
+}

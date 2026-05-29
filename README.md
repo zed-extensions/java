@@ -246,6 +246,70 @@ If your project uses custom or internal Maven repositories, you should point JDT
 
 Without this, JDTLS's embedded Maven will only resolve artifacts from Maven Central, which will cause unresolved dependency errors for projects using internal or private repositories.
 
+## Google Java Format
+
+The extension supports formatting Java code using the [google-java-format](https://github.com/google/google-java-format) tool.
+
+To configure `google-java-format`, add the following to your `settings.json`:
+
+```jsonc
+"languages": {
+  "Java": {
+    // Instruct Zed to delegate document formatting to the language server (and our proxy)
+    "formatter": "language_server"
+  }
+},
+"lsp": {
+  "jdtls": {
+    "settings": {
+      "google_java_format": {
+        // Enable or disable Google Java Format (default: false)
+        "enabled": true,
+        // The format style to use: "GOOGLE" or "AOSP" (default: "GOOGLE")
+        "style": "GOOGLE",
+        // Optional: path to your local google-java-format executable or JAR file.
+        // If omitted, the extension will automatically download the correct native
+        // binary for your platform, or fallback to the universal JAR.
+        "path": "/path/to/google-java-format"
+      }
+    }
+  }
+}
+```
+
+If you specify a path to the JAR version of `google-java-format`, the extension will run it using your configured Java environment.
+
+## Palantir Java Format
+
+The extension supports formatting Java code using the [palantir-java-format](https://github.com/palantir/palantir-java-format) tool.
+
+To configure `palantir-java-format`, add the following to your `settings.json`:
+
+```jsonc
+"languages": {
+  "Java": {
+    // Instruct Zed to delegate document formatting to the language server (and our proxy)
+    "formatter": "language_server"
+  }
+},
+"lsp": {
+  "jdtls": {
+    "settings": {
+      "palantir_java_format": {
+        // Enable or disable Palantir Java Format (default: false)
+        "enabled": true,
+        // Optional: path to your local palantir-java-format executable or JAR file.
+        // If omitted, the extension will automatically download the correct native
+        // binary for your platform from Maven Central.
+        "path": "/path/to/palantir-java-format"
+      }
+    }
+  }
+}
+```
+
+If you specify a path to the JAR version of `palantir-java-format`, the extension will run it using your configured Java environment.
+
 ## Advanced Configuration/JDTLS initialization Options
 
 JDTLS provides many configuration options that can be passed via the `initialize` LSP-request. The extension will pass the JSON-object from `lsp.jdtls.initialization_options` in your settings on to JDTLS. Please refer to the [JDTLS Configuration Wiki Page](https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request) for the available options and values.
