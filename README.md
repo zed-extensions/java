@@ -252,7 +252,11 @@ If you prefer to use an external formatting tool like `google-java-format` or `p
 
 ### Configuring google-java-format
 
-To format Java code using `google-java-format`, download the tool from the [GitHub releases page](https://github.com/google/google-java-format/releases), install it on your system, and add the following to your Zed `settings.json`:
+To use `google-java-format` as your external formatter:
+
+1. **Installation**: Download the pre-built native binary for your platform from the [GitHub releases page](https://github.com/google/google-java-format/releases). Place it in a directory that is in your system's `PATH` (e.g., `/usr/local/bin` or `~/.local/bin`), rename it to `google-java-format` (or `google-java-format.exe` on Windows), and ensure it is marked as executable.
+   - Alternatively, on macOS, you can install it via Homebrew: `brew install google-java-format`
+2. Add the configuration to your Zed `settings.json`:
 
 ```json
 "languages": {
@@ -282,7 +286,7 @@ If you prefer to format using the AOSP style (4-space indentation), you can pass
 }
 ```
 
-If you installed it to a custom location, specify the absolute path for the `command`:
+If you installed it to a custom location not on your `PATH`, specify the absolute path for the `command`:
 
 ```json
 "languages": {
@@ -299,7 +303,12 @@ If you installed it to a custom location, specify the absolute path for the `com
 
 ### Configuring palantir-java-format
 
-To format Java code using `palantir-java-format`, download the tool from the [Maven Central repository page](https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/), install it on your system, and add the following to your Zed `settings.json` (note that the `--palantir` option is required):
+To use `palantir-java-format` as your external formatter:
+
+1. **Installation**:
+   - **macOS / Linux**: Download the native binary for your architecture from the [Maven Central repository page](https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/). Rename it to `palantir-java-format`, mark it as executable, and place it in a directory in your system's `PATH`.
+   - **Windows**: Palantir does not distribute official pre-built native binaries for Windows. You must compile the native executable yourself from source by running `./gradlew nativeCompile` inside the [palantir-java-format repository](https://github.com/palantir/palantir-java-format) (which requires a GraalVM environment and Visual Studio Build Tools).
+2. Add the configuration to your Zed `settings.json` (note that the `--palantir` option is required):
 
 ```json
 "languages": {
@@ -308,6 +317,45 @@ To format Java code using `palantir-java-format`, download the tool from the [Ma
       "external": {
         "command": "palantir-java-format",
         "arguments": ["--palantir", "-"]
+      }
+    }
+  }
+}
+```
+
+### Running Formatters via JAR File (Alternative)
+
+If a native executable is not available for your platform (or you prefer not to compile/install one), you can run the formatters using their `.jar` files (e.g. the all-deps/shadow JARs) by configuring Zed to launch `java` directly:
+
+#### Using google-java-format JAR
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "java",
+        "arguments": ["-jar", "/path/to/google-java-format-all-deps.jar", "-"]
+      }
+    }
+  }
+}
+```
+
+#### Using palantir-java-format JAR
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "java",
+        "arguments": [
+          "-jar",
+          "/path/to/palantir-java-format-all-deps.jar",
+          "--palantir",
+          "-"
+        ]
       }
     }
   }
