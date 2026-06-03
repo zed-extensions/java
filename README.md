@@ -246,6 +246,74 @@ If your project uses custom or internal Maven repositories, you should point JDT
 
 Without this, JDTLS's embedded Maven will only resolve artifacts from Maven Central, which will cause unresolved dependency errors for projects using internal or private repositories.
 
+## External Formatters
+
+If you prefer to use an external formatting tool like `google-java-format` or `palantir-java-format` instead of the built-in Eclipse formatter, you can configure Zed to run these tools on save or format commands.
+
+### Configuring google-java-format
+
+To format Java code using `google-java-format`, download the tool from the [GitHub releases page](https://github.com/google/google-java-format/releases), install it on your system, and add the following to your Zed `settings.json`:
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "google-java-format",
+        "arguments": ["-"]
+      }
+    }
+  }
+}
+```
+
+If you prefer to format using the AOSP style (4-space indentation), you can pass the `--aosp` flag:
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "google-java-format",
+        "arguments": ["--aosp", "-"]
+      }
+    }
+  }
+}
+```
+
+If you installed it to a custom location, specify the absolute path for the `command`:
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "/path/to/google-java-format",
+        "arguments": ["-"]
+      }
+    }
+  }
+}
+```
+
+### Configuring palantir-java-format
+
+To format Java code using `palantir-java-format`, download the tool from the [Maven Central repository page](https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/), install it on your system, and add the following to your Zed `settings.json` (note that the `--palantir` option is required):
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "palantir-java-format",
+        "arguments": ["--palantir", "-"]
+      }
+    }
+  }
+}
+```
+
 ## Advanced Configuration/JDTLS initialization Options
 
 JDTLS provides many configuration options that can be passed via the `initialize` LSP-request. The extension will pass the JSON-object from `lsp.jdtls.initialization_options` in your settings on to JDTLS. Please refer to the [JDTLS Configuration Wiki Page](https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request) for the available options and values.
