@@ -246,6 +246,122 @@ If your project uses custom or internal Maven repositories, you should point JDT
 
 Without this, JDTLS's embedded Maven will only resolve artifacts from Maven Central, which will cause unresolved dependency errors for projects using internal or private repositories.
 
+## External Formatters
+
+If you prefer to use an external formatting tool like `google-java-format` or `palantir-java-format` instead of the built-in Eclipse formatter, you can configure Zed to run these tools on save or format commands.
+
+### Configuring google-java-format
+
+To use `google-java-format` as your external formatter:
+
+1. **Installation**: Download the pre-built native binary for your platform from the [GitHub releases page](https://github.com/google/google-java-format/releases). Place it in a directory that is in your system's `PATH` (e.g., `/usr/local/bin` or `~/.local/bin`), rename it to `google-java-format` (or `google-java-format.exe` on Windows), and ensure it is marked as executable.
+   - Alternatively, on macOS, you can install it via Homebrew: `brew install google-java-format`
+2. Add the configuration to your Zed `settings.json`:
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "google-java-format",
+        "arguments": ["-"]
+      }
+    }
+  }
+}
+```
+
+If you prefer to format using the AOSP style (4-space indentation), you can pass the `--aosp` flag:
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "google-java-format",
+        "arguments": ["--aosp", "-"]
+      }
+    }
+  }
+}
+```
+
+If you installed it to a custom location not on your `PATH`, specify the absolute path for the `command`:
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "/path/to/google-java-format",
+        "arguments": ["-"]
+      }
+    }
+  }
+}
+```
+
+### Configuring palantir-java-format
+
+To use `palantir-java-format` as your external formatter:
+
+1. **Installation**:
+   - **macOS / Linux**: Download the native binary for your architecture from the [Maven Central repository page](https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/). Rename it to `palantir-java-format`, mark it as executable, and place it in a directory in your system's `PATH`.
+   - **Windows**: Palantir does not distribute official pre-built native binaries for Windows. You must compile the native executable yourself from [palantir-java-format repository](https://github.com/palantir/palantir-java-format).
+2. Add the configuration to your Zed `settings.json` (note that the `--palantir` option is required):
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "palantir-java-format",
+        "arguments": ["--palantir", "-"]
+      }
+    }
+  }
+}
+```
+
+### Running Formatters via JAR File (Alternative)
+
+If a native executable is not available for your platform (or you prefer not to compile/install one), you can run the formatters using their `.jar` files (e.g. the all-deps/shadow JARs) by configuring Zed to launch `java` directly:
+
+#### Using google-java-format JAR
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "java",
+        "arguments": ["-jar", "/path/to/google-java-format-all-deps.jar", "-"]
+      }
+    }
+  }
+}
+```
+
+#### Using palantir-java-format JAR
+
+```json
+"languages": {
+  "Java": {
+    "formatter": {
+      "external": {
+        "command": "java",
+        "arguments": [
+          "-jar",
+          "/path/to/palantir-java-format-all-deps.jar",
+          "--palantir",
+          "-"
+        ]
+      }
+    }
+  }
+}
+```
+
 ## Advanced Configuration/JDTLS initialization Options
 
 JDTLS provides many configuration options that can be passed via the `initialize` LSP-request. The extension will pass the JSON-object from `lsp.jdtls.initialization_options` in your settings on to JDTLS. Please refer to the [JDTLS Configuration Wiki Page](https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request) for the available options and values.
