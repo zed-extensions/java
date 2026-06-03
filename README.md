@@ -307,7 +307,7 @@ To use `palantir-java-format` as your external formatter:
 
 1. **Installation**:
    - **macOS / Linux**: Download the native binary for your architecture from the [Maven Central repository page](https://repo1.maven.org/maven2/com/palantir/javaformat/palantir-java-format-native/). Rename it to `palantir-java-format`, mark it as executable, and place it in a directory in your system's `PATH`.
-   - **Windows**: Palantir does not distribute official pre-built native binaries for Windows. You must compile the native executable yourself from source by running `./gradlew nativeCompile` inside the [palantir-java-format repository](https://github.com/palantir/palantir-java-format) (which requires a GraalVM environment and Visual Studio Build Tools).
+   - **Windows**: Palantir does not distribute official pre-built native binaries for Windows. You must compile the native executable yourself from [palantir-java-format repository](https://github.com/palantir/palantir-java-format).
 2. Add the configuration to your Zed `settings.json` (note that the `--palantir` option is required):
 
 ```json
