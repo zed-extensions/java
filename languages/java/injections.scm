@@ -5,7 +5,7 @@
   (#set! injection.language "comment"))
 
 ((block_comment) @injection.content
-  (#lua-match? @injection.content "/[*][!<*][^a-zA-Z]")
+  (#match? @injection.content "^/\\*\\*[^*]")
   (#set! injection.language "doxygen"))
 
 ((method_invocation
