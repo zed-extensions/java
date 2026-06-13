@@ -10,8 +10,9 @@ use zed_extension_api::{
 };
 
 use crate::{
+    component::Component,
     config::get_java_debug_jar,
-    lsp::LspWrapper,
+    lsp,
     util::{
         ArgsStringOrList, create_path_if_not_exists, get_curr_dir, mark_checked_once,
         path_to_string, should_use_local_or_download,
@@ -66,15 +67,13 @@ const JAVA_DEBUG_PLUGIN_FORK_URL: &str = "https://github.com/zed-industries/java
 
 const MAVEN_METADATA_URL: &str = "https://repo1.maven.org/maven2/com/microsoft/java/com.microsoft.java.debug.plugin/maven-metadata.xml";
 
-pub fn find_latest_local_debugger() -> Option<PathBuf> {
+fn find_latest_local_debugger() -> Option<PathBuf> {
     let prefix = PathBuf::from(DEBUGGER_INSTALL_PATH);
-    // walk the dir where we install debugger
     fs::read_dir(&prefix)
         .map(|entries| {
             entries
                 .filter_map(Result::ok)
                 .map(|entry| entry.path())
-                // get the most recently created jar file
                 .filter(|path| {
                     path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
                 })
@@ -90,52 +89,12 @@ pub fn find_latest_local_debugger() -> Option<PathBuf> {
 }
 
 pub struct Debugger {
-    lsp: LspWrapper,
     plugin_path: Option<PathBuf>,
 }
 
 impl Debugger {
-    pub fn new(lsp: LspWrapper) -> Debugger {
-        Debugger {
-            plugin_path: None,
-            lsp,
-        }
-    }
-
-    pub fn loaded(&self) -> bool {
-        self.plugin_path.is_some()
-    }
-
-    pub fn get_or_download(
-        &mut self,
-        language_server_id: &LanguageServerId,
-        configuration: &Option<Value>,
-        worktree: &Worktree,
-    ) -> zed::Result<PathBuf> {
-        // when the fix to https://github.com/microsoft/java-debug/issues/605 becomes part of an official release
-        // switch back to this:
-        // return self.get_or_download_latest_official(language_server_id);
-
-        // Use user-configured path if provided
-        if let Some(jar_path) = get_java_debug_jar(configuration, worktree) {
-            let path = PathBuf::from(&jar_path);
-            self.plugin_path = Some(path.clone());
-            return Ok(path);
-        }
-
-        // Use local installation if update mode requires it
-        if let Some(path) = should_use_local_or_download(
-            configuration,
-            find_latest_local_debugger(),
-            DEBUGGER_INSTALL_PATH,
-        )
-        .map_err(|err| format!("Failed to resolve debugger installation: {err}"))?
-        {
-            self.plugin_path = Some(path.clone());
-            return Ok(path);
-        }
-
-        self.get_or_download_fork(language_server_id)
+    pub fn new() -> Debugger {
+        Debugger { plugin_path: None }
     }
 
     fn get_or_download_fork(
@@ -283,16 +242,13 @@ impl Debugger {
         Ok(jar_path)
     }
 
-    pub fn start_session(&self) -> zed::Result<TcpArgumentsTemplate> {
-        let port = self
-            .lsp
-            .get()
-            .map_err(|err| format!("Failed to acquire LSP client lock: {err}"))?
-            .request::<u16>(
-                "workspace/executeCommand",
-                json!({ "command": "vscode.java.startDebugSession" }),
-            )
-            .map_err(|err| format!("Failed to start debug session via LSP: {err}"))?;
+    pub fn start_session(&self, workspace: &str) -> zed::Result<TcpArgumentsTemplate> {
+        let port = lsp::request::<u16>(
+            workspace,
+            "workspace/executeCommand",
+            json!({ "command": "vscode.java.startDebugSession" }),
+        )
+        .map_err(|err| format!("Failed to start debug session via LSP: {err}"))?;
 
         Ok(TcpArgumentsTemplate {
             host: None,
@@ -325,11 +281,7 @@ impl Debugger {
                 .cloned()
                 .collect::<Vec<String>>();
 
-            let entries = self
-                .lsp
-                .get()
-                .map_err(|err| format!("Failed to acquire LSP client lock: {err}"))?
-                .resolve_main_class(arguments)
+            let entries = lsp::resolve_main_class(&workspace_folder, arguments)
                 .map_err(|err| format!("Failed to resolve main class: {err}"))?
                 .into_iter()
                 .filter(|entry| {
@@ -382,11 +334,7 @@ impl Debugger {
 
             let arguments = vec![main_class.clone(), project_name.clone(), scope.clone()];
 
-            let result = self
-                .lsp
-                .get()
-                .map_err(|err| format!("Failed to acquire LSP client lock: {err}"))?
-                .resolve_class_path(arguments)
+            let result = lsp::resolve_class_path(&workspace_folder, arguments)
                 .map_err(|err| format!("Failed to resolve classpath: {err}"))?;
 
             for resolved in result {
@@ -409,6 +357,10 @@ impl Debugger {
             .replace("${workspaceFolder}", &workspace_folder);
 
         Ok(config)
+    }
+
+    pub fn plugin_path(&self) -> Option<&PathBuf> {
+        self.plugin_path.as_ref()
     }
 
     pub fn inject_plugin_into_options(
@@ -454,5 +406,60 @@ impl Debugger {
                 Ok(options)
             }
         }
+    }
+}
+
+impl Component for Debugger {
+    const INSTALL_PATH: &'static str = DEBUGGER_INSTALL_PATH;
+
+    fn find_local(&self) -> Option<PathBuf> {
+        find_latest_local_debugger()
+    }
+
+    fn loaded(&self) -> bool {
+        self.plugin_path.is_some()
+    }
+
+    fn fetch_latest_version(&self) -> zed::Result<String> {
+        Ok("0.53.2".to_string())
+    }
+
+    fn download(
+        &mut self,
+        _version: &str,
+        language_server_id: &LanguageServerId,
+    ) -> zed::Result<PathBuf> {
+        self.get_or_download_fork(language_server_id)
+    }
+
+    fn get_or_download(
+        &mut self,
+        language_server_id: &LanguageServerId,
+        configuration: &Option<Value>,
+        worktree: &Worktree,
+    ) -> zed::Result<PathBuf> {
+        if let Some(jar_path) = self.user_configured_path(configuration, worktree) {
+            let path = PathBuf::from(&jar_path);
+            self.plugin_path = Some(path.clone());
+            return Ok(path);
+        }
+
+        if let Some(path) =
+            should_use_local_or_download(configuration, self.find_local(), Self::INSTALL_PATH)
+                .map_err(|err| format!("Failed to resolve debugger installation: {err}"))?
+        {
+            self.plugin_path = Some(path.clone());
+            return Ok(path);
+        }
+
+        self.get_or_download_fork(language_server_id)
+    }
+
+    fn user_configured_path(
+        &self,
+        configuration: &Option<Value>,
+        worktree: &Worktree,
+    ) -> Option<String> {
+        get_java_debug_jar(configuration, worktree)
     }
 }
