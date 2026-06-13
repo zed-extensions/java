@@ -15,12 +15,13 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::is_java_autodownload,
-    jdk::try_to_fetch_and_install_latest_jdk,
+    component::Component,
+    config::{get_lombok_jar, is_java_autodownload},
+    jdk::Jdk,
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
         get_java_major_version, get_latest_versions_from_tag, mark_checked_once, path_to_string,
-        remove_all_files_except, should_use_local_or_download,
+        remove_all_files_except,
     },
 };
 
@@ -29,10 +30,207 @@ const JDTLS_REPO: &str = "eclipse-jdtls/eclipse.jdt.ls";
 const LOMBOK_INSTALL_PATH: &str = "lombok";
 const LOMBOK_REPO: &str = "projectlombok/lombok";
 
-// Errors
-
 const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java version 21 to run. You can either specify a different JDK to use by configuring lsp.jdtls.settings.java_home to point to a different JDK, or set lsp.jdtls.settings.jdk_auto_download to true to let the extension automatically download one for you.";
-const JDTLS_VERION_ERROR: &str = "No version to fallback to";
+const JDTLS_VERSION_ERROR: &str = "No version to fallback to";
+
+// --- Jdtls Component ---
+
+pub struct Jdtls {
+    cached_path: Option<PathBuf>,
+}
+
+impl Jdtls {
+    pub fn new() -> Self {
+        Self { cached_path: None }
+    }
+}
+
+impl Component for Jdtls {
+    const INSTALL_PATH: &'static str = JDTLS_INSTALL_PATH;
+
+    fn find_local(&self) -> Option<PathBuf> {
+        let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
+        read_dir(&prefix)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .filter(|path| path.is_dir())
+                    .filter_map(|path| {
+                        let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
+                        Some((path, created_time))
+                    })
+                    .max_by_key(|&(_, time)| time)
+                    .map(|(path, _)| path)
+            })
+            .ok()
+            .flatten()
+    }
+
+    fn loaded(&self) -> bool {
+        self.cached_path.is_some()
+    }
+
+    fn fetch_latest_version(&self) -> zed::Result<String> {
+        let (last, _) = get_latest_versions_from_tag(JDTLS_REPO)
+            .map_err(|err| format!("Failed to fetch JDTLS versions from {JDTLS_REPO}: {err}"))?;
+        Ok(last)
+    }
+
+    fn download(
+        &mut self,
+        _version: &str,
+        language_server_id: &LanguageServerId,
+    ) -> zed::Result<PathBuf> {
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::CheckingForUpdate,
+        );
+
+        let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)
+            .map_err(|err| format!("Failed to fetch JDTLS versions from {JDTLS_REPO}: {err}"))?;
+
+        let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
+            .map_or_else(
+                |_| {
+                    second_last
+                        .ok_or(JDTLS_VERSION_ERROR.to_string())
+                        .and_then(|fallback| {
+                            download_jdtls_milestone(&fallback)
+                                .map(|milestone| (fallback, milestone.trim_end().to_string()))
+                        })
+                },
+                |milestone| Ok((last, milestone.trim_end().to_string())),
+            )?;
+
+        let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
+        let build_directory = latest_version_build.replace(".tar.gz", "");
+        let build_path = prefix.join(&build_directory);
+        let binary_path = build_path.join("bin").join(get_binary_name());
+
+        if !metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
+            set_language_server_installation_status(
+                language_server_id,
+                &LanguageServerInstallationStatus::Downloading,
+            );
+            let download_url = format!(
+                "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
+            );
+            download_file(
+                &download_url,
+                path_to_string(build_path.clone())
+                    .map_err(|err| format!("Invalid JDTLS build path {build_path:?}: {err}"))?
+                    .as_str(),
+                DownloadedFileType::GzipTar,
+            )
+            .map_err(|err| format!("Failed to download JDTLS from {download_url}: {err}"))?;
+            make_file_executable(
+                path_to_string(&binary_path)
+                    .map_err(|err| format!("Invalid JDTLS binary path {binary_path:?}: {err}"))?
+                    .as_str(),
+            )
+            .map_err(|err| format!("Failed to make JDTLS executable at {binary_path:?}: {err}"))?;
+
+            let _ = remove_all_files_except(prefix, build_directory.as_str());
+            let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
+        }
+
+        self.cached_path = Some(build_path.clone());
+        Ok(build_path)
+    }
+}
+
+// --- Lombok Component ---
+
+pub struct Lombok {
+    cached_path: Option<PathBuf>,
+}
+
+impl Lombok {
+    pub fn new() -> Self {
+        Self { cached_path: None }
+    }
+}
+
+impl Component for Lombok {
+    const INSTALL_PATH: &'static str = LOMBOK_INSTALL_PATH;
+
+    fn find_local(&self) -> Option<PathBuf> {
+        let prefix = PathBuf::from(LOMBOK_INSTALL_PATH);
+        read_dir(&prefix)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .filter(|path| {
+                        path.is_file()
+                            && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
+                    })
+                    .filter_map(|path| {
+                        let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
+                        Some((path, created_time))
+                    })
+                    .max_by_key(|&(_, time)| time)
+                    .map(|(path, _)| path)
+            })
+            .ok()
+            .flatten()
+    }
+
+    fn loaded(&self) -> bool {
+        self.cached_path.is_some()
+    }
+
+    fn fetch_latest_version(&self) -> zed::Result<String> {
+        let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)
+            .map_err(|err| format!("Failed to fetch Lombok versions from {LOMBOK_REPO}: {err}"))?;
+        Ok(latest_version)
+    }
+
+    fn download(
+        &mut self,
+        version: &str,
+        language_server_id: &LanguageServerId,
+    ) -> zed::Result<PathBuf> {
+        let prefix = LOMBOK_INSTALL_PATH;
+        let jar_name = format!("lombok-{version}.jar");
+        let jar_path = Path::new(prefix).join(&jar_name);
+
+        if !metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
+            set_language_server_installation_status(
+                language_server_id,
+                &LanguageServerInstallationStatus::Downloading,
+            );
+            create_path_if_not_exists(prefix)
+                .map_err(|err| format!("Failed to create Lombok directory '{prefix}': {err}"))?;
+            let download_url = format!("https://projectlombok.org/downloads/{jar_name}");
+            download_file(
+                &download_url,
+                path_to_string(jar_path.clone())
+                    .map_err(|err| format!("Invalid Lombok jar path {jar_path:?}: {err}"))?
+                    .as_str(),
+                DownloadedFileType::Uncompressed,
+            )
+            .map_err(|err| format!("Failed to download Lombok from {download_url}: {err}"))?;
+
+            let _ = remove_all_files_except(prefix, jar_name.as_str());
+            let _ = mark_checked_once(LOMBOK_INSTALL_PATH, version);
+        }
+
+        self.cached_path = Some(jar_path.clone());
+        Ok(jar_path)
+    }
+
+    fn user_configured_path(
+        &self,
+        configuration: &Option<Value>,
+        worktree: &Worktree,
+    ) -> Option<String> {
+        get_lombok_jar(configuration, worktree)
+    }
+}
+
+// --- JDTLS launch utilities ---
 
 /// Parse a JVM memory string (e.g. "2G", "512m", "1024k") into bytes.
 fn parse_memory_value(s: &str) -> Option<u64> {
@@ -52,6 +250,7 @@ pub fn build_jdtls_launch_args(
     worktree: &Worktree,
     jvm_args: Vec<String>,
     language_server_id: &LanguageServerId,
+    jdk: &mut Jdk,
 ) -> zed::Result<Vec<String>> {
     if let Some(jdtls_launcher) = get_jdtls_launcher_from_path(worktree) {
         return Ok(vec![jdtls_launcher]);
@@ -63,10 +262,10 @@ pub fn build_jdtls_launch_args(
         .map_err(|err| format!("Failed to determine Java version: {err}"))?;
     if java_major_version < 21 {
         if is_java_autodownload(configuration) {
-            java_executable =
-                try_to_fetch_and_install_latest_jdk(language_server_id, configuration)
-                    .map_err(|err| format!("Failed to auto-download JDK for JDTLS: {err}"))?
-                    .join(get_java_exec_name());
+            java_executable = jdk
+                .get_bin_path(language_server_id, configuration, worktree)
+                .map_err(|err| format!("Failed to auto-download JDK for JDTLS: {err}"))?
+                .join(get_java_exec_name());
         } else {
             return Err(JAVA_VERSION_ERROR.to_string());
         }
@@ -136,51 +335,6 @@ pub fn build_jdtls_launch_args(
     Ok(args)
 }
 
-pub fn find_latest_local_jdtls() -> Option<PathBuf> {
-    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
-    // walk the dir where we install jdtls
-    read_dir(&prefix)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| entry.path())
-                .filter(|path| path.is_dir())
-                // get the most recently created subdirectory
-                .filter_map(|path| {
-                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
-                    Some((path, created_time))
-                })
-                .max_by_key(|&(_, time)| time)
-                // and return it
-                .map(|(path, _)| path)
-        })
-        .ok()
-        .flatten()
-}
-
-pub fn find_latest_local_lombok() -> Option<PathBuf> {
-    let prefix = PathBuf::from(LOMBOK_INSTALL_PATH);
-    // walk the dir where we install lombok
-    read_dir(&prefix)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| entry.path())
-                // get the most recently created jar file
-                .filter(|path| {
-                    path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("jar")
-                })
-                .filter_map(|path| {
-                    let created_time = metadata(&path).and_then(|meta| meta.created()).ok()?;
-                    Some((path, created_time))
-                })
-                .max_by_key(|&(_, time)| time)
-                .map(|(path, _)| path)
-        })
-        .ok()
-        .flatten()
-}
-
 pub fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
     let jdtls_executable_filename = match current_platform().0 {
         Os::Windows => "jdtls.bat",
@@ -188,142 +342,6 @@ pub fn get_jdtls_launcher_from_path(worktree: &Worktree) -> Option<String> {
     };
 
     worktree.which(jdtls_executable_filename)
-}
-
-pub fn try_to_fetch_and_install_latest_jdtls(
-    language_server_id: &LanguageServerId,
-    configuration: &Option<Value>,
-) -> zed::Result<PathBuf> {
-    // Use local installation if update mode requires it
-    if let Some(path) =
-        should_use_local_or_download(configuration, find_latest_local_jdtls(), JDTLS_INSTALL_PATH)
-            .map_err(|err| format!("Failed to resolve JDTLS installation: {err}"))?
-    {
-        return Ok(path);
-    }
-
-    // Download latest version
-    set_language_server_installation_status(
-        language_server_id,
-        &LanguageServerInstallationStatus::CheckingForUpdate,
-    );
-
-    let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)
-        .map_err(|err| format!("Failed to fetch JDTLS versions from {JDTLS_REPO}: {err}"))?;
-
-    let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
-        .map_or_else(
-            |_| {
-                second_last
-                    .ok_or(JDTLS_VERION_ERROR.to_string())
-                    .and_then(|fallback| {
-                        download_jdtls_milestone(&fallback)
-                            .map(|milestone| (fallback, milestone.trim_end().to_string()))
-                    })
-            },
-            |milestone| Ok((last, milestone.trim_end().to_string())),
-        )?;
-
-    let prefix = PathBuf::from(JDTLS_INSTALL_PATH);
-
-    let build_directory = latest_version_build.replace(".tar.gz", "");
-    let build_path = prefix.join(&build_directory);
-    let binary_path = build_path.join("bin").join(get_binary_name());
-
-    // If latest version isn't installed,
-    if !metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
-        // then download it...
-
-        set_language_server_installation_status(
-            language_server_id,
-            &LanguageServerInstallationStatus::Downloading,
-        );
-        let download_url = format!(
-            "https://www.eclipse.org/downloads/download.php?file=/jdtls/milestones/{latest_version}/{latest_version_build}"
-        );
-        download_file(
-            &download_url,
-            path_to_string(build_path.clone())
-                .map_err(|err| format!("Invalid JDTLS build path {build_path:?}: {err}"))?
-                .as_str(),
-            DownloadedFileType::GzipTar,
-        )
-        .map_err(|err| format!("Failed to download JDTLS from {download_url}: {err}"))?;
-        make_file_executable(
-            path_to_string(&binary_path)
-                .map_err(|err| format!("Invalid JDTLS binary path {binary_path:?}: {err}"))?
-                .as_str(),
-        )
-        .map_err(|err| format!("Failed to make JDTLS executable at {binary_path:?}: {err}"))?;
-
-        // ...and delete other versions
-        let _ = remove_all_files_except(prefix, build_directory.as_str());
-
-        // Mark the downloaded version for "Once" mode tracking
-        let _ = mark_checked_once(JDTLS_INSTALL_PATH, &latest_version);
-    }
-
-    // return jdtls base path
-    Ok(build_path)
-}
-
-pub fn try_to_fetch_and_install_latest_lombok(
-    language_server_id: &LanguageServerId,
-    configuration: &Option<Value>,
-) -> zed::Result<PathBuf> {
-    // Use local installation if update mode requires it
-    if let Some(path) = should_use_local_or_download(
-        configuration,
-        find_latest_local_lombok(),
-        LOMBOK_INSTALL_PATH,
-    )
-    .map_err(|err| format!("Failed to resolve Lombok installation: {err}"))?
-    {
-        return Ok(path);
-    }
-
-    // Download latest version
-    set_language_server_installation_status(
-        language_server_id,
-        &LanguageServerInstallationStatus::CheckingForUpdate,
-    );
-
-    let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)
-        .map_err(|err| format!("Failed to fetch Lombok versions from {LOMBOK_REPO}: {err}"))?;
-    let prefix = LOMBOK_INSTALL_PATH;
-    let jar_name = format!("lombok-{latest_version}.jar");
-    let jar_path = Path::new(prefix).join(&jar_name);
-
-    // If latest version isn't installed,
-    if !metadata(&jar_path).is_ok_and(|stat| stat.is_file()) {
-        // then download it...
-
-        set_language_server_installation_status(
-            language_server_id,
-            &LanguageServerInstallationStatus::Downloading,
-        );
-        create_path_if_not_exists(prefix)
-            .map_err(|err| format!("Failed to create Lombok directory '{prefix}': {err}"))?;
-        let download_url = format!("https://projectlombok.org/downloads/{jar_name}");
-        download_file(
-            &download_url,
-            path_to_string(jar_path.clone())
-                .map_err(|err| format!("Invalid Lombok jar path {jar_path:?}: {err}"))?
-                .as_str(),
-            DownloadedFileType::Uncompressed,
-        )
-        .map_err(|err| format!("Failed to download Lombok from {download_url}: {err}"))?;
-
-        // ...and delete other versions
-
-        let _ = remove_all_files_except(prefix, jar_name.as_str());
-
-        // Mark the downloaded version for "Once" mode tracking
-        let _ = mark_checked_once(LOMBOK_INSTALL_PATH, &latest_version);
-    }
-
-    // else use it
-    Ok(jar_path)
 }
 
 fn download_jdtls_milestone(version: &str) -> zed::Result<String> {
@@ -345,13 +363,11 @@ fn download_jdtls_milestone(version: &str) -> zed::Result<String> {
 fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String> {
     let plugins_dir = jdtls_base_directory.join("plugins");
 
-    // if we have `org.eclipse.equinox.launcher.jar` use that
     let specific_launcher = plugins_dir.join("org.eclipse.equinox.launcher.jar");
     if specific_launcher.is_file() {
         return Ok(specific_launcher);
     }
 
-    // else get the first file that matches the glob 'org.eclipse.equinox.launcher_*.jar'
     let entries =
         read_dir(&plugins_dir).map_err(|err| format!("Failed to read plugins directory: {err}"))?;
 
@@ -368,11 +384,6 @@ fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String>
 }
 
 fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
-    // Note: the JDTLS data path is where JDTLS stores its own caches.
-    // In the unlikely event we can't find the canonical OS-Level cache-path,
-    // we fall back to the the extension's workdir, which may never get cleaned up.
-    // In future we may want to deliberately manage caches to be able to force-clean them.
-
     let env = worktree.shell_env();
     let base_cachedir = match current_platform().0 {
         Os::Mac => env
@@ -405,9 +416,7 @@ fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
             .map(|path| path.join("caches"))
     })?;
 
-    // caches are unique per worktree-root-path
     let cache_key = worktree.root_path();
-
     let hex_digest = get_sha1_hex(&cache_key);
     let unique_dir_name = format!("jdtls-{hex_digest}");
     Ok(base_cachedir.join(unique_dir_name))
