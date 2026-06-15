@@ -170,6 +170,36 @@ impl<'a> TaskRunner<'a> {
 
     fn run(self) -> String {
         let mut cmd = std::process::Command::new("sh");
+
+        // Find the built java-task-helper binary
+        let task_helper_bin = std::env::current_dir().unwrap();
+
+        // Try common target paths
+        let paths = [
+            "target/debug/java-task-helper",
+            "target/x86_64-unknown-linux-gnu/debug/java-task-helper",
+            "target/aarch64-unknown-linux-gnu/debug/java-task-helper",
+        ];
+
+        let mut found_bin = None;
+        for path in paths {
+            let p = task_helper_bin.join(path);
+            if p.exists() {
+                found_bin = Some(p);
+                break;
+            }
+        }
+
+        let found_bin = found_bin.expect(
+            "Could not find java-task-helper binary in target directory. Run 'cargo build' first.",
+        );
+
+        // Create a temporary ZED_EXT directory structure matching what tasks.json expects
+        let zed_ext_base = self.project.temp_dir.join("mock_zed_ext");
+        let zed_ext_dir = zed_ext_base.join("zed/extensions/work/java/proxy-bin");
+        fs::create_dir_all(&zed_ext_dir).unwrap();
+        fs::copy(&found_bin, zed_ext_dir.join("java-task-helper")).unwrap();
+
         cmd.arg("-c")
             .arg(&self.command)
             .env("ZED_FILE", self.zed_file.to_string_lossy().to_string())
@@ -177,6 +207,7 @@ impl<'a> TaskRunner<'a> {
             .env("ZED_CUSTOM_java_package_name", &self.package)
             .env("ZED_CUSTOM_java_class_name", &self.class)
             .env("PATH", &self.project.new_path)
+            .env("XDG_DATA_HOME", zed_ext_base.to_string_lossy().to_string())
             .current_dir(&self.project.temp_dir);
 
         for (k, v) in self.extra_env {
