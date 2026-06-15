@@ -14,7 +14,7 @@ use zed_extension_api::{
 
 use crate::{
     config::{CheckUpdates, get_check_updates, get_java_home, is_java_autodownload},
-    jdk::try_to_fetch_and_install_latest_jdk,
+    jdk::Jdk,
 };
 
 // Errors
@@ -182,10 +182,11 @@ pub fn get_java_executable(
 
     // If the user has set the option, retrieve the latest version of Corretto (OpenJDK)
     if is_java_autodownload(configuration) {
-        return Ok(
-            try_to_fetch_and_install_latest_jdk(language_server_id, configuration)?
-                .join(java_executable_filename),
-        );
+        let mut jdk = Jdk::new();
+        return Ok(jdk
+            .get_bin_path(language_server_id, configuration, worktree)
+            .map_err(|err| format!("Failed to auto-download JDK: {err}"))?
+            .join(java_executable_filename));
     }
 
     Err(JAVA_EXEC_NOT_FOUND_ERROR.to_string())

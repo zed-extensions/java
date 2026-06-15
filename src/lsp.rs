@@ -1,7 +1,6 @@
 use std::{
     fs::{self},
     path::Path,
-    sync::{Arc, RwLock},
 };
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -12,109 +11,83 @@ use zed_extension_api::{
     serde_json::{self, Map, Value},
 };
 
-///
-/// `proxy.mjs` starts an HTTP server and writes its port to
-/// `${workdir}/proxy/${hex(project_root)}`.
-///
-/// This allows us to send LSP requests directly from the Java extension.
-/// It’s  a temporary workaround until `zed_extension_api`
-/// provides the ability to send LSP requests directly.
-///
-pub struct LspClient {
-    workspace: String,
+/*
+`java-lsp-proxy` starts an HTTP server and writes its port to
+`${workdir}/proxy/${hex(project_root)}`.
+
+This allows us to send LSP requests directly from the Java extension.
+It's  a temporary workaround until `zed_extension_api`
+provides the ability to send LSP requests directly.
+ */
+
+pub fn resolve_class_path(
+    workspace: &str,
+    args: Vec<Option<String>>,
+) -> zed::Result<Vec<Vec<String>>> {
+    request::<Vec<Vec<String>>>(
+        workspace,
+        "workspace/executeCommand",
+        json!({
+            "command": "vscode.java.resolveClasspath",
+            "arguments": args
+        }),
+    )
 }
 
-#[derive(Clone)]
-pub struct LspWrapper(Arc<RwLock<LspClient>>);
-
-impl LspWrapper {
-    pub fn new(workspace: String) -> Self {
-        LspWrapper(Arc::new(RwLock::new(LspClient { workspace })))
-    }
-
-    pub fn get(&self) -> zed::Result<std::sync::RwLockReadGuard<'_, LspClient>> {
-        self.0
-            .read()
-            .map_err(|err| format!("LspClient RwLock poisoned during read: {err}"))
-    }
-
-    pub fn switch_workspace(&self, workspace: String) -> zed::Result<()> {
-        let mut lock = self
-            .0
-            .write()
-            .map_err(|err| format!("LspClient RwLock poisoned during read: {err}"))?;
-
-        lock.workspace = workspace;
-
-        Ok(())
-    }
+pub fn resolve_main_class(workspace: &str, args: Vec<String>) -> zed::Result<Vec<MainClassEntry>> {
+    request::<Vec<MainClassEntry>>(
+        workspace,
+        "workspace/executeCommand",
+        json!({
+            "command": "vscode.java.resolveMainClass",
+            "arguments": args
+        }),
+    )
 }
 
-impl LspClient {
-    pub fn resolve_class_path(&self, args: Vec<Option<String>>) -> zed::Result<Vec<Vec<String>>> {
-        self.request::<Vec<Vec<String>>>(
-            "workspace/executeCommand",
-            json!({
-                "command": "vscode.java.resolveClasspath",
-                "arguments": args
-            }),
-        )
-    }
+pub fn request<T>(workspace: &str, method: &str, params: Value) -> Result<T, String>
+where
+    T: DeserializeOwned,
+{
+    let port = {
+        let filename = string_to_hex(workspace);
 
-    pub fn resolve_main_class(&self, args: Vec<String>) -> zed::Result<Vec<MainClassEntry>> {
-        self.request::<Vec<MainClassEntry>>(
-            "workspace/executeCommand",
-            json!({
-                "command": "vscode.java.resolveMainClass",
-                "arguments": args
-            }),
-        )
-    }
+        let port_path = Path::new("proxy").join(filename);
 
-    pub fn request<T>(&self, method: &str, params: Value) -> Result<T, String>
-    where
-        T: DeserializeOwned,
-    {
-        // We cannot cache it because the user may restart the LSP
-        let port = {
-            let filename = string_to_hex(&self.workspace);
+        if !fs::metadata(&port_path).is_ok_and(|file| file.is_file()) {
+            return Err("Failed to find lsp port file".to_owned());
+        }
 
-            let port_path = Path::new("proxy").join(filename);
+        fs::read_to_string(port_path)
+            .map_err(|err| format!("Failed to read LSP proxy port from file: {err}"))?
+            .parse::<u16>()
+            .map_err(|err| format!("Failed to parse LSP proxy port (file corrupted): {err}"))?
+    };
 
-            if !fs::metadata(&port_path).is_ok_and(|file| file.is_file()) {
-                return Err("Failed to find lsp port file".to_owned());
-            }
+    let mut body = Map::new();
+    body.insert("method".to_owned(), Value::String(method.to_owned()));
+    body.insert("params".to_owned(), params);
 
-            fs::read_to_string(port_path)
-                .map_err(|err| format!("Failed to read LSP proxy port from file: {err}"))?
-                .parse::<u16>()
-                .map_err(|err| format!("Failed to parse LSP proxy port (file corrupted): {err}"))?
-        };
+    let res = fetch(
+        &HttpRequest::builder()
+            .method(HttpMethod::Post)
+            .url(format!("http://localhost:{port}"))
+            .body(Value::Object(body).to_string())
+            .build()?,
+    )
+    .map_err(|err| format!("Failed to send request to LSP proxy: {err}"))?;
 
-        let mut body = Map::new();
-        body.insert("method".to_owned(), Value::String(method.to_owned()));
-        body.insert("params".to_owned(), params);
+    let data: LspResponse<T> = serde_json::from_slice(&res.body)
+        .map_err(|err| format!("Failed to parse response from LSP proxy: {err}"))?;
 
-        let res = fetch(
-            &HttpRequest::builder()
-                .method(HttpMethod::Post)
-                .url(format!("http://localhost:{port}"))
-                .body(Value::Object(body).to_string())
-                .build()?,
-        )
-        .map_err(|err| format!("Failed to send request to LSP proxy: {err}"))?;
-
-        let data: LspResponse<T> = serde_json::from_slice(&res.body)
-            .map_err(|err| format!("Failed to parse response from LSP proxy: {err}"))?;
-
-        match data {
-            LspResponse::Success { result } => Ok(result),
-            LspResponse::Error { error } => {
-                Err(format!("{} {} {}", error.code, error.message, error.data))
-            }
+    match data {
+        LspResponse::Success { result } => Ok(result),
+        LspResponse::Error { error } => {
+            Err(format!("{} {} {}", error.code, error.message, error.data))
         }
     }
 }
+
 fn string_to_hex(s: &str) -> String {
     let mut hex_string = String::new();
     for byte in s.as_bytes() {
