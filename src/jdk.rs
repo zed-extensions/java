@@ -7,7 +7,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    component::Component,
+    downloadable::Downloadable,
     util::{get_curr_dir, mark_checked_once, path_to_string, remove_all_files_except},
 };
 
@@ -38,7 +38,7 @@ impl Jdk {
     }
 }
 
-impl Component for Jdk {
+impl Downloadable for Jdk {
     const INSTALL_PATH: &'static str = "jdk";
 
     fn find_local(&self) -> Option<PathBuf> {

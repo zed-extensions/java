@@ -4,7 +4,7 @@ use zed_extension_api::{self as zed, LanguageServerId, Worktree, serde_json::Val
 
 use crate::util::should_use_local_or_download;
 
-pub trait Component {
+pub trait Downloadable {
     const INSTALL_PATH: &'static str;
 
     fn find_local(&self) -> Option<PathBuf>;

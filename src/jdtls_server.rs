@@ -8,9 +8,9 @@ use zed_extension_api::{
 };
 
 use crate::{
-    component::Component,
     config::{get_java_home, get_jdtls_launcher, is_lombok_enabled},
     debugger::Debugger,
+    downloadable::Downloadable,
     jdk::Jdk,
     jdtls::{Jdtls, Lombok, build_jdtls_launch_args, get_jdtls_launcher_from_path},
     language_server::LanguageServer,

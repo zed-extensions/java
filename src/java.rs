@@ -1,6 +1,6 @@
-mod component;
 mod config;
 mod debugger;
+mod downloadable;
 mod jdk;
 mod jdtls;
 mod jdtls_server;
@@ -19,7 +19,9 @@ use zed_extension_api::{
     serde_json::{Value, json},
 };
 
-use crate::{component::Component, jdtls_server::JdtlsServer, language_server::LanguageServer};
+use crate::{
+    downloadable::Downloadable, jdtls_server::JdtlsServer, language_server::LanguageServer,
+};
 
 const DEBUG_ADAPTER_NAME: &str = "Java";
 

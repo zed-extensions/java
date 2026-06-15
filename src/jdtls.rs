@@ -15,8 +15,8 @@ use zed_extension_api::{
 };
 
 use crate::{
-    component::Component,
     config::{get_lombok_jar, is_java_autodownload},
+    downloadable::Downloadable,
     jdk::Jdk,
     util::{
         create_path_if_not_exists, get_curr_dir, get_java_exec_name, get_java_executable,
@@ -45,7 +45,7 @@ impl Jdtls {
     }
 }
 
-impl Component for Jdtls {
+impl Downloadable for Jdtls {
     const INSTALL_PATH: &'static str = JDTLS_INSTALL_PATH;
 
     fn find_local(&self) -> Option<PathBuf> {
@@ -152,7 +152,7 @@ impl Lombok {
     }
 }
 
-impl Component for Lombok {
+impl Downloadable for Lombok {
     const INSTALL_PATH: &'static str = LOMBOK_INSTALL_PATH;
 
     fn find_local(&self) -> Option<PathBuf> {

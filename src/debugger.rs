@@ -10,8 +10,8 @@ use zed_extension_api::{
 };
 
 use crate::{
-    component::Component,
     config::get_java_debug_jar,
+    downloadable::Downloadable,
     lsp,
     util::{
         ArgsStringOrList, create_path_if_not_exists, get_curr_dir, mark_checked_once,
@@ -409,7 +409,7 @@ impl Debugger {
     }
 }
 
-impl Component for Debugger {
+impl Downloadable for Debugger {
     const INSTALL_PATH: &'static str = DEBUGGER_INSTALL_PATH;
 
     fn find_local(&self) -> Option<PathBuf> {

@@ -7,8 +7,8 @@ use zed_extension_api::{
 };
 
 use crate::{
-    component::Component,
     config::get_lsp_proxy_path,
+    downloadable::Downloadable,
     util::{mark_checked_once, remove_all_files_except, should_use_local_or_download},
 };
 
@@ -36,7 +36,7 @@ impl Proxy {
     }
 }
 
-impl Component for Proxy {
+impl Downloadable for Proxy {
     const INSTALL_PATH: &'static str = PROXY_INSTALL_PATH;
 
     fn find_local(&self) -> Option<PathBuf> {
