@@ -296,6 +296,7 @@ pub fn build_jdtls_launch_args(
         "-Dosgi.sharedConfiguration.area.readOnly=true".to_string(),
         "-Dosgi.configuration.cascaded=true".to_string(),
         "-Djava.import.generatesMetadataFilesAtProjectRoot=false".to_string(),
+        "-Djava.net.preferIPv4Stack=true".to_string(),
     ];
     {
         let mut min =
