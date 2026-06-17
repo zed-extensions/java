@@ -12,6 +12,7 @@ use crate::{
 };
 
 const TASK_HELPER_BINARY: &str = "java-task-helper";
+const TASK_HELPER_INSTALL_PATH: &str = "proxy-bin";
 const GITHUB_REPO: &str = "zed-extensions/java";
 
 pub struct TaskHelper {
@@ -25,15 +26,15 @@ impl TaskHelper {
 }
 
 impl Downloadable for TaskHelper {
-    const INSTALL_PATH: &'static str = "proxy-bin";
+    const INSTALL_PATH: &'static str = TASK_HELPER_INSTALL_PATH;
 
     fn find_local(&self) -> Option<PathBuf> {
-        let local_binary = PathBuf::from(Self::INSTALL_PATH).join(task_helper_exec());
+        let local_binary = PathBuf::from(TASK_HELPER_INSTALL_PATH).join(task_helper_exec());
         if metadata(&local_binary).is_ok_and(|m| m.is_file()) {
             return Some(local_binary);
         }
 
-        std::fs::read_dir(Self::INSTALL_PATH)
+        std::fs::read_dir(TASK_HELPER_INSTALL_PATH)
             .ok()?
             .filter_map(Result::ok)
             .map(|e| e.path().join(task_helper_exec()))
@@ -65,7 +66,10 @@ impl Downloadable for TaskHelper {
         language_server_id: &LanguageServerId,
     ) -> zed::Result<PathBuf> {
         let (name, file_type) = asset_name()?;
-        let bin_path = format!("{}/{version}/{}", Self::INSTALL_PATH, task_helper_exec());
+        let bin_path = format!(
+            "{TASK_HELPER_INSTALL_PATH}/{version}/{}",
+            task_helper_exec()
+        );
 
         if metadata(&bin_path).is_ok() {
             self.cached_path = Some(bin_path.clone());
@@ -87,7 +91,7 @@ impl Downloadable for TaskHelper {
             .find(|a| a.name == name)
             .ok_or_else(|| format!("No asset found matching {name:?}"))?;
 
-        let version_dir = format!("{}/{version}", Self::INSTALL_PATH);
+        let version_dir = format!("{TASK_HELPER_INSTALL_PATH}/{version}");
 
         set_language_server_installation_status(
             language_server_id,
@@ -102,8 +106,8 @@ impl Downloadable for TaskHelper {
             language_server_id,
             &LanguageServerInstallationStatus::None,
         );
-        let _ = remove_all_files_except(Self::INSTALL_PATH, version);
-        let _ = mark_checked_once(Self::INSTALL_PATH, version);
+        let _ = remove_all_files_except(TASK_HELPER_INSTALL_PATH, version);
+        let _ = mark_checked_once(TASK_HELPER_INSTALL_PATH, version);
 
         self.cached_path = Some(bin_path.clone());
         Ok(PathBuf::from(bin_path))

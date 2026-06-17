@@ -12,6 +12,11 @@ fn main() {
     }
 
     let subcommand = &args[0];
+    if subcommand == "clear-cache" {
+        task_clear_cache();
+        return;
+    }
+
     let (tool, _root) = get_workspace_root();
 
     let result = match subcommand.as_str() {
@@ -53,7 +58,6 @@ fn main() {
             let file = &args[1];
             Some(tool.run_all_tests(file))
         }
-        "clear-cache" => Some(task_clear_cache()),
         _ => None,
     };
 
@@ -80,7 +84,7 @@ pub fn get_jdwp_args() -> String {
     )
 }
 
-fn task_clear_cache() -> crate::command::TaskCommand {
+fn task_clear_cache() {
     let cache_dir = if let Ok(xdg) = env::var("XDG_CACHE_HOME") {
         PathBuf::from(xdg)
     } else if cfg!(target_os = "macos") {
@@ -93,15 +97,33 @@ fn task_clear_cache() -> crate::command::TaskCommand {
             .unwrap_or_default()
     };
 
-    crate::command::TaskCommand {
-        command: "sh".to_string(),
-        args: vec![
-            "-c".to_string(),
-            format!("find \"{}\" -maxdepth 1 -type d -name 'jdtls-*' -exec rm -rf {{}} + && echo 'JDTLS cache cleared. Restart the language server'", cache_dir.to_string_lossy()),
-        ],
-        cwd: env::current_dir()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string(),
+    if !cache_dir.exists() {
+        println!("No JDTLS cache found");
+        return;
+    }
+
+    let mut cleared = false;
+    if let Ok(entries) = std::fs::read_dir(&cache_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("jdtls-") {
+                        if let Err(e) = std::fs::remove_dir_all(&path) {
+                            eprintln!("Failed to remove cache directory {:?}: {}", path, e);
+                        } else {
+                            println!("Removed cache directory {:?}", path);
+                            cleared = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if cleared {
+        println!("JDTLS cache cleared. Restart the language server");
+    } else {
+        println!("No JDTLS cache found");
     }
 }

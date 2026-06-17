@@ -57,14 +57,14 @@ impl BuildTool for Gradle {
 
     fn run_test_method(
         &self,
-        _file: &str,
+        file: &str,
         package: &str,
         class: &str,
         outer: Option<&str>,
         method: &str,
     ) -> TaskCommand {
         let command = which_wrapper(&self.root, "gradle");
-        let module = self.find_module(_file);
+        let module = self.find_module(file);
         let full_class = match outer {
             Some(o) => format!("{}${}", o, class),
             None => class.to_string(),
@@ -95,13 +95,13 @@ impl BuildTool for Gradle {
 
     fn run_test_class(
         &self,
-        _file: &str,
+        file: &str,
         package: &str,
         class: &str,
         outer: Option<&str>,
     ) -> TaskCommand {
         let command = which_wrapper(&self.root, "gradle");
-        let module = self.find_module(_file);
+        let module = self.find_module(file);
         let full_class = match outer {
             Some(o) => format!("{}${}", o, class),
             None => class.to_string(),
@@ -130,9 +130,9 @@ impl BuildTool for Gradle {
         }
     }
 
-    fn run_all_tests(&self, _file: &str) -> TaskCommand {
+    fn run_all_tests(&self, file: &str) -> TaskCommand {
         let command = which_wrapper(&self.root, "gradle");
-        let module = self.find_module(_file);
+        let module = self.find_module(file);
 
         let task = if let Some(m) = module {
             format!(":{}:test", m.to_string_lossy().replace("/", ":"))
