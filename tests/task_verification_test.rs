@@ -135,6 +135,67 @@ impl Drop for TestProject {
         let _ = fs::remove_dir_all(&self.temp_dir);
     }
 }
+
+static BUILD_HELPER: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+fn ensure_task_helper_built() -> PathBuf {
+    BUILD_HELPER
+        .get_or_init(|| {
+            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| std::env::current_dir().unwrap());
+
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.current_dir(&manifest_dir);
+            cmd.env_remove("CARGO_BUILD_TARGET");
+            cmd.args([
+                "build",
+                "-p",
+                "java-task-helper",
+                "--bin",
+                "java-task-helper",
+                "--message-format=json",
+            ]);
+            if !cfg!(debug_assertions) {
+                cmd.arg("--release");
+            }
+
+            let output = cmd
+                .output()
+                .expect("failed to run cargo build for java-task-helper");
+            assert!(
+                output.status.success(),
+                "cargo build -p java-task-helper failed:\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut found_path = None;
+            for line in stdout.lines() {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                    let is_target_bin = val["target"]["kind"]
+                        .as_array()
+                        .is_some_and(|k| k.iter().any(|kind| kind == "bin"));
+                    if val["reason"] == "compiler-artifact"
+                        && val["target"]["name"] == "java-task-helper"
+                        && is_target_bin
+                    {
+                        found_path = val["filenames"]
+                            .as_array()
+                            .and_then(|files| files.first())
+                            .and_then(|f| f.as_str())
+                            .map(PathBuf::from);
+                    }
+                }
+            }
+
+            found_path.expect(
+                "Could not find compiler artifact filename for java-task-helper in cargo build output",
+            )
+        })
+        .clone()
+}
+
 struct TaskRunner<'a> {
     project: &'a TestProject,
     command: String,
@@ -171,34 +232,19 @@ impl<'a> TaskRunner<'a> {
     fn run(self) -> String {
         let mut cmd = std::process::Command::new("sh");
 
-        // Find the built java-task-helper binary
-        let task_helper_bin = std::env::current_dir().unwrap();
-
-        // Try common target paths
-        let paths = [
-            "target/debug/java-task-helper",
-            "target/x86_64-unknown-linux-gnu/debug/java-task-helper",
-            "target/aarch64-unknown-linux-gnu/debug/java-task-helper",
-        ];
-
-        let mut found_bin = None;
-        for path in paths {
-            let p = task_helper_bin.join(path);
-            if p.exists() {
-                found_bin = Some(p);
-                break;
-            }
-        }
-
-        let found_bin = found_bin.expect(
-            "Could not find java-task-helper binary in target directory. Run 'cargo build' first.",
-        );
+        let found_bin = ensure_task_helper_built();
 
         // Create a temporary ZED_EXT directory structure matching what tasks.json expects
         let zed_ext_base = self.project.temp_dir.join("mock_zed_ext");
         let zed_ext_dir = zed_ext_base.join("zed/extensions/work/java/proxy-bin");
         fs::create_dir_all(&zed_ext_dir).unwrap();
-        fs::copy(&found_bin, zed_ext_dir.join("java-task-helper")).unwrap();
+        let dest_bin = zed_ext_dir.join("java-task-helper");
+        fs::copy(&found_bin, &dest_bin).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&dest_bin, fs::Permissions::from_mode(0o755)).unwrap();
+        }
 
         cmd.arg("-c")
             .arg(&self.command)
@@ -215,6 +261,14 @@ impl<'a> TaskRunner<'a> {
         }
 
         let output = cmd.output().expect("Failed to execute shell command");
+        if !output.status.success() {
+            panic!(
+                "Shell command failed with status: {:?}\nStdout: {}\nStderr: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
         String::from_utf8_lossy(&output.stdout).to_string()
     }
 }
