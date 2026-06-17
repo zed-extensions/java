@@ -606,8 +606,10 @@ The project includes a `justfile` with common development tasks:
 | Recipe | Description |
 |--------|-------------|
 | `just proxy-build` | Build the proxy binary in debug mode |
+| `just proxy-release` | Build the proxy binary in release mode |
 | `just proxy-install` | Build release proxy and copy it to the extension workdir |
 | `just task-build` | Build the task helper binary in debug mode |
+| `just task-release` | Build the task helper binary in release mode |
 | `just task-install` | Build release task helper and copy it to the extension workdir |
 | `just task-test` | Run task helper tests |
 | `just ext-build` | Build the WASM extension in release mode |
