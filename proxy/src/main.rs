@@ -6,7 +6,9 @@ mod log;
 use completions::{is_completion_response, process_completions, sanitize_resolved_completion};
 use decompile::{rewrite_jdt_in_strings, rewrite_jdt_locations};
 use http::handle_http;
-use proxy_common::{parse_lsp_content, raw_has_id, spawn_parent_monitor, write_raw, write_to_stdout, LspReader};
+use proxy_common::{
+    parse_lsp_content, raw_has_id, spawn_parent_monitor, write_raw, write_to_stdout, LspReader,
+};
 use serde_json::Value;
 use std::{
     collections::HashMap,

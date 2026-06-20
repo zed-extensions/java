@@ -7,12 +7,13 @@
 //! the editor over tokio's stdout.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Stdout};
 use tokio::sync::Mutex;
 
-use proxy_common::{encode_lsp, parse_lsp_content};
+use proxy_common::{encode_lsp, parse_lsp_content, path_to_file_uri};
 
 /// Prefix for the JSON-RPC `id` of requests the bridge injects into the language
 /// server (the build-model sync commands). Responses carry the same id, letting
@@ -40,27 +41,26 @@ pub fn is_gradle_build_file_save(raw: &[u8]) -> bool {
     contains_subslice(body, b"\"textDocument/didSave\"") && contains_subslice(body, b".gradle")
 }
 
-/// Detect a `textDocument/didSave` for `gradle-wrapper.properties`, which
-/// declares the Gradle distribution version.
-pub fn is_wrapper_properties_save(raw: &[u8]) -> bool {
-    let Some(body) = lsp_body(raw) else {
-        return false;
-    };
-    contains_subslice(body, b"\"textDocument/didSave\"")
-        && contains_subslice(body, b"gradle-wrapper.properties")
-}
-
 /// Whether a raw LSP message is a response to one of the bridge's injected
-/// requests, identified by an `"id":"gradle-sync-…"` field. Such responses must
-/// not reach the editor, which never sent the corresponding request.
+/// requests, identified by a string `id` beginning with [`INJECTED_ID_PREFIX`].
+/// Such responses must not reach the editor, which never sent the corresponding
+/// request.
+///
+/// A cheap byte pre-check (does the body even mention the prefix?) gates a
+/// proper JSON parse of the `id` field, so the common case — the vast majority
+/// of messages, which don't contain the prefix at all — stays allocation-free,
+/// while matches are confirmed without depending on the server's exact
+/// whitespace around `"id":` (compact today, but not guaranteed).
 pub fn is_injected_response(raw: &[u8]) -> bool {
     let Some(body) = lsp_body(raw) else {
         return false;
     };
-    let mut needle = Vec::with_capacity(INJECTED_ID_PREFIX.len() + 6);
-    needle.extend_from_slice(b"\"id\":\"");
-    needle.extend_from_slice(INJECTED_ID_PREFIX.as_bytes());
-    contains_subslice(body, &needle)
+    if !contains_subslice(body, INJECTED_ID_PREFIX.as_bytes()) {
+        return false;
+    }
+    parse_lsp_content(raw)
+        .and_then(|msg| msg.get("id")?.as_str().map(str::to_string))
+        .is_some_and(|id| id.starts_with(INJECTED_ID_PREFIX))
 }
 
 /// The JSON body of a raw LSP message (everything after the `\r\n\r\n` header
@@ -125,7 +125,7 @@ pub fn build_eval_diagnostics(
         "message": message
     });
 
-    let uri = path_to_file_uri(path);
+    let uri = path_to_file_uri(Path::new(path));
     let mut map = HashMap::new();
     map.insert(uri, vec![diagnostic]);
     map
@@ -169,16 +169,6 @@ pub fn parse_line_column(message: &str) -> Option<(u64, u64)> {
 fn take_u64(s: &str) -> Option<u64> {
     let digits: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
     digits.parse().ok()
-}
-
-/// Convert a filesystem path to a `file://` URI, matching how the language
-/// server's `publishDiagnostics` and the editor key documents.
-pub fn path_to_file_uri(path: &str) -> String {
-    if cfg!(windows) {
-        format!("file:///{}", path.replace('\\', "/"))
-    } else {
-        format!("file://{path}")
-    }
 }
 
 /// Owns the single byte stream to the editor (the bridge's stdout) and the
@@ -281,6 +271,11 @@ mod tests {
     fn detects_injected_response_with_string_id() {
         let raw = frame(r#"{"jsonrpc":"2.0","id":"gradle-sync-0","result":null}"#);
         assert!(is_injected_response(&raw));
+
+        // Tolerant of whitespace around the colon (compact today, but the parse
+        // path must not depend on it).
+        let spaced = frame(r#"{"jsonrpc": "2.0", "id": "gradle-sync-7", "result": null}"#);
+        assert!(is_injected_response(&spaced));
     }
 
     #[test]
@@ -319,11 +314,12 @@ mod tests {
     }
 
     #[test]
-    fn detects_wrapper_properties_save() {
+    fn wrapper_properties_save_is_not_a_build_file_save() {
+        // `gradle-wrapper.properties` is a `.properties` file, not a build
+        // script, so it must not trigger a build-model re-sync.
         let save = frame(
             r#"{"jsonrpc":"2.0","method":"textDocument/didSave","params":{"textDocument":{"uri":"file:///p/gradle/wrapper/gradle-wrapper.properties"}}}"#,
         );
-        assert!(is_wrapper_properties_save(&save));
         assert!(!is_gradle_build_file_save(&save));
     }
 

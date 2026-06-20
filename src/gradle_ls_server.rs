@@ -117,9 +117,11 @@ impl LanguageServer for GradleLsServer {
         // fallback to the init options' `settings` — that fallback exists only
         // for JDTLS for historical reasons; the Gradle server has no such legacy
         // and its init options are kept empty.
-        Ok(LspSettings::for_worktree(language_server_id.as_ref(), worktree)
-            .ok()
-            .and_then(|lsp_settings| lsp_settings.settings))
+        Ok(
+            LspSettings::for_worktree(language_server_id.as_ref(), worktree)
+                .ok()
+                .and_then(|lsp_settings| lsp_settings.settings),
+        )
     }
 }
 

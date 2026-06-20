@@ -25,9 +25,14 @@ use tokio::time::sleep;
 use tonic::transport::{Channel, Endpoint};
 
 use crate::proto::gradle::{
-    gradle_client::GradleClient, get_build_reply::Kind, output::OutputType, GetBuildRequest,
+    get_build_reply::Kind, gradle_client::GradleClient, output::OutputType, GetBuildRequest,
     GradleConfig, GradleProject,
 };
+
+/// The `java_extension_version` reported to `gradle-server` in `GradleConfig`.
+/// It only has to clear the server's `isAtLeast("1.3.0")` compatibility gate;
+/// we report the vscode-gradle line we drive the protocol against.
+const JAVA_EXTENSION_VERSION: &str = "3.17.3";
 
 /// The Gradle distribution configuration forwarded by the extension via
 /// environment variables and threaded into the gRPC `GradleConfig`. Mirrors the
@@ -67,9 +72,12 @@ impl DistributionConfig {
             jvm_arguments: self.jvm_arguments.clone(),
             wrapper_enabled: self.wrapper_enabled,
             version: self.version.clone(),
-            // The Gradle Language Server checks the extension version against a
-            // minimum; the value is otherwise opaque, so report a recent one.
-            java_extension_version: String::new(),
+            // gradle-server runs a compatibility gate as `new Version(value)
+            // .isAtLeast("1.3.0")` (verified in GetBuildHandler), and an empty
+            // string would construct an invalid Version. Report a value at/above
+            // that floor, mirroring the real vscode-gradle extension which sends
+            // its own version here.
+            java_extension_version: JAVA_EXTENSION_VERSION.to_string(),
             java_home: self.java_home.clone(),
         }
     }
@@ -84,7 +92,10 @@ fn env_or_empty(key: &str) -> String {
 pub enum BuildOutcome {
     Model(GradleProject),
     /// `(error, causes)` — already flattened from the gRPC status / reply.
-    Error { error: String, causes: Vec<String> },
+    Error {
+        error: String,
+        causes: Vec<String>,
+    },
 }
 
 /// Manages the long-lived `gradle-server` process and gRPC channel. Cloneable
@@ -182,11 +193,10 @@ impl GradleServer {
                             causes: stderr_causes(&stderr),
                         };
                     }
-                    Some(Kind::Output(output)) => {
-                        if output.output_type == OutputType::Stderr as i32 {
+                    Some(Kind::Output(output))
+                        if output.output_type == OutputType::Stderr as i32 => {
                             stderr.push_str(&String::from_utf8_lossy(&output.output_bytes));
                         }
-                    }
                     // Progress/Environment/Cancelled are informational.
                     _ => {}
                 },
@@ -253,7 +263,10 @@ impl GradleServer {
         let port = free_port().await?;
         let child = self.spawn_server(port)?;
         let channel = connect_with_retry(port).await?;
-        state.running = Some(RunningServer { child, channel: channel.clone() });
+        state.running = Some(RunningServer {
+            child,
+            channel: channel.clone(),
+        });
         Ok(channel)
     }
 
@@ -367,10 +380,7 @@ fn collect_commands(project: &GradleProject, out: &mut Vec<(&'static str, Value)
     let project_path = normalize_project_path(&project.project_path);
 
     // gradle.setPlugins [projectPath, plugins[]]
-    out.push((
-        "gradle.setPlugins",
-        json!([project_path, project.plugins]),
-    ));
+    out.push(("gradle.setPlugins", json!([project_path, project.plugins])));
 
     // gradle.setClosures [projectPath, closures[]]
     let closures: Vec<Value> = project

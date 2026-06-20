@@ -4,32 +4,14 @@ use std::{
     env, fs,
     hash::{Hash, Hasher},
     io::Write,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{mpsc, Arc, Mutex},
 };
 
 use crate::{lsp_error, lsp_warn};
-use proxy_common::encode_lsp;
+use proxy_common::{encode_lsp, path_to_file_uri};
 
 const DECOMPILED_DIR: &str = "jdtls-decompiled";
-
-/// Convert a `PathBuf` to a proper `file://` URI.
-///
-/// On Unix the path already starts with `/`, so `file://` + path gives us
-/// the correct `file:///…` form with no extra work.
-///
-/// On Windows we must replace `\` with `/` and prepend `file:///` before the
-/// drive letter so that we get `file:///C:/…` instead of `file://C:\…`.
-#[cfg(unix)]
-fn path_to_file_uri(path: &Path) -> String {
-    format!("file://{}", path.display())
-}
-
-#[cfg(windows)]
-fn path_to_file_uri(path: &Path) -> String {
-    let s = path.display().to_string().replace('\\', "/");
-    format!("file:///{s}")
-}
 
 fn cache_dir() -> PathBuf {
     env::temp_dir().join(DECOMPILED_DIR)

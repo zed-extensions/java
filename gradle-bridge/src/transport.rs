@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 
 use crate::channel::{
     is_gradle_build_file_save, is_initialized_notification, is_injected_response,
-    is_wrapper_properties_save, parse_publish_diagnostics, EditorChannel,
+    parse_publish_diagnostics, EditorChannel,
 };
 use crate::sync::SyncScheduler;
 
@@ -99,10 +99,7 @@ impl<R: AsyncRead + Unpin> AsyncLspReader<R> {
 ///
 /// All other messages are forwarded verbatim. Runs until the server closes the
 /// connection.
-pub async fn pump_ls_to_editor<R: AsyncRead + Unpin>(
-    ls_reader: R,
-    channel: Arc<EditorChannel>,
-) {
+pub async fn pump_ls_to_editor<R: AsyncRead + Unpin>(ls_reader: R, channel: Arc<EditorChannel>) {
     let mut reader = AsyncLspReader::new(ls_reader);
     while let Ok(Some(raw)) = reader.read_message().await {
         if is_injected_response(&raw) {
@@ -147,15 +144,15 @@ pub async fn pump_editor_to_ls<R: AsyncRead + Unpin>(
         ls_writer.send(raw.clone()).await;
 
         // Initial sync once the server is ready, then re-sync on every save of a
-        // Gradle build file or the wrapper properties — the build model
-        // (plugins, closures, classpaths) can change and the language server
-        // otherwise keeps stale completions.
+        // Gradle build file — the build model (plugins, closures, classpaths)
+        // can change and the language server otherwise keeps stale completions.
+        // (We don't watch `gradle-wrapper.properties`: it belongs to the
+        // Properties language, so the editor never routes its saves to us.)
         let should_sync = if !initialized_sent && is_initialized_notification(&raw) {
             initialized_sent = true;
             true
         } else {
-            initialized_sent
-                && (is_gradle_build_file_save(&raw) || is_wrapper_properties_save(&raw))
+            initialized_sent && is_gradle_build_file_save(&raw)
         };
 
         if should_sync {

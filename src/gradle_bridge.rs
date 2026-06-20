@@ -7,7 +7,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{get_gradle_bridge_path, get_lsp_proxy_path},
+    config::get_gradle_bridge_path,
     downloadable::Downloadable,
     util::{mark_checked_once, remove_all_files_except, should_use_local_or_download},
 };
@@ -137,19 +137,25 @@ impl Downloadable for GradleBridge {
             return Ok(PathBuf::from(path));
         }
 
-        if let Some(path) =
-            should_use_local_or_download(configuration, self.find_local(), Self::INSTALL_PATH)
-                .unwrap_or(None)
-        {
-            let s = path.to_string_lossy().to_string();
-            self.cached_path = Some(s);
-            return Ok(path);
-        }
-
-        if let Ok(version) = self.fetch_latest_version()
-            && let Ok(path) = self.download(&version, language_server_id)
-        {
-            return Ok(path);
+        // Respect the `check_updates` policy:
+        //   Ok(Some) — use the local install,
+        //   Ok(None) — policy allows a download (fall through),
+        //   Err      — Never / Once-exhausted with no local install: do NOT
+        //              download; fall through to the PATH lookup as a last resort.
+        match should_use_local_or_download(configuration, self.find_local(), Self::INSTALL_PATH) {
+            Ok(Some(path)) => {
+                let s = path.to_string_lossy().to_string();
+                self.cached_path = Some(s);
+                return Ok(path);
+            }
+            Ok(None) => {
+                if let Ok(version) = self.fetch_latest_version()
+                    && let Ok(path) = self.download(&version, language_server_id)
+                {
+                    return Ok(path);
+                }
+            }
+            Err(_) => { /* policy forbids download; skip to PATH fallback */ }
         }
 
         if let Some(path) = worktree.which(bridge_exec().as_str()) {
@@ -169,21 +175,7 @@ impl Downloadable for GradleBridge {
             return Some(path);
         }
 
-        // Otherwise, if the user points `lsp_proxy_path` at a local build, look
-        // for the bridge as a sibling — but only adopt it when it actually
-        // exists, so users running a custom proxy without a co-located bridge
-        // still fall through to the normal download path.
-        let proxy_path = get_lsp_proxy_path(configuration, worktree)?;
-        let p = PathBuf::from(&proxy_path);
-        let dir = if p.is_dir() {
-            p
-        } else {
-            p.parent().map(PathBuf::from).unwrap_or(p)
-        };
-        let sibling = dir.join(bridge_exec());
-        metadata(&sibling)
-            .is_ok_and(|m| m.is_file())
-            .then(|| sibling.to_string_lossy().to_string())
+        None
     }
 }
 
