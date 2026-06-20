@@ -82,6 +82,12 @@ Configuration, when you need it, goes under the `gradle-language-server` languag
     "settings": {
       // All optional — sensible defaults are used when omitted.
 
+      // JDK used to run gradle-server and the Gradle daemon. Falls back to the
+      // $JAVA_HOME environment variable. Modern Gradle requires JVM 17+, so set
+      // this if your default Java is older. Also accepts the legacy key
+      // "java.home". (Same key the jdtls server uses.)
+      "java_home": "/path/to/your/JDK17+",
+
       // Gradle distribution (mirrors the Gradle Language Server's own schema).
       // By default the project's Gradle wrapper is used.
       "gradleWrapperEnabled": true,
@@ -98,7 +104,9 @@ Configuration, when you need it, goes under the `gradle-language-server` languag
 }
 ```
 
-> **Note:** The bridge launches `gradle-server` with the same JDK the extension resolves for Java (`$JAVA_HOME` / the `java_home` setting / an auto-downloaded JDK). Modern Gradle requires JVM 17+, so ensure that JDK satisfies your Gradle distribution.
+> **Note:** The bridge launches `gradle-server` with the JDK resolved from this server's own settings — the `java_home` value under `gradle-language-server` (falling back to the `$JAVA_HOME` environment variable, then an auto-downloaded JDK). Modern Gradle requires JVM 17+, so ensure that JDK satisfies your Gradle distribution.
+>
+> `java_home` is configured **per language server**: the value under `jdtls` does not carry over to `gradle-language-server` (and vice-versa). This is intentional — JDTLS needs a JDK 21+ to run, while the Gradle daemon only needs 17+ — but it means setting `java_home` under `jdtls` alone won't affect Gradle. Set it under `gradle-language-server` too, or rely on the shared `$JAVA_HOME` fallback that applies to both.
 
 ## Project Symbol Search
 
