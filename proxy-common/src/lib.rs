@@ -12,8 +12,8 @@ pub mod platform;
 pub mod uri;
 
 pub use lsp::{
-    encode_lsp, parse_lsp_content, raw_has_id, write_raw, write_to_stdout, LspReader,
-    CONTENT_LENGTH, HEADER_SEP,
+    contains_subslice, encode_lsp, lsp_body, parse_content_length, parse_lsp_content, raw_has_id,
+    write_raw, write_to_stdout, LspReader, CONTENT_LENGTH, HEADER_SEP,
 };
 pub use platform::spawn_parent_monitor;
 pub use uri::path_to_file_uri;

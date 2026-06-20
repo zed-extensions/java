@@ -68,19 +68,7 @@ impl<R: AsyncRead + Unpin> AsyncLspReader<R> {
             }
         }
 
-        let header_str = String::from_utf8_lossy(&header_buf);
-        let content_length = header_str
-            .lines()
-            .find_map(|line| {
-                let (name, value) = line.split_once(": ")?;
-                if name.eq_ignore_ascii_case("Content-Length") {
-                    value.trim().parse::<usize>().ok()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
-
+        let content_length = proxy_common::parse_content_length(&header_buf);
         let mut content = vec![0u8; content_length];
         self.reader.read_exact(&mut content).await?;
 

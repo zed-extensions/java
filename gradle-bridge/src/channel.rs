@@ -13,7 +13,9 @@ use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Stdout};
 use tokio::sync::Mutex;
 
-use proxy_common::{encode_lsp, parse_lsp_content, path_to_file_uri};
+use proxy_common::{
+    contains_subslice, encode_lsp, lsp_body, parse_lsp_content, path_to_file_uri,
+};
 
 /// Prefix for the JSON-RPC `id` of requests the bridge injects into the language
 /// server (the build-model sync commands). Responses carry the same id, letting
@@ -61,20 +63,6 @@ pub fn is_injected_response(raw: &[u8]) -> bool {
     parse_lsp_content(raw)
         .and_then(|msg| msg.get("id")?.as_str().map(str::to_string))
         .is_some_and(|id| id.starts_with(INJECTED_ID_PREFIX))
-}
-
-/// The JSON body of a raw LSP message (everything after the `\r\n\r\n` header
-/// separator), or `None` if the framing is absent.
-fn lsp_body(raw: &[u8]) -> Option<&[u8]> {
-    let sep_pos = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
-    Some(&raw[sep_pos + 4..])
-}
-
-pub fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return false;
-    }
-    haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 /// If `raw` is a `textDocument/publishDiagnostics` notification, return its
