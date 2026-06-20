@@ -94,12 +94,6 @@ impl LanguageServer for GradleLsServer {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<Option<Value>> {
-        // Mirror the JDTLS server: forward the user's `initialization_options`
-        // verbatim, defaulting to an empty object when none are configured. The
-        // Gradle distribution config the bridge needs is read separately from
-        // the `settings` block (see `command`/`gradle_config_env`), so for now
-        // init options are typically empty. An empty object — not null — also
-        // avoids the language server's NPE on a null `initializationOptions`.
         let options = LspSettings::for_worktree(language_server_id.as_ref(), worktree)
             .map(|lsp_settings| lsp_settings.initialization_options)
             .map_err(|err| format!("Failed to get LSP settings: {err}"))?
@@ -113,10 +107,6 @@ impl LanguageServer for GradleLsServer {
         language_server_id: &LanguageServerId,
         worktree: &Worktree,
     ) -> zed::Result<Option<Value>> {
-        // Return the `settings` block as-is. Unlike the JDTLS server, there is no
-        // fallback to the init options' `settings` — that fallback exists only
-        // for JDTLS for historical reasons; the Gradle server has no such legacy
-        // and its init options are kept empty.
         Ok(
             LspSettings::for_worktree(language_server_id.as_ref(), worktree)
                 .ok()

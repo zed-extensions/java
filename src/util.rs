@@ -7,7 +7,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use zed_extension_api::{
-    self as zed, Command, LanguageServerId, Os, Worktree, current_platform,
+    self as zed, Architecture, Command, DownloadedFileType, LanguageServerId, Os, Worktree,
+    current_platform,
     http_client::{HttpMethod, HttpRequest, fetch},
     serde_json::Value,
 };
@@ -202,6 +203,44 @@ pub fn get_java_exec_name() -> String {
         Os::Windows => "java.exe".to_string(),
         _ => "java".to_string(),
     }
+}
+
+/// The platform-specific executable file name for a downloaded native binary
+/// (appends `.exe` on Windows). Shared by the proxy and the Gradle bridge, which
+/// differ only in `binary`.
+pub fn platform_exec_name(binary: &str) -> String {
+    match current_platform().0 {
+        Os::Windows => format!("{binary}.exe"),
+        _ => binary.to_string(),
+    }
+}
+
+/// The release-asset name and archive type for a downloaded native binary on the
+/// current platform, e.g. `java-lsp-proxy-darwin-aarch64.tar.gz`. The proxy and
+/// the bridge ship per-platform assets under the same release with this naming;
+/// only `binary` differs.
+///
+/// # Errors
+///
+/// Returns an error on an unsupported CPU architecture.
+pub fn platform_asset_name(binary: &str) -> zed::Result<(String, DownloadedFileType)> {
+    let (os, arch) = current_platform();
+    let (os_str, file_type) = match os {
+        Os::Mac => ("darwin", DownloadedFileType::GzipTar),
+        Os::Linux => ("linux", DownloadedFileType::GzipTar),
+        Os::Windows => ("windows", DownloadedFileType::Zip),
+    };
+    let arch_str = match arch {
+        Architecture::Aarch64 => "aarch64",
+        Architecture::X8664 => "x86_64",
+        _ => return Err("Unsupported architecture".into()),
+    };
+    let ext = if matches!(file_type, DownloadedFileType::Zip) {
+        "zip"
+    } else {
+        "tar.gz"
+    };
+    Ok((format!("{binary}-{os_str}-{arch_str}.{ext}"), file_type))
 }
 
 /// Retrieve the java major version accessible by the extension

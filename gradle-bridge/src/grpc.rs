@@ -194,9 +194,10 @@ impl GradleServer {
                         };
                     }
                     Some(Kind::Output(output))
-                        if output.output_type == OutputType::Stderr as i32 => {
-                            stderr.push_str(&String::from_utf8_lossy(&output.output_bytes));
-                        }
+                        if output.output_type == OutputType::Stderr as i32 =>
+                    {
+                        stderr.push_str(&String::from_utf8_lossy(&output.output_bytes));
+                    }
                     // Progress/Environment/Cancelled are informational.
                     _ => {}
                 },

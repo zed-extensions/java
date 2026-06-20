@@ -9,7 +9,10 @@ use zed_extension_api::{
 use crate::{
     config::get_gradle_bridge_path,
     downloadable::Downloadable,
-    util::{mark_checked_once, remove_all_files_except, should_use_local_or_download},
+    util::{
+        mark_checked_once, platform_asset_name, platform_exec_name, remove_all_files_except,
+        should_use_local_or_download,
+    },
 };
 
 const BRIDGE_BINARY: &str = "gradle-lsp-bridge";
@@ -170,7 +173,6 @@ impl Downloadable for GradleBridge {
         configuration: &Option<Value>,
         worktree: &Worktree,
     ) -> Option<String> {
-        // A dedicated override always wins.
         if let Some(path) = get_gradle_bridge_path(configuration, worktree) {
             return Some(path);
         }
@@ -180,32 +182,9 @@ impl Downloadable for GradleBridge {
 }
 
 fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
-    let (os, arch) = zed::current_platform();
-    let (os_str, file_type) = match os {
-        zed::Os::Mac => ("darwin", DownloadedFileType::GzipTar),
-        zed::Os::Linux => ("linux", DownloadedFileType::GzipTar),
-        zed::Os::Windows => ("windows", DownloadedFileType::Zip),
-    };
-    let arch_str = match arch {
-        zed::Architecture::Aarch64 => "aarch64",
-        zed::Architecture::X8664 => "x86_64",
-        _ => return Err("Unsupported architecture".into()),
-    };
-    let ext = if matches!(file_type, DownloadedFileType::Zip) {
-        "zip"
-    } else {
-        "tar.gz"
-    };
-    Ok((
-        format!("{BRIDGE_BINARY}-{os_str}-{arch_str}.{ext}"),
-        file_type,
-    ))
+    platform_asset_name(BRIDGE_BINARY)
 }
 
 fn bridge_exec() -> String {
-    let (os, _arch) = zed::current_platform();
-    match os {
-        zed::Os::Linux | zed::Os::Mac => BRIDGE_BINARY.to_string(),
-        zed::Os::Windows => format!("{BRIDGE_BINARY}.exe"),
-    }
+    platform_exec_name(BRIDGE_BINARY)
 }

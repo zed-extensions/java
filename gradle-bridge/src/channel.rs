@@ -13,9 +13,7 @@ use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Stdout};
 use tokio::sync::Mutex;
 
-use proxy_common::{
-    contains_subslice, encode_lsp, lsp_body, parse_lsp_content, path_to_file_uri,
-};
+use proxy_common::{contains_subslice, encode_lsp, lsp_body, parse_lsp_content, path_to_file_uri};
 
 /// Prefix for the JSON-RPC `id` of requests the bridge injects into the language
 /// server (the build-model sync commands). Responses carry the same id, letting
