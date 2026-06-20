@@ -1,0 +1,20 @@
+[package]
+name = "gradle-lsp-bridge"
+version = "6.8.20"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+description = "Bridges Zed to the Gradle Language Server, driving the real gradle-server.jar over gRPC for plugin-aware completions"
+
+[[bin]]
+name = "gradle-lsp-bridge"
+path = "src/main.rs"
+
+[dependencies]
+proxy-common.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+prost = "0.14"
+tonic = { version = "0.14", default-features = false, features = ["channel", "codegen", "transport"] }
+tonic-prost = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "io-std", "net", "process", "sync", "time", "fs"] }

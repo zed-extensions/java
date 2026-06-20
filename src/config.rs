@@ -162,3 +162,26 @@ pub fn get_lsp_proxy_path(configuration: &Option<Value>, worktree: &Worktree) ->
 
     None
 }
+
+/// Path to a local `gradle-lsp-bridge` binary, overriding the downloaded one.
+/// Parallel to [`get_lsp_proxy_path`] for the JDTLS proxy; primarily used to
+/// test a locally-built bridge before a release ships the asset.
+pub fn get_gradle_bridge_path(
+    configuration: &Option<Value>,
+    worktree: &Worktree,
+) -> Option<String> {
+    if let Some(configuration) = configuration
+        && let Some(bridge_path) = configuration
+            .pointer("/gradle_bridge_path")
+            .and_then(|x| x.as_str())
+    {
+        match expand_home_path(worktree, bridge_path.to_string()) {
+            Ok(path) => return Some(path),
+            Err(err) => {
+                println!("{err}");
+            }
+        }
+    }
+
+    None
+}

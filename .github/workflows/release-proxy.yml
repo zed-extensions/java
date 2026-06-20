@@ -17,28 +17,34 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             runner: macos-15
-            asset_name: java-lsp-proxy-darwin-aarch64.tar.gz
             helper_asset_name: java-task-helper-darwin-aarch64.tar.gz
+            proxy_asset: java-lsp-proxy-darwin-aarch64.tar.gz
+            bridge_asset: gradle-lsp-bridge-darwin-aarch64.tar.gz
           - target: x86_64-apple-darwin
             runner: macos-15-intel
-            asset_name: java-lsp-proxy-darwin-x86_64.tar.gz
             helper_asset_name: java-task-helper-darwin-x86_64.tar.gz
+            proxy_asset: java-lsp-proxy-darwin-x86_64.tar.gz
+            bridge_asset: gradle-lsp-bridge-darwin-x86_64.tar.gz
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-22.04
-            asset_name: java-lsp-proxy-linux-x86_64.tar.gz
             helper_asset_name: java-task-helper-linux-x86_64.tar.gz
+            proxy_asset: java-lsp-proxy-linux-x86_64.tar.gz
+            bridge_asset: gradle-lsp-bridge-linux-x86_64.tar.gz
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-22.04-arm
-            asset_name: java-lsp-proxy-linux-aarch64.tar.gz
             helper_asset_name: java-task-helper-linux-aarch64.tar.gz
+            proxy_asset: java-lsp-proxy-linux-aarch64.tar.gz
+            bridge_asset: gradle-lsp-bridge-linux-aarch64.tar.gz
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
-            asset_name: java-lsp-proxy-windows-x86_64.zip
             helper_asset_name: java-task-helper-windows-x86_64.zip
+            proxy_asset: java-lsp-proxy-windows-x86_64.zip
+            bridge_asset: gradle-lsp-bridge-windows-x86_64.zip
           - target: aarch64-pc-windows-msvc
             runner: windows-11-arm
-            asset_name: java-lsp-proxy-windows-aarch64.zip
             helper_asset_name: java-task-helper-windows-aarch64.zip
+            proxy_asset: java-lsp-proxy-windows-aarch64.zip
+            bridge_asset: gradle-lsp-bridge-windows-aarch64.zip
 
     steps:
       - name: Checkout
@@ -49,9 +55,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build proxy binary
-        working-directory: proxy
-        run: cargo build --release --target ${{ matrix.target }}
+      # Build both native binaries from the workspace root. Selecting the two
+      # packages explicitly keeps the WASM extension crate (`zed_java`, a
+      # cdylib) out of the native target build. The gradle-lsp-bridge gRPC
+      # bindings are committed, so no protoc toolchain is needed here.
+      - name: Build binaries
+        run: cargo build --release --target ${{ matrix.target }} -p java-lsp-proxy -p gradle-lsp-bridge
         shell: bash
 
       - name: Build task helper binary
@@ -62,27 +71,32 @@ jobs:
       - name: Package binaries (Unix)
         if: runner.os != 'Windows'
         run: |
-          tar -czf ${{ matrix.asset_name }} \
+          tar -czf ${{ matrix.proxy_asset }} \
             -C target/${{ matrix.target }}/release \
             java-lsp-proxy
           tar -czf ${{ matrix.helper_asset_name }} \
             -C target/${{ matrix.target }}/release \
             java-task-helper
+          tar -czf ${{ matrix.bridge_asset }} \
+            -C target/${{ matrix.target }}/release \
+            gradle-lsp-bridge
 
       - name: Package binaries (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          Compress-Archive -Path target/${{ matrix.target }}/release/java-lsp-proxy.exe -DestinationPath ${{ matrix.asset_name }}
+        run: |          
           Compress-Archive -Path target/${{ matrix.target }}/release/java-task-helper.exe -DestinationPath ${{ matrix.helper_asset_name }}
+          Compress-Archive -Path target/${{ matrix.target }}/release/java-lsp-proxy.exe -DestinationPath ${{ matrix.proxy_asset }}
+          Compress-Archive -Path target/${{ matrix.target }}/release/gradle-lsp-bridge.exe -DestinationPath ${{ matrix.bridge_asset }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.target }}
           path: |
-            ${{ matrix.asset_name }}
             ${{ matrix.helper_asset_name }}
+            ${{ matrix.proxy_asset }}
+            ${{ matrix.bridge_asset }}
           retention-days: 1
 
   release:

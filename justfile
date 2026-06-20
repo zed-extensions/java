@@ -5,7 +5,7 @@ tasks_bin := ext_dir / "bin" / "java-task-helper"
 
 # Build proxy in debug mode
 proxy-build:
-    cd proxy && cargo build --target {{ native_target }}
+    cargo build --target {{ native_target }} -p java-lsp-proxy
 
 # Build proxy in release mode
 proxy-release:
@@ -42,6 +42,13 @@ task-clean:
     cd task_helper && cargo clean
 
 # --- Core recipes ---
+# Build gradle-lsp-bridge in debug mode
+bridge-build:
+    cargo build --target {{ native_target }} -p gradle-lsp-bridge
+
+# Build gradle-lsp-bridge in release mode
+bridge-release:
+    cargo build --release --target {{ native_target }} -p gradle-lsp-bridge
 
 # Build WASM extension in release mode
 ext-build:
@@ -52,10 +59,10 @@ fmt:
     cargo fmt --all
     ts_query_ls format languages
 
-# Run clippy on both crates
+# Run clippy on the WASM extension and the native crates (proxy, bridge, common)
 clippy:
     cargo clippy --all-targets --fix --allow-dirty
-    cd proxy && cargo clippy --all-targets --fix --allow-dirty --target {{ native_target }}
+    cargo clippy --fix --allow-dirty --target {{ native_target }} -p java-lsp-proxy -p gradle-lsp-bridge -p proxy-common
 
 # Format and lint all code
 lint: fmt clippy

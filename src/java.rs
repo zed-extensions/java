@@ -1,6 +1,9 @@
 mod config;
 mod debugger;
 mod downloadable;
+mod gradle_bridge;
+mod gradle_ls;
+mod gradle_ls_server;
 mod jdk;
 mod jdtls;
 mod jdtls_server;
@@ -21,13 +24,15 @@ use zed_extension_api::{
 };
 
 use crate::{
-    downloadable::Downloadable, jdtls_server::JdtlsServer, language_server::LanguageServer,
+    downloadable::Downloadable, gradle_ls_server::GradleLsServer, jdtls_server::JdtlsServer,
+    language_server::LanguageServer,
 };
 
 const DEBUG_ADAPTER_NAME: &str = "Java";
 
 struct Java {
     jdtls_server: JdtlsServer,
+    gradle_ls_server: GradleLsServer,
 }
 
 impl Extension for Java {
@@ -37,6 +42,7 @@ impl Extension for Java {
     {
         Self {
             jdtls_server: JdtlsServer::new(),
+            gradle_ls_server: GradleLsServer::new(),
         }
     }
 
@@ -47,6 +53,9 @@ impl Extension for Java {
     ) -> zed::Result<zed::Command> {
         match language_server_id.as_ref() {
             JdtlsServer::SERVER_ID => self.jdtls_server.command(language_server_id, worktree),
+            GradleLsServer::SERVER_ID => {
+                self.gradle_ls_server.command(language_server_id, worktree)
+            }
             id => Err(format!("Unknown language server: {id}")),
         }
     }
@@ -60,6 +69,9 @@ impl Extension for Java {
             JdtlsServer::SERVER_ID => self
                 .jdtls_server
                 .initialization_options(language_server_id, worktree),
+            GradleLsServer::SERVER_ID => self
+                .gradle_ls_server
+                .initialization_options(language_server_id, worktree),
             _ => Ok(None),
         }
     }
@@ -72,6 +84,9 @@ impl Extension for Java {
         match language_server_id.as_ref() {
             JdtlsServer::SERVER_ID => self
                 .jdtls_server
+                .workspace_configuration(language_server_id, worktree),
+            GradleLsServer::SERVER_ID => self
+                .gradle_ls_server
                 .workspace_configuration(language_server_id, worktree),
             _ => Ok(None),
         }

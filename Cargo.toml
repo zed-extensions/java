@@ -2,8 +2,16 @@
 members = [
     ".",
     "proxy",
-    "task_helper"
+    "task_helper",
+    "proxy-common",
+    "gradle-bridge"
 ]
+exclude = [
+    "grammars/groovy"
+]
+
+[workspace.dependencies]
+proxy-common = { path = "proxy-common" }
 
 [package]
 name = "zed_java"

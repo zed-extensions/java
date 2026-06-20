@@ -16,9 +16,17 @@ commit = "94703d5a6bed02b98e438d7cad1136c01a60ba2c"
 repository = "https://github.com/tree-sitter-grammars/tree-sitter-properties"
 commit = "579b62f5ad8d96c2bb331f07d1408c92767531d9"
 
+[grammars.groovy]
+repository = "https://github.com/murtaza64/tree-sitter-groovy"
+commit = "deb0dcf8c4544f07564060f6e9b9f6e4b0bfc27d"
+
 [language_servers.jdtls]
 name = "Eclipse JDT Language Server"
 language = "Java"
+
+[language_servers.gradle-language-server]
+name = "Gradle Language Server"
+language = "Gradle"
 
 [debug_adapters.Java]
 

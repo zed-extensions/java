@@ -1,6 +1,6 @@
 [package]
 name = "java-lsp-proxy"
-version = "6.8.12"
+version = "6.8.20"
 edition = "2021"
 publish = false
 license = "Apache-2.0"
@@ -11,11 +11,6 @@ name = "java-lsp-proxy"
 path = "src/main.rs"
 
 [dependencies]
+proxy-common.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_Threading", "Win32_Foundation", "Win32_System_Diagnostics_ToolHelp"] }

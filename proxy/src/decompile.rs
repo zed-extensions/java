@@ -8,7 +8,8 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use crate::{lsp::encode_lsp, lsp_error, lsp_warn};
+use crate::{lsp_error, lsp_warn};
+use proxy_common::encode_lsp;
 
 const DECOMPILED_DIR: &str = "jdtls-decompiled";
 

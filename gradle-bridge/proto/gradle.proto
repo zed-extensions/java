@@ -1,0 +1,199 @@
+// Source of truth: this file is a verbatim copy of `gradle.proto` embedded
+// inside the shipped `gradle-server.jar` (vscode-gradle / package
+// `com.github.badsyntax.gradle`), extracted with:
+//
+//     unzip -p gradle-server.jar gradle.proto
+//
+// The Rust bindings in `src/gen/gradle.rs` are generated from this file and
+// COMMITTED, so neither CI nor contributors need `protoc`. When Microsoft ships
+// a new gradle-server contract, re-extract this proto and regenerate:
+//
+//     # from gradle-bridge/, with protoc on PATH:
+//     cargo run --quiet --bin gen-proto   # (throwaway tonic-build helper), or
+//     protoc + tonic-build as documented in the build notes
+//
+// then commit both this file and the regenerated `src/gen/gradle.rs`.
+//
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.github.badsyntax.gradle";
+option java_outer_classname = "GradleProto";
+
+package gradle;
+
+service Gradle {
+  rpc GetBuild(GetBuildRequest) returns (stream GetBuildReply) {}
+  rpc RunBuild(RunBuildRequest) returns (stream RunBuildReply) {}
+  rpc CancelBuild(CancelBuildRequest) returns (CancelBuildReply) {}
+  rpc CancelBuilds(CancelBuildsRequest) returns (CancelBuildsReply) {}
+  rpc executeCommand(ExecuteCommandRequest) returns (ExecuteCommandReply) {}
+}
+
+message GetBuildRequest {
+  string project_dir = 1;
+  string cancellation_key = 2;
+  GradleConfig gradle_config = 3;
+  bool show_output_colors = 4;
+}
+
+message GetBuildReply {
+  oneof kind {
+    GetBuildResult get_build_result = 1;
+    Progress progress = 2;
+    Output output = 3;
+    Cancelled cancelled = 4;
+    Environment environment = 5;
+    string compatibility_check_error = 6;
+  }
+}
+
+message GetBuildResult {
+  string message = 1;
+  GradleBuild build = 2;
+}
+
+enum GradleDependencyType
+{
+  PROJECT = 0;
+  CONFIGURATION = 1;
+  DEPENDENCY = 2;
+}
+
+message DependencyItem {
+  string name = 1;
+  GradleDependencyType type = 2;
+  repeated DependencyItem children = 3;
+}
+
+message GrpcGradleClosure {
+  string name = 1;
+  repeated GrpcGradleMethod methods = 2;
+  repeated GrpcGradleField fields = 3;
+}
+
+message GrpcGradleMethod {
+  string name = 1;
+  repeated string parameterTypes = 2;
+  bool deprecated = 3;
+}
+
+message GrpcGradleField {
+  string name = 1;
+  bool deprecated = 2;
+}
+
+message RunBuildRequest {
+  string project_dir = 1;
+  string cancellation_key = 2;
+  repeated string args = 3;
+  int32 java_debug_port = 4;
+  GradleConfig gradle_config = 5;
+  string input = 6;
+  bool show_output_colors = 7;
+  bool java_debug_clean_output_cache = 8;
+  string additional_tool_options = 9;
+}
+
+message RunBuildResult {
+  string message = 1;
+}
+
+message RunBuildReply {
+  oneof kind {
+    RunBuildResult run_build_result = 1;
+    Progress progress = 2;
+    Output output = 3;
+    Cancelled cancelled = 4;
+  }
+}
+
+message CancelBuildRequest {
+  string cancellation_key = 1;
+}
+
+message CancelBuildsRequest {}
+
+message CancelBuildReply {
+  string message = 1;
+  bool build_running = 2;
+}
+
+message CancelBuildsReply {
+  string message = 1;
+}
+
+message GradleConfig {
+  string gradle_home = 1;
+  string user_home = 2;
+  string jvm_arguments = 3;
+  bool wrapper_enabled = 4;
+  string version = 5;
+  string java_extension_version = 6;
+  string java_home = 7;
+}
+
+message GradleBuild { GradleProject project = 1; }
+
+message GradleProject {
+  bool is_root = 1;
+  repeated GradleTask tasks = 2;
+  repeated GradleProject projects = 3;
+  string projectPath = 4;
+  DependencyItem dependencyItem = 5;
+  repeated string plugins = 6;
+  repeated GrpcGradleClosure pluginClosures = 7;
+  repeated string scriptClasspaths = 8;
+}
+
+message GradleTask {
+  string name = 1;
+  string group = 2;
+  string path = 3;
+  string project = 4;
+  string buildFile = 5;
+  string rootProject = 6;
+  string description = 7;
+  bool debuggable = 8;
+}
+
+message Cancelled {
+  string message = 1;
+  string project_dir = 2;
+}
+
+message Progress { string message = 1; }
+
+message Environment {
+  JavaEnvironment java_environment = 1;
+  GradleEnvironment gradle_environment = 2;
+}
+
+message JavaEnvironment {
+  string java_home = 1;
+  repeated string jvm_args = 2;
+}
+
+message GradleEnvironment {
+  string gradle_user_home = 1;
+  string gradle_version = 2;
+}
+
+message Output {
+  enum OutputType {
+    STDERR = 0;
+    STDOUT = 1;
+  }
+
+  OutputType output_type = 1;
+  bytes output_bytes = 2;
+}
+
+message ExecuteCommandRequest {
+    string command = 1;
+    repeated string arguments = 2;
+}
+
+message ExecuteCommandReply {
+    string result = 1;
+}

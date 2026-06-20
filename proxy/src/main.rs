@@ -2,14 +2,11 @@ mod completions;
 mod decompile;
 mod http;
 mod log;
-mod lsp;
-mod platform;
 
 use completions::{is_completion_response, process_completions, sanitize_resolved_completion};
 use decompile::{rewrite_jdt_in_strings, rewrite_jdt_locations};
 use http::handle_http;
-use lsp::{parse_lsp_content, raw_has_id, write_raw, write_to_stdout, LspReader};
-use platform::spawn_parent_monitor;
+use proxy_common::{parse_lsp_content, raw_has_id, spawn_parent_monitor, write_raw, write_to_stdout, LspReader};
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -33,6 +30,7 @@ enum TrackedKind {
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
+
     if args.len() < 2 {
         eprintln!("Usage: java-lsp-proxy <workdir> <bin> [args...]");
         lsp_error!("Usage: java-lsp-proxy <workdir> <bin> [args...]");
