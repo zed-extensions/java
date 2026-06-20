@@ -6,9 +6,6 @@ members = [
     "proxy-common",
     "gradle-bridge"
 ]
-exclude = [
-    "grammars/groovy"
-]
 
 [workspace.dependencies]
 proxy-common = { path = "proxy-common" }

@@ -20,13 +20,19 @@ commit = "579b62f5ad8d96c2bb331f07d1408c92767531d9"
 repository = "https://github.com/murtaza64/tree-sitter-groovy"
 commit = "deb0dcf8c4544f07564060f6e9b9f6e4b0bfc27d"
 
+# Kotlin grammar for `*.gradle.kts` build scripts (the same grammar the Kotlin
+# extension uses). Bundled so KTS highlighting works without that extension.
+[grammars.kotlin]
+repository = "https://github.com/fwcd/tree-sitter-kotlin"
+commit = "4e909d6cc9ac96b4eaecb3fb538eaca48e9e9ee9"
+
 [language_servers.jdtls]
 name = "Eclipse JDT Language Server"
 language = "Java"
 
 [language_servers.gradle-language-server]
 name = "Gradle Language Server"
-language = "Gradle"
+languages = ["Gradle", "Gradle KTS"]
 
 [debug_adapters.Java]
 

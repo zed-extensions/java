@@ -2,7 +2,7 @@
 
 This extension adds support for Java and `.properties` files to [Zed](https://zed.dev). It uses the [Eclipse JDT Language Server](https://projects.eclipse.org/projects/eclipse.jdt.ls) (JDTLS for short) to provide completions, code-actions and diagnostics.
 
-It also provides intelligence for Gradle build files (`.gradle` / `.gradle.kts`) via Microsoft's [Gradle Language Server](https://github.com/microsoft/vscode-gradle) — plugin-aware completions, closures, and build-script diagnostics. See [Gradle Build Files](#gradle-build-files) below.
+It also provides intelligence for Gradle build files via Microsoft's [Gradle Language Server](https://github.com/microsoft/vscode-gradle): plugin-aware completions, closures, and diagnostics for Groovy `.gradle` scripts, plus highlighting and build-evaluation diagnostics for Kotlin `.gradle.kts` scripts. See [Gradle Build Files](#gradle-build-files) below.
 
 ## Quick Start
 
@@ -61,9 +61,18 @@ Here is a common `settings.json` including the above mentioned configurations:
 
 ## Gradle Build Files
 
-For `.gradle` and `.gradle.kts` files the extension runs Microsoft's [Gradle Language Server](https://github.com/microsoft/vscode-gradle), giving you completions for Gradle DSL closures, plugin-contributed blocks (e.g. `java {}`, `application {}`), Maven Central dependency coordinates, and diagnostics for build-script errors.
+For **Groovy** build scripts (`.gradle`) the extension runs Microsoft's [Gradle Language Server](https://github.com/microsoft/vscode-gradle), giving you completions for Gradle DSL closures, plugin-contributed blocks (e.g. `java {}`, `application {}`), Maven Central dependency coordinates, and syntax diagnostics.
 
 To resolve the *plugin-aware* parts of the model (which plugins are applied, the closures/methods they contribute, and the script classpath), the language server needs the resolved build model. The extension obtains this exactly the way the VS Code Gradle extension does: it drives the bundled `gradle-server` over gRPC via a small native binary, `gradle-lsp-bridge`. The bridge keeps a single `gradle-server` process (and its Gradle daemon) warm for the lifetime of the session, so re-syncs after a build-file save are fast. Both the language server and the bridge are downloaded and managed automatically — no configuration is required.
+
+### Kotlin DSL (`.gradle.kts`)
+
+The Gradle Language Server itself is Groovy-only, so it does **not** provide completions or semantic tokens for Kotlin-DSL build scripts. For `.gradle.kts` files the extension instead provides:
+
+- **Syntax highlighting** via the bundled Kotlin grammar.
+- **Build-evaluation diagnostics** — when `gradle-server` configures the project, Gradle's own Kotlin-DSL compiler reports errors (unresolved references, invalid dependency notations, etc.). The bridge surfaces these as squiggles on the build file with the correct line.
+
+(The Groovy language server's own — invalid — diagnostics for these files are suppressed, since it cannot parse Kotlin.)
 
 Configuration, when you need it, goes under the `gradle-language-server` language server in your `settings.json` (note: this is a **different** block from `jdtls`):
 

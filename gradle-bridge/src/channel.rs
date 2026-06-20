@@ -363,6 +363,19 @@ mod tests {
     }
 
     #[test]
+    fn parses_kotlin_dsl_build_failure() {
+        // The shape gradle-server emits for a Kotlin-DSL script error, captured
+        // from its stderr: capital "Build file '…'" with a `line: N` marker.
+        let msg = "FAILURE: Build failed with an exception.\n* Where:\nBuild file '/Users/me/proj/build.gradle.kts' line: 4\n* What went wrong:\nScript compilation error:\n  Line 4:     adewdw\n              ^ Unresolved reference 'adewdw'.";
+        assert_eq!(
+            parse_build_file_path(msg).as_deref(),
+            Some("/Users/me/proj/build.gradle.kts")
+        );
+        // 1-based "line: 4" -> 0-based line 4 -> 3.
+        assert_eq!(parse_line_column(msg), Some((3, 0)));
+    }
+
+    #[test]
     fn no_location_for_methodless_errors() {
         let msg =
             "Could not find method implementatoin() for arguments [com.google.gwt:gwt:2.10.0]";

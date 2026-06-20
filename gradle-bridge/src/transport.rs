@@ -109,6 +109,17 @@ pub async fn pump_ls_to_editor<R: AsyncRead + Unpin>(
             continue;
         }
         if let Some((uri, diagnostics)) = parse_publish_diagnostics(&raw) {
+            // The language server parses every file as Groovy, but Kotlin-DSL
+            // build scripts (`*.gradle.kts`) are not Groovy — so its diagnostics
+            // for those are spurious syntax errors. Drop them (publish an empty
+            // set) while still letting the build-eval diagnostics from the
+            // gradle-server sync show through the merge. Groovy `.gradle` files
+            // keep their real syntax diagnostics.
+            let diagnostics = if uri.ends_with(".gradle.kts") {
+                Vec::new()
+            } else {
+                diagnostics
+            };
             channel.set_server_diagnostics(uri, diagnostics).await;
             continue;
         }
