@@ -10,15 +10,13 @@ use crate::{
     config::get_gradle_bridge_path,
     downloadable::Downloadable,
     util::{
-        mark_checked_once, platform_asset_name, platform_exec_name, remove_all_files_except,
-        should_use_local_or_download,
+        NATIVE_BIN_DIR, mark_checked_once, platform_asset_name, platform_exec_name,
+        remove_all_files_except, should_use_local_or_download,
     },
 };
 
 const BRIDGE_BINARY: &str = "gradle-lsp-bridge";
-const BRIDGE_INSTALL_PATH: &str = "gradle-bridge-bin";
-/// The bridge ships as a separate per-platform asset on the same GitHub release
-/// as the JDTLS proxy (the extension version's release tag).
+const BRIDGE_INSTALL_PATH: &str = NATIVE_BIN_DIR;
 const GITHUB_REPO: &str = "zed-extensions/java";
 
 /// Downloads and locates the `gradle-lsp-bridge` binary — the native process

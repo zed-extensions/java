@@ -10,13 +10,13 @@ use crate::{
     config::get_lsp_proxy_path,
     downloadable::Downloadable,
     util::{
-        mark_checked_once, platform_asset_name, platform_exec_name, remove_all_files_except,
-        should_use_local_or_download,
+        NATIVE_BIN_DIR, mark_checked_once, platform_asset_name, platform_exec_name,
+        remove_all_files_except, should_use_local_or_download,
     },
 };
 
 const PROXY_BINARY: &str = "java-lsp-proxy";
-const PROXY_INSTALL_PATH: &str = "bin";
+const PROXY_INSTALL_PATH: &str = NATIVE_BIN_DIR;
 const GITHUB_REPO: &str = "zed-extensions/java";
 
 pub struct Proxy {

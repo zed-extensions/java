@@ -205,6 +205,12 @@ pub fn get_java_exec_name() -> String {
     }
 }
 
+/// The single install directory shared by every native binary the extension
+/// downloads. They are versioned by the same release tag,
+/// so they co-locate under `bin/<version>/` and survive each
+/// other's `remove_all_files_except` cleanup.
+pub const NATIVE_BIN_DIR: &str = "bin";
+
 /// The platform-specific executable file name for a downloaded native binary
 /// (appends `.exe` on Windows). Shared by the proxy and the Gradle bridge, which
 /// differ only in `binary`.
