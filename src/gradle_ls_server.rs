@@ -1,7 +1,8 @@
 use std::{env, fs};
 
 use zed_extension_api::{
-    self as zed, LanguageServerId, Os, Worktree, current_platform,
+    self as zed, CodeLabel, CodeLabelSpan, LanguageServerId, Os, Worktree, current_platform,
+    lsp::{Completion, CompletionKind, Symbol, SymbolKind},
     serde_json::{Value, json},
     settings::LspSettings,
 };
@@ -112,6 +113,112 @@ impl LanguageServer for GradleLsServer {
                 .ok()
                 .and_then(|lsp_settings| lsp_settings.settings),
         )
+    }
+
+    /// Syntax-highlight Gradle build-script completions. The Microsoft Gradle LS
+    /// emits three kinds (verified against `CompletionHandler`/`CompletionUtils`
+    /// in `gradle-language-server.jar`):
+    ///
+    /// - `Property` — DSL closure fields (e.g. `group`, `version`) and extension
+    ///   properties; the bare name is the label, with parameters in `insertText`.
+    /// - `Function` — DSL methods/closures (e.g. `dependencies`, `implementation`);
+    ///   again the label is the bare name.
+    /// - `Module` — Maven coordinate completions (group/artifact/version) from the
+    ///   Maven Central / local / index handlers.
+    ///
+    /// None of them carry a `detail`, so we render the label as Groovy code so it
+    /// picks up the `gradle` theme colors (functions, properties/fields) rather
+    /// than appearing as flat, uncolored text.
+    fn label_for_completion(
+        &self,
+        _language_server_id: &LanguageServerId,
+        completion: Completion,
+    ) -> Option<CodeLabel> {
+        let label = &completion.label;
+        let len = label.len();
+
+        match completion.kind? {
+            CompletionKind::Function | CompletionKind::Method => {
+                // The Gradle LS emits class-method labels as `name(TypeA a,TypeB b)`
+                // (simple type names + abbreviated arg names; the parens are part of
+                // the label). Rendering that as a *call* puts the type tokens in
+                // argument position, so they get `@variable.parameter` — the same
+                // color as the arg names. Render it as a method *definition* instead
+                // (`def name(TypeA a,TypeB b) {}`) so the grammar tags the parameter
+                // types as `@type`, visually distinct from the names. The leading
+                // `def ` and trailing ` {}` are outside the displayed code range.
+                //
+                // Extension-closure labels are bare names with no parens; render
+                // those as a call so the name still picks up `@function`.
+                if let Some(name_len) = label.find('(') {
+                    let prefix = "def ";
+                    let code = format!("{prefix}{label} {{}}");
+                    Some(CodeLabel {
+                        spans: vec![CodeLabelSpan::code_range(
+                            prefix.len()..prefix.len() + len,
+                        )],
+                        filter_range: (0..name_len).into(),
+                        code,
+                    })
+                } else {
+                    let code = format!("{label}()");
+                    Some(CodeLabel {
+                        spans: vec![CodeLabelSpan::code_range(0..len)],
+                        filter_range: (0..len).into(),
+                        code,
+                    })
+                }
+            }
+            // Render as a bare reference; the Groovy grammar highlights a lone
+            // identifier as `@variable`, matching DSL property access.
+            CompletionKind::Property | CompletionKind::Field => Some(CodeLabel {
+                spans: vec![CodeLabelSpan::code_range(0..len)],
+                filter_range: (0..len).into(),
+                code: label.clone(),
+            }),
+            // Maven coordinates (and any other kind) have no meaningful Groovy
+            // syntax, so emit them as a plain literal span.
+            _ => Some(CodeLabel {
+                spans: vec![CodeLabelSpan::literal(label.clone(), None)],
+                filter_range: (0..len).into(),
+                code: String::new(),
+            }),
+        }
+    }
+
+    /// Highlight document/workspace symbols for `.gradle` files. The Gradle LS
+    /// `DocumentSymbolVisitor` emits `Function` (configuration closures and
+    /// method-call statements), `Property` (`a = b` assignments), and `Constant`
+    /// (dependency entries). We render the name as Groovy code so it inherits the
+    /// theme color instead of showing as plain text.
+    fn label_for_symbol(
+        &self,
+        _language_server_id: &LanguageServerId,
+        symbol: Symbol,
+    ) -> Option<CodeLabel> {
+        let name = &symbol.name;
+        let len = name.len();
+
+        match symbol.kind {
+            SymbolKind::Function | SymbolKind::Method => {
+                let code = format!("{name}()");
+                Some(CodeLabel {
+                    spans: vec![CodeLabelSpan::code_range(0..len)],
+                    filter_range: (0..len).into(),
+                    code,
+                })
+            }
+            SymbolKind::Property | SymbolKind::Field | SymbolKind::Constant => Some(CodeLabel {
+                spans: vec![CodeLabelSpan::code_range(0..len)],
+                filter_range: (0..len).into(),
+                code: name.clone(),
+            }),
+            _ => Some(CodeLabel {
+                spans: vec![CodeLabelSpan::literal(name.clone(), None)],
+                filter_range: (0..len).into(),
+                code: String::new(),
+            }),
+        }
     }
 }
 

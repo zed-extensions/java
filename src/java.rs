@@ -101,6 +101,9 @@ impl Extension for Java {
             JdtlsServer::SERVER_ID => self
                 .jdtls_server
                 .label_for_completion(language_server_id, completion),
+            GradleLsServer::SERVER_ID => self
+                .gradle_ls_server
+                .label_for_completion(language_server_id, completion),
             _ => None,
         }
     }
@@ -113,6 +116,9 @@ impl Extension for Java {
         match language_server_id.as_ref() {
             JdtlsServer::SERVER_ID => self
                 .jdtls_server
+                .label_for_symbol(language_server_id, symbol),
+            GradleLsServer::SERVER_ID => self
+                .gradle_ls_server
                 .label_for_symbol(language_server_id, symbol),
             _ => None,
         }

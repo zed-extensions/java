@@ -93,6 +93,20 @@
 ((identifier) @variable.parameter
   (#is? @variable.parameter "local.parameter"))
 
+; An identifier on the left of an assignment (e.g. `group = '…'`, `version = '…'`
+; in a build script) is a property reference, not a parameter. Re-capture it as
+; `@variable` after the `@variable.parameter` rule above so it wins last-match.
+(assignment
+  .
+  (identifier) @variable)
+
+; Members of a dotted access (e.g. `tasks` in `tasks.named(…)`, the receiver
+; segments of `project.ext.foo`) are object/property references, not parameters.
+; Re-capture as `@variable` after the parameter rule; the `function_call` rules
+; below still override the trailing method segment to `@function`.
+(dotted_identifier
+  (identifier) @variable)
+
 ((identifier) @constant
   (#match? @constant "^[A-Z][A-Z_]+"))
 

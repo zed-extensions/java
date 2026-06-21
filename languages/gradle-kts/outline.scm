@@ -48,3 +48,38 @@
 
 (anonymous_initializer
   "init" @name) @item
+
+; --- Gradle build-script DSL -------------------------------------------------
+; The declarations above cover generic Kotlin, but a `build.gradle.kts` is mostly
+; configuration blocks and assignments. Surface those so the outline reflects the
+; build structure rather than just the rare top-level `val`/`fun`/`class`.
+
+; Configuration blocks: `name { … }` — a call with a trailing lambda, e.g.
+; `plugins { … }`, `dependencies { … }`, `repositories { … }`, `doLast { … }`.
+; The lambda body is captured as `@item` so members nest underneath.
+(call_expression
+  (simple_identifier) @name
+  (call_suffix
+    (annotated_lambda
+      (lambda_literal) @item)))
+
+; Task containers with a name argument and a trailing lambda, e.g.
+; `tasks.register("myTask") { … }`, `tasks.named<Test>("test") { … }`. The
+; method (`register`/`named`) is the context and the string name is the label.
+(call_expression
+  (call_expression
+    (navigation_expression
+      (navigation_suffix
+        (simple_identifier) @context))
+    (call_suffix
+      (value_arguments
+        (value_argument
+          (string_literal) @name))))
+  (call_suffix
+    (annotated_lambda
+      (lambda_literal) @item)))
+
+; Top-level property assignments, e.g. `group = "com.example"`, `version = "…"`.
+(assignment
+  (directly_assignable_expression
+    (simple_identifier) @name)) @item
