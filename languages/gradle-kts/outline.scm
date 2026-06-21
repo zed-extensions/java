@@ -53,7 +53,6 @@
 ; The declarations above cover generic Kotlin, but a `build.gradle.kts` is mostly
 ; configuration blocks and assignments. Surface those so the outline reflects the
 ; build structure rather than just the rare top-level `val`/`fun`/`class`.
-
 ; Configuration blocks: `name { … }` — a call with a trailing lambda, e.g.
 ; `plugins { … }`, `dependencies { … }`, `repositories { … }`, `doLast { … }`.
 ; The lambda body is captured as `@item` so members nest underneath.

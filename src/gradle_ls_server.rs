@@ -154,9 +154,7 @@ impl LanguageServer for GradleLsServer {
                     let prefix = "def ";
                     let code = format!("{prefix}{label} {{}}");
                     Some(CodeLabel {
-                        spans: vec![CodeLabelSpan::code_range(
-                            prefix.len()..prefix.len() + len,
-                        )],
+                        spans: vec![CodeLabelSpan::code_range(prefix.len()..prefix.len() + len)],
                         filter_range: (0..name_len).into(),
                         code,
                     })

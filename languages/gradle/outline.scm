@@ -10,7 +10,6 @@
 ; `@item` so its members nest underneath it in the outline tree. We deliberately
 ; do not list every bare method call (e.g. `mavenCentral()`, `println …`) to keep
 ; the outline structural rather than one-row-per-statement.
-
 ; Configuration closures: `name { … }` — a call whose argument is a closure.
 (juxt_function_call
   function: (identifier) @name
