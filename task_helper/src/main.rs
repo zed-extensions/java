@@ -8,20 +8,32 @@ use std::path::{Path, PathBuf};
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
+        println!("java-task-helper: no arguments provided");
         return;
     }
 
     let subcommand = &args[0];
+    println!("java-task-helper: running subcommand={}", subcommand);
+
     if subcommand == "clear-cache" {
         task_clear_cache();
         return;
     }
 
-    let (tool, _root) = get_workspace_root();
+    let file_path = args.get(1).map(|s| s.as_str());
+    let (tool, root) = get_workspace_root(file_path);
+    println!(
+        "java-task-helper: workspace root={}",
+        root.to_string_lossy()
+    );
 
     let result = match subcommand.as_str() {
         "run-class" => {
             if args.len() < 4 {
+                eprintln!(
+                    "java-task-helper: run-class requires at least 4 arguments, got {}",
+                    args.len()
+                );
                 return;
             }
             let file = &args[1];
@@ -31,18 +43,44 @@ fn main() {
             Some(tool.run_class(file, package, class, outer))
         }
         "run-test-method" => {
-            if args.len() < 6 {
+            // Accept 5 or 6 args. On Windows, the iex invocation in tasks.json
+            // sometimes drops the empty-string outer-class argument, producing
+            // 5 positional args: subcommand, file, package, class, method.
+            if args.len() == 5 {
+                let file = &args[1];
+                let package = &args[2];
+                let class = &args[3];
+                let method = &args[4];
+                println!(
+                    "java-task-helper: run-test-method file={} package={} class={} method={}",
+                    file, package, class, method
+                );
+                Some(tool.run_test_method(file, package, class, None, method))
+            } else if args.len() >= 6 {
+                let file = &args[1];
+                let package = &args[2];
+                let class = &args[3];
+                let outer = args.get(4).filter(|s| !s.is_empty()).map(|s| s.as_str());
+                let method = &args[5];
+                println!(
+                    "java-task-helper: run-test-method file={} package={} class={} outer={:?} method={}",
+                    file, package, class, outer, method
+                );
+                Some(tool.run_test_method(file, package, class, outer, method))
+            } else {
+                eprintln!(
+                    "java-task-helper: run-test-method requires 5 or 6 arguments, got {}",
+                    args.len()
+                );
                 return;
             }
-            let file = &args[1];
-            let package = &args[2];
-            let class = &args[3];
-            let outer = args.get(4).filter(|s| !s.is_empty()).map(|s| s.as_str());
-            let method = &args[5];
-            Some(tool.run_test_method(file, package, class, outer, method))
         }
         "run-test-class" => {
             if args.len() < 4 {
+                eprintln!(
+                    "java-task-helper: run-test-class requires at least 4 arguments, got {}",
+                    args.len()
+                );
                 return;
             }
             let file = &args[1];
@@ -53,19 +91,35 @@ fn main() {
         }
         "run-all-tests" => {
             if args.len() < 2 {
+                eprintln!(
+                    "java-task-helper: run-all-tests requires at least 2 arguments, got {}",
+                    args.len()
+                );
                 return;
             }
             let file = &args[1];
             Some(tool.run_all_tests(file))
         }
-        _ => None,
+        _ => {
+            eprintln!("java-task-helper: unknown subcommand '{}'", subcommand);
+            None
+        }
     };
 
     if let Some(cmd) = result {
         // Output JSON for transparency/debugging
-        eprintln!("{}", serde_json::to_string(&cmd).unwrap());
+        if let Ok(json) = serde_json::to_string(&cmd) {
+            println!("{}", json);
+        } else {
+            eprintln!("java-task-helper: failed to serialize task command");
+        }
         // Execute the task
+        println!(
+            "java-task-helper: executing command={} args={:?}",
+            cmd.command, cmd.args
+        );
         cmd.execute();
+        println!("java-task-helper: command finished");
     }
 }
 

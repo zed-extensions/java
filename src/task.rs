@@ -12,7 +12,7 @@ use crate::{
 };
 
 const TASK_HELPER_BINARY: &str = "java-task-helper";
-const TASK_HELPER_INSTALL_PATH: &str = "proxy-bin";
+const TASK_HELPER_INSTALL_PATH: &str = "bin";
 const GITHUB_REPO: &str = "zed-extensions/java";
 
 pub struct TaskHelper {

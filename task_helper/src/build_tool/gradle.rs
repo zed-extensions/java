@@ -38,7 +38,8 @@ impl BuildTool for Gradle {
         };
 
         let task = if let Some(m) = module {
-            format!(":{}:run", m.to_string_lossy().replace("/", ":"))
+            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
+            format!(":{gradle_path}:run")
         } else {
             ":run".to_string()
         };
@@ -52,6 +53,8 @@ impl BuildTool for Gradle {
             command,
             args,
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 
@@ -76,7 +79,8 @@ impl BuildTool for Gradle {
         };
 
         let task = if let Some(m) = module {
-            format!(":{}:test", m.to_string_lossy().replace("/", ":"))
+            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
+            format!(":{gradle_path}:test")
         } else {
             ":test".to_string()
         };
@@ -90,6 +94,8 @@ impl BuildTool for Gradle {
             command,
             args,
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 
@@ -113,7 +119,8 @@ impl BuildTool for Gradle {
         };
 
         let task = if let Some(m) = module {
-            format!(":{}:test", m.to_string_lossy().replace("/", ":"))
+            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
+            format!(":{gradle_path}:test")
         } else {
             ":test".to_string()
         };
@@ -127,6 +134,8 @@ impl BuildTool for Gradle {
             command,
             args,
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 
@@ -135,7 +144,8 @@ impl BuildTool for Gradle {
         let module = self.find_module(file);
 
         let task = if let Some(m) = module {
-            format!(":{}:test", m.to_string_lossy().replace("/", ":"))
+            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
+            format!(":{gradle_path}:test")
         } else {
             ":test".to_string()
         };
@@ -149,6 +159,8 @@ impl BuildTool for Gradle {
             command,
             args,
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 }

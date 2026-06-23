@@ -3,6 +3,19 @@ use crate::command::TaskCommand;
 use crate::{get_jdwp_args, is_debug};
 use std::path::PathBuf;
 
+fn echo_command() -> (String, Vec<String>) {
+    // On Windows, `echo` is a cmd.exe built-in, not an executable.
+    // Use `cmd /c echo` so Command::new succeeds.
+    if cfg!(windows) {
+        (
+            "cmd".to_string(),
+            vec!["/C".to_string(), "echo".to_string()],
+        )
+    } else {
+        ("echo".to_string(), vec![])
+    }
+}
+
 pub struct Vanilla {
     root: PathBuf,
 }
@@ -44,6 +57,8 @@ impl BuildTool for Vanilla {
                 format!("find . -name '*.java' -not -path './bin/*' -not -path './target/*' -not -path './build/*' -print0 | xargs -0 javac -d bin && java {} -cp bin \"{}\"", debug_args, full_name),
             ],
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 
@@ -55,10 +70,15 @@ impl BuildTool for Vanilla {
         _outer: Option<&str>,
         _method: &str,
     ) -> TaskCommand {
+        let (cmd, prefix_args) = echo_command();
+        let mut args = prefix_args;
+        args.push("No build tool found".to_string());
         TaskCommand {
-            command: "echo".to_string(),
-            args: vec!["No build tool found".to_string()],
+            command: cmd,
+            args,
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 
@@ -69,18 +89,28 @@ impl BuildTool for Vanilla {
         _class: &str,
         _outer: Option<&str>,
     ) -> TaskCommand {
+        let (cmd, prefix_args) = echo_command();
+        let mut args = prefix_args;
+        args.push("No build tool found".to_string());
         TaskCommand {
-            command: "echo".to_string(),
-            args: vec!["No build tool found".to_string()],
+            command: cmd,
+            args,
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 
     fn run_all_tests(&self, _file: &str) -> TaskCommand {
+        let (cmd, prefix_args) = echo_command();
+        let mut args = prefix_args;
+        args.push("No build tool found".to_string());
         TaskCommand {
-            command: "echo".to_string(),
-            args: vec!["No build tool found".to_string()],
+            command: cmd,
+            args,
             cwd: self.root.to_string_lossy().to_string(),
+            env: vec![],
+            then: vec![],
         }
     }
 }

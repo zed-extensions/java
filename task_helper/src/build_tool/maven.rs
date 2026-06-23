@@ -27,6 +27,14 @@ impl Maven {
             format!("{}.{}", package, full_class)
         }
     }
+
+    fn debug_env() -> Vec<(String, String)> {
+        if is_debug() {
+            vec![("MAVEN_OPTS".to_string(), get_jdwp_args())]
+        } else {
+            vec![]
+        }
+    }
 }
 
 impl BuildTool for Maven {
@@ -43,33 +51,39 @@ impl BuildTool for Maven {
         let is_test = file.contains("/src/test/");
         let compile_goal = if is_test { "test-compile" } else { "compile" };
         let classpath_scope = if is_test { "test" } else { "runtime" };
-
-        let env_prefix = if is_debug() {
-            format!("MAVEN_OPTS=\"{}\" ", get_jdwp_args())
-        } else {
-            "".to_string()
-        };
+        let env = Self::debug_env();
 
         if let Some(m) = module {
             let m_str = m.to_string_lossy().to_string();
-            let shell_cmd = format!(
-                "{}{} clean {} -pl \"{}\" -am && {}{} exec:java -pl \"{}\" -Dexec.mainClass=\"{}\" -Dexec.classpathScope={}",
-                env_prefix, command, compile_goal, m_str, env_prefix, command, m_str, full_name, classpath_scope
-            );
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args: vec![
+                    "clean".to_string(),
+                    compile_goal.to_string(),
+                    "exec:java".to_string(),
+                    "-pl".to_string(),
+                    m_str,
+                    "-am".to_string(),
+                    format!("-Dexec.mainClass={}", full_name),
+                    format!("-Dexec.classpathScope={}", classpath_scope),
+                ],
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         } else {
-            let shell_cmd = format!(
-                "{}{} clean {} exec:java -Dexec.mainClass=\"{}\" -Dexec.classpathScope={}",
-                env_prefix, command, compile_goal, full_name, classpath_scope
-            );
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args: vec![
+                    "clean".to_string(),
+                    compile_goal.to_string(),
+                    "exec:java".to_string(),
+                    format!("-Dexec.mainClass={}", full_name),
+                    format!("-Dexec.classpathScope={}", classpath_scope),
+                ],
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         }
     }
@@ -93,33 +107,44 @@ impl BuildTool for Maven {
         } else {
             format!("{}.{}#{}", package, full_class, method)
         };
-
-        let debug_arg = if is_debug() {
-            " -Dmaven.surefire.debug"
-        } else {
-            ""
-        };
+        let env = Self::debug_env();
 
         if let Some(m) = module {
             let m_str = m.to_string_lossy().to_string();
-            let shell_cmd = format!(
-                "{} clean test-compile -pl \"{}\" -am && {} test -pl \"{}\" -Dtest='{}'{}",
-                command, m_str, command, m_str, test_filter, debug_arg
-            );
+            let mut args = vec![
+                "clean".to_string(),
+                "test".to_string(),
+                "-pl".to_string(),
+                m_str,
+                "-am".to_string(),
+                "-Dsurefire.failIfNoSpecifiedTests=false".to_string(),
+                format!("-Dtest={}", test_filter),
+            ];
+            if is_debug() {
+                args.push("-Dmaven.surefire.debug".to_string());
+            }
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args,
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         } else {
-            let shell_cmd = format!(
-                "{} clean test -Dtest='{}'{}",
-                command, test_filter, debug_arg
-            );
+            let mut args = vec![
+                "clean".to_string(),
+                "test".to_string(),
+                format!("-Dtest={}", test_filter),
+            ];
+            if is_debug() {
+                args.push("-Dmaven.surefire.debug".to_string());
+            }
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args,
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         }
     }
@@ -142,33 +167,44 @@ impl BuildTool for Maven {
         } else {
             format!("{}.{}", package, full_class)
         };
-
-        let debug_arg = if is_debug() {
-            " -Dmaven.surefire.debug"
-        } else {
-            ""
-        };
+        let env = Self::debug_env();
 
         if let Some(m) = module {
             let m_str = m.to_string_lossy().to_string();
-            let shell_cmd = format!(
-                "{} clean test-compile -pl \"{}\" -am && {} test -pl \"{}\" -Dtest='{}'{}",
-                command, m_str, command, m_str, test_filter, debug_arg
-            );
+            let mut args = vec![
+                "clean".to_string(),
+                "test".to_string(),
+                "-pl".to_string(),
+                m_str,
+                "-am".to_string(),
+                "-Dsurefire.failIfNoSpecifiedTests=false".to_string(),
+                format!("-Dtest={}", test_filter),
+            ];
+            if is_debug() {
+                args.push("-Dmaven.surefire.debug".to_string());
+            }
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args,
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         } else {
-            let shell_cmd = format!(
-                "{} clean test -Dtest='{}'{}",
-                command, test_filter, debug_arg
-            );
+            let mut args = vec![
+                "clean".to_string(),
+                "test".to_string(),
+                format!("-Dtest={}", test_filter),
+            ];
+            if is_debug() {
+                args.push("-Dmaven.surefire.debug".to_string());
+            }
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args,
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         }
     }
@@ -176,29 +212,38 @@ impl BuildTool for Maven {
     fn run_all_tests(&self, file: &str) -> TaskCommand {
         let command = which_wrapper(&self.root, "mvn");
         let module = self.find_module(file);
-        let debug_arg = if is_debug() {
-            " -Dmaven.surefire.debug"
-        } else {
-            ""
-        };
+        let env = Self::debug_env();
 
         if let Some(m) = module {
             let m_str = m.to_string_lossy().to_string();
-            let shell_cmd = format!(
-                "{} clean test-compile -pl \"{}\" -am && {} test -pl \"{}\"{}",
-                command, m_str, command, m_str, debug_arg
-            );
+            let mut args = vec![
+                "clean".to_string(),
+                "test".to_string(),
+                "-pl".to_string(),
+                m_str,
+                "-am".to_string(),
+            ];
+            if is_debug() {
+                args.push("-Dmaven.surefire.debug".to_string());
+            }
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args,
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         } else {
-            let shell_cmd = format!("{} clean test{}", command, debug_arg);
+            let mut args = vec!["clean".to_string(), "test".to_string()];
+            if is_debug() {
+                args.push("-Dmaven.surefire.debug".to_string());
+            }
             TaskCommand {
-                command: "sh".to_string(),
-                args: vec!["-c".to_string(), shell_cmd],
+                command,
+                args,
                 cwd: self.root.to_string_lossy().to_string(),
+                env,
+                then: vec![],
             }
         }
     }

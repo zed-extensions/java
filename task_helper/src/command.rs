@@ -6,6 +6,10 @@ pub struct TaskCommand {
     pub command: String,
     pub args: Vec<String>,
     pub cwd: String,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub env: Vec<(String, String)>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub then: Vec<TaskCommand>,
 }
 
 impl TaskCommand {
@@ -13,8 +17,10 @@ impl TaskCommand {
         let mut cmd = Command::new(&self.command);
         cmd.args(&self.args);
         cmd.current_dir(&self.cwd);
+        for (k, v) in &self.env {
+            cmd.env(k, v);
+        }
 
-        // Inherit stdin/stdout/stderr
         cmd.stdin(process::Stdio::inherit());
         cmd.stdout(process::Stdio::inherit());
         cmd.stderr(process::Stdio::inherit());
@@ -29,6 +35,12 @@ impl TaskCommand {
             process::exit(1);
         });
 
-        process::exit(status.code().unwrap_or(0));
+        if !status.success() {
+            process::exit(status.code().unwrap_or(1));
+        }
+
+        for next in self.then {
+            next.execute();
+        }
     }
 }

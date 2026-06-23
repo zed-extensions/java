@@ -236,7 +236,7 @@ impl<'a> TaskRunner<'a> {
 
         // Create a temporary ZED_EXT directory structure matching what tasks.json expects
         let zed_ext_base = self.project.temp_dir.join("mock_zed_ext");
-        let zed_ext_dir = zed_ext_base.join("zed/extensions/work/java/proxy-bin");
+        let zed_ext_dir = zed_ext_base.join("zed/extensions/work/java/bin");
         fs::create_dir_all(&zed_ext_dir).unwrap();
         let dest_bin = zed_ext_dir.join("java-task-helper");
         fs::copy(&found_bin, &dest_bin).unwrap();

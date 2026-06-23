@@ -1,7 +1,7 @@
 native_target := `rustc -vV | grep host | awk '{print $2}'`
 ext_dir := if os() == "macos" { env("HOME") / "Library/Application Support/Zed/extensions/work/java" } else if os() == "linux" { env("HOME") / ".local/share/zed/extensions/work/java" } else { env("LOCALAPPDATA") / "Zed/extensions/work/java" }
-proxy_bin := ext_dir / "proxy-bin" / "java-lsp-proxy"
-tasks_bin := ext_dir / "proxy-bin" / "java-task-helper"
+proxy_bin := ext_dir / "bin" / "java-lsp-proxy"
+tasks_bin := ext_dir / "bin" / "java-task-helper"
 
 # Build proxy in debug mode
 proxy-build:
@@ -13,7 +13,7 @@ proxy-release:
 
 # Build proxy release and install to extension workdir for testing
 proxy-install: proxy-release
-    mkdir -p "{{ ext_dir }}/proxy-bin"
+    mkdir -p "{{ ext_dir }}/bin"
     cp "target/{{ native_target }}/release/java-lsp-proxy" "{{ proxy_bin }}"
     @echo "Installed to {{ ext_dir }}"
 
@@ -29,7 +29,7 @@ task-release:
 
 # Build task helper release and install to extension workdir for testing
 task-install: task-release
-    mkdir -p "{{ ext_dir }}/proxy-bin"
+    mkdir -p "{{ ext_dir }}/bin"
     cp "target/{{ native_target }}/release/java-task-helper" "{{ tasks_bin }}"
     @echo "Installed to {{ ext_dir }}"
 

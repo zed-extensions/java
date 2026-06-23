@@ -13,7 +13,7 @@ use crate::{
 };
 
 const PROXY_BINARY: &str = "java-lsp-proxy";
-const PROXY_INSTALL_PATH: &str = "proxy-bin";
+const PROXY_INSTALL_PATH: &str = "bin";
 const GITHUB_REPO: &str = "zed-extensions/java";
 
 pub struct Proxy {
