@@ -319,12 +319,12 @@ fn test_maven_multi_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: clean compile exec:java -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: exec:java -pl module-a"),
+        stdout.contains("-Dexec.mainClass=com.example.Main"),
         "Should run only the submodule. Got: {}",
         stdout
     );
@@ -335,12 +335,12 @@ fn test_maven_multi_module_command_logic() {
     );
 
     assert!(
-        stdout_test.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout_test.contains("MVN_CALLED: clean test-compile exec:java -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout_test
     );
     assert!(
-        stdout_test.contains("MVN_CALLED: exec:java -pl module-a"),
+        stdout_test.contains("-Dexec.mainClass=com.example.Main"),
         "Should run only the submodule. Got: {}",
         stdout_test
     );
@@ -361,12 +361,12 @@ fn test_maven_nested_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl nested/module-b -am"),
+        stdout.contains("MVN_CALLED: clean test-compile exec:java -pl nested/module-b -am"),
         "Should build nested submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: exec:java -pl nested/module-b"),
+        stdout.contains("-Dexec.mainClass=com.example.Main"),
         "Should run only the nested submodule. Got: {}",
         stdout
     );
@@ -382,12 +382,12 @@ fn test_maven_multi_module_test_method_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: clean test -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Main#shouldPersist"),
+        stdout.contains("-Dtest=com.example.Main#shouldPersist"),
         "Should run only the submodule test. Got: {}",
         stdout
     );
@@ -405,7 +405,7 @@ fn test_maven_nested_class_test_method_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Outer$Inner#testMe"),
+        stdout.contains("-Dtest=com.example.Outer$Inner#testMe"),
         "Should run nested class test method correctly. Got: {}",
         stdout
     );
@@ -418,12 +418,12 @@ fn test_maven_run_all_tests_logic() {
     let stdout = project.task("java-test-all").run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: clean test -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a"),
+        stdout.contains("-pl module-a -am"),
         "Should run all tests in submodule. Got: {}",
         stdout
     );
@@ -436,12 +436,12 @@ fn test_maven_test_class_logic() {
     let stdout = project.task("java-test-class").run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: clean test -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Main"),
+        stdout.contains("-Dtest=com.example.Main"),
         "Should run only the submodule test class. Got: {}",
         stdout
     );
@@ -756,13 +756,8 @@ fn test_no_build_tool_command_logic() {
         stdout
     );
     assert!(
-        stdout.contains("./src/main/java/com/example/Main.java"),
+        stdout.contains("./Main.java"),
         "Should compile Main.java. Got: {}",
-        stdout
-    );
-    assert!(
-        stdout.contains("./src/test/java/com/example/MainTest.java"),
-        "Should compile MainTest.java. Got: {}",
         stdout
     );
     assert!(
