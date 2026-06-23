@@ -4,8 +4,6 @@ use crate::{get_jdwp_args, is_debug};
 use std::path::PathBuf;
 
 fn echo_command() -> (String, Vec<String>) {
-    // On Windows, `echo` is a cmd.exe built-in, not an executable.
-    // Use `cmd /c echo` so Command::new succeeds.
     if cfg!(windows) {
         (
             "cmd".to_string(),
@@ -29,7 +27,7 @@ impl Vanilla {
 impl BuildTool for Vanilla {
     fn run_class(
         &self,
-        _file: &str,
+        file: &str,
         package: &str,
         class: &str,
         outer: Option<&str>,
@@ -44,21 +42,50 @@ impl BuildTool for Vanilla {
             format!("{}.{}", package, full_class)
         };
 
-        let debug_args = if is_debug() {
-            format!("{} ", get_jdwp_args())
-        } else {
-            "".to_string()
-        };
+        let root = self.root.to_string_lossy().to_string();
+
+        // Java 11+ supports single-file execution: java <file>.java
+        // Use it when there's no package and no outer class (simple single class).
+        let is_simple = package.is_empty() && outer.is_none();
+        if is_simple {
+            let mut args = vec![];
+            if is_debug() {
+                args.push(get_jdwp_args());
+            }
+            args.push(file.to_string());
+            return TaskCommand {
+                command: "java".to_string(),
+                args,
+                cwd: root,
+                env: vec![],
+                then: vec![],
+            };
+        }
+
+        let mut run_args = vec!["-cp".to_string(), "bin".to_string()];
+        if is_debug() {
+            run_args.push(get_jdwp_args());
+        }
+        run_args.push(full_name);
 
         TaskCommand {
-            command: "sh".to_string(),
+            command: "javac".to_string(),
             args: vec![
-                "-c".to_string(),
-                format!("find . -name '*.java' -not -path './bin/*' -not -path './target/*' -not -path './build/*' -print0 | xargs -0 javac -d bin && java {} -cp bin \"{}\"", debug_args, full_name),
+                "-d".to_string(),
+                "bin".to_string(),
+                "-sourcepath".to_string(),
+                ".".to_string(),
+                file.to_string(),
             ],
-            cwd: self.root.to_string_lossy().to_string(),
+            cwd: root.clone(),
             env: vec![],
-            then: vec![],
+            then: vec![TaskCommand {
+                command: "java".to_string(),
+                args: run_args,
+                cwd: root,
+                env: vec![],
+                then: vec![],
+            }],
         }
     }
 

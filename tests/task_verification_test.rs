@@ -756,7 +756,7 @@ fn test_no_build_tool_command_logic() {
         stdout
     );
     assert!(
-        stdout.contains("./Main.java"),
+        stdout.contains(&project.zed_file.to_string_lossy().to_string()),
         "Should compile Main.java. Got: {}",
         stdout
     );
