@@ -9,7 +9,8 @@
 
 use std::sync::Arc;
 
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use proxy_common::AsyncLspReader;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
 
 use crate::channel::{
@@ -39,42 +40,6 @@ impl LsWriter {
         let mut w = self.inner.lock().await;
         let _ = w.write_all(&bytes).await;
         let _ = w.flush().await;
-    }
-}
-
-/// Async LSP message reader: reads `Content-Length`-framed messages from an
-/// `AsyncRead`, returning each complete message (headers + body) as raw bytes.
-pub struct AsyncLspReader<R> {
-    reader: R,
-}
-
-impl<R: AsyncRead + Unpin> AsyncLspReader<R> {
-    pub fn new(reader: R) -> Self {
-        Self { reader }
-    }
-
-    /// Read the next message, or `None` at EOF.
-    pub async fn read_message(&mut self) -> std::io::Result<Option<Vec<u8>>> {
-        let mut header_buf: Vec<u8> = Vec::new();
-        loop {
-            let mut byte = [0u8; 1];
-            match self.reader.read(&mut byte).await {
-                Ok(0) => return Ok(None),
-                Ok(_) => header_buf.push(byte[0]),
-                Err(e) => return Err(e),
-            }
-            if header_buf.ends_with(b"\r\n\r\n") {
-                break;
-            }
-        }
-
-        let content_length = proxy_common::parse_content_length(&header_buf);
-        let mut content = vec![0u8; content_length];
-        self.reader.read_exact(&mut content).await?;
-
-        let mut message = header_buf;
-        message.extend_from_slice(&content);
-        Ok(Some(message))
     }
 }
 

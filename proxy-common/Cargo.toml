@@ -10,9 +10,13 @@ description = "Shared primitives (LSP framing, parent-process monitor) for the Z
 name = "proxy_common"
 path = "src/lib.rs"
 
+[features]
+tokio = ["dep:tokio"]
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tokio = { version = "1", default-features = false, features = ["io-util"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

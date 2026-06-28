@@ -1,6 +1,9 @@
 use serde::Serialize;
 use std::io::{self, Read, Write};
 
+#[cfg(feature = "tokio")]
+use tokio::io::{AsyncRead, AsyncReadExt};
+
 pub const CONTENT_LENGTH: &str = "Content-Length";
 pub const HEADER_SEP: &[u8] = b"\r\n\r\n";
 
@@ -30,6 +33,41 @@ impl<R: Read> LspReader<R> {
         let content_length = parse_content_length(&header_buf);
         let mut content = vec![0u8; content_length];
         self.reader.read_exact(&mut content)?;
+
+        let mut message = header_buf;
+        message.extend_from_slice(&content);
+        Ok(Some(message))
+    }
+}
+
+#[cfg(feature = "tokio")]
+pub struct AsyncLspReader<R> {
+    reader: R,
+}
+
+#[cfg(feature = "tokio")]
+impl<R: AsyncRead + Unpin> AsyncLspReader<R> {
+    pub fn new(reader: R) -> Self {
+        Self { reader }
+    }
+
+    pub async fn read_message(&mut self) -> io::Result<Option<Vec<u8>>> {
+        let mut header_buf = Vec::new();
+        loop {
+            let mut byte = [0u8; 1];
+            match self.reader.read(&mut byte).await {
+                Ok(0) => return Ok(None),
+                Ok(_) => header_buf.push(byte[0]),
+                Err(e) => return Err(e),
+            }
+            if header_buf.ends_with(HEADER_SEP) {
+                break;
+            }
+        }
+
+        let content_length = parse_content_length(&header_buf);
+        let mut content = vec![0u8; content_length];
+        self.reader.read_exact(&mut content).await?;
 
         let mut message = header_buf;
         message.extend_from_slice(&content);
