@@ -6,8 +6,6 @@ pub mod gradle;
 pub mod maven;
 pub mod vanilla;
 
-/// Canonicalize a path but strip the Windows `\\?\` extended-length prefix,
-/// which causes issues with `std::process::Command::current_dir()`.
 fn canonicalize_clean(path: &Path) -> PathBuf {
     let c = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let s = c.to_string_lossy();
@@ -15,6 +13,33 @@ fn canonicalize_clean(path: &Path) -> PathBuf {
         PathBuf::from(stripped)
     } else {
         c
+    }
+}
+
+pub fn full_class_name(package: &str, class: &str, outer: Option<&str>) -> String {
+    let full_class = match outer {
+        Some(o) => format!("{}${}", o, class),
+        None => class.to_string(),
+    };
+    if package.is_empty() {
+        full_class
+    } else {
+        format!("{}.{}", package, full_class)
+    }
+}
+
+pub fn task(
+    command: String,
+    args: Vec<String>,
+    cwd: String,
+    env: Vec<(String, String)>,
+) -> TaskCommand {
+    TaskCommand {
+        command,
+        args,
+        cwd,
+        env,
+        then: vec![],
     }
 }
 
@@ -137,42 +162,40 @@ pub fn find_closest_module(file_path: &str, root: &Path, marker_files: &[&str]) 
     None
 }
 
+#[cfg(windows)]
 pub fn which_wrapper(root: &Path, tool_name: &str) -> String {
-    if cfg!(windows) {
-        // On Windows, use the full path to the wrapper so that
-        // Command::new() can find it via CreateProcess (SearchPathW
-        // searches the helper's CWD, not the child's current_dir,
-        // so a bare filename like "gradlew.bat" may not resolve).
-        let wrapper_path = root.join("gradlew.bat");
-        if wrapper_path.exists() {
-            eprintln!("Detected {} project. Using gradlew.bat wrapper.", tool_name);
-            return wrapper_path.to_string_lossy().to_string();
-        }
-        let wrapper_path = root.join("mvnw.cmd");
-        if wrapper_path.exists() {
-            eprintln!("Detected {} project. Using mvnw.cmd wrapper.", tool_name);
-            return wrapper_path.to_string_lossy().to_string();
-        }
+    let wrapper_path = root.join("gradlew.bat");
+    if wrapper_path.exists() {
+        eprintln!("Detected {} project. Using gradlew.bat wrapper.", tool_name);
+        return wrapper_path.to_string_lossy().to_string();
+    }
+    let wrapper_path = root.join("mvnw.cmd");
+    if wrapper_path.exists() {
+        eprintln!("Detected {} project. Using mvnw.cmd wrapper.", tool_name);
+        return wrapper_path.to_string_lossy().to_string();
+    }
+    eprintln!(
+        "Detected {} project. No wrapper found, using {}.",
+        tool_name, tool_name
+    );
+    tool_name.to_string()
+}
+
+#[cfg(not(windows))]
+pub fn which_wrapper(root: &Path, tool_name: &str) -> String {
+    let wrapper_path = root.join("gradlew");
+    if wrapper_path.exists() {
+        eprintln!("Detected {} project. Using ./gradlew wrapper.", tool_name);
+        "./gradlew".to_string()
+    } else if root.join("mvnw").exists() {
+        eprintln!("Detected {} project. Using ./mvnw wrapper.", tool_name);
+        "./mvnw".to_string()
+    } else {
         eprintln!(
             "Detected {} project. No wrapper found, using {}.",
             tool_name, tool_name
         );
         tool_name.to_string()
-    } else {
-        let wrapper_path = root.join("gradlew");
-        if wrapper_path.exists() {
-            eprintln!("Detected {} project. Using ./gradlew wrapper.", tool_name);
-            "./gradlew".to_string()
-        } else if root.join("mvnw").exists() {
-            eprintln!("Detected {} project. Using ./mvnw wrapper.", tool_name);
-            "./mvnw".to_string()
-        } else {
-            eprintln!(
-                "Detected {} project. No wrapper found, using {}.",
-                tool_name, tool_name
-            );
-            tool_name.to_string()
-        }
     }
 }
 

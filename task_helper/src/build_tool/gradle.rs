@@ -1,4 +1,4 @@
-use crate::build_tool::{find_closest_module, which_wrapper, BuildTool};
+use crate::build_tool::{find_closest_module, full_class_name, task, which_wrapper, BuildTool};
 use crate::command::TaskCommand;
 use crate::is_debug;
 use std::path::PathBuf;
@@ -15,6 +15,56 @@ impl Gradle {
     fn find_module(&self, file: &str) -> Option<PathBuf> {
         find_closest_module(file, &self.root, &["build.gradle", "build.gradle.kts"])
     }
+
+    fn cwd(&self) -> String {
+        self.root.to_string_lossy().to_string()
+    }
+
+    fn command(&self) -> String {
+        which_wrapper(&self.root, "gradle")
+    }
+
+    fn gradle_task(&self, module: &Option<PathBuf>, task_name: &str) -> String {
+        match module {
+            Some(m) => {
+                let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
+                format!(":{gradle_path}:{task_name}")
+            }
+            None => format!(":{task_name}"),
+        }
+    }
+
+    fn debug_args() -> Vec<String> {
+        if is_debug() {
+            vec!["--debug-jvm".to_string()]
+        } else {
+            vec![]
+        }
+    }
+
+    fn test_filter(
+        package: &str,
+        class: &str,
+        outer: Option<&str>,
+        method: Option<&str>,
+    ) -> String {
+        let full = full_class_name(package, class, outer);
+        match method {
+            Some(m) => format!("{}.{}", full, m),
+            None => full,
+        }
+    }
+
+    fn test_args(&self, module: &Option<PathBuf>, filter: Option<&str>) -> Vec<String> {
+        let gradle_task = self.gradle_task(module, "test");
+        let mut args = vec![gradle_task];
+        if let Some(f) = filter {
+            args.push("--tests".to_string());
+            args.push(f.to_string());
+        }
+        args.extend(Self::debug_args());
+        args
+    }
 }
 
 impl BuildTool for Gradle {
@@ -25,37 +75,14 @@ impl BuildTool for Gradle {
         class: &str,
         outer: Option<&str>,
     ) -> TaskCommand {
-        let command = which_wrapper(&self.root, "gradle");
         let module = self.find_module(file);
-        let full_class = match outer {
-            Some(o) => format!("{}${}", o, class),
-            None => class.to_string(),
-        };
-        let full_name = if package.is_empty() {
-            full_class
-        } else {
-            format!("{}.{}", package, full_class)
-        };
+        let full_name = full_class_name(package, class, outer);
+        let gradle_task = self.gradle_task(&module, "run");
 
-        let task = if let Some(m) = module {
-            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
-            format!(":{gradle_path}:run")
-        } else {
-            ":run".to_string()
-        };
+        let mut args = vec![gradle_task, format!("-PmainClass={}", full_name)];
+        args.extend(Self::debug_args());
 
-        let mut args = vec![task, format!("-PmainClass={}", full_name)];
-        if is_debug() {
-            args.push("--debug-jvm".to_string());
-        }
-
-        TaskCommand {
-            command,
-            args,
-            cwd: self.root.to_string_lossy().to_string(),
-            env: vec![],
-            then: vec![],
-        }
+        task(self.command(), args, self.cwd(), vec![])
     }
 
     fn run_test_method(
@@ -66,37 +93,12 @@ impl BuildTool for Gradle {
         outer: Option<&str>,
         method: &str,
     ) -> TaskCommand {
-        let command = which_wrapper(&self.root, "gradle");
         let module = self.find_module(file);
-        let full_class = match outer {
-            Some(o) => format!("{}${}", o, class),
-            None => class.to_string(),
-        };
-        let test_filter = if package.is_empty() {
-            format!("{}.{}", full_class, method)
-        } else {
-            format!("{}.{}.{}", package, full_class, method)
-        };
+        let test_filter = Self::test_filter(package, class, outer, Some(method));
 
-        let task = if let Some(m) = module {
-            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
-            format!(":{gradle_path}:test")
-        } else {
-            ":test".to_string()
-        };
+        let args = self.test_args(&module, Some(&test_filter));
 
-        let mut args = vec![task, "--tests".to_string(), test_filter];
-        if is_debug() {
-            args.push("--debug-jvm".to_string());
-        }
-
-        TaskCommand {
-            command,
-            args,
-            cwd: self.root.to_string_lossy().to_string(),
-            env: vec![],
-            then: vec![],
-        }
+        task(self.command(), args, self.cwd(), vec![])
     }
 
     fn run_test_class(
@@ -106,61 +108,19 @@ impl BuildTool for Gradle {
         class: &str,
         outer: Option<&str>,
     ) -> TaskCommand {
-        let command = which_wrapper(&self.root, "gradle");
         let module = self.find_module(file);
-        let full_class = match outer {
-            Some(o) => format!("{}${}", o, class),
-            None => class.to_string(),
-        };
-        let test_filter = if package.is_empty() {
-            full_class
-        } else {
-            format!("{}.{}", package, full_class)
-        };
+        let test_filter = Self::test_filter(package, class, outer, None);
 
-        let task = if let Some(m) = module {
-            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
-            format!(":{gradle_path}:test")
-        } else {
-            ":test".to_string()
-        };
+        let args = self.test_args(&module, Some(&test_filter));
 
-        let mut args = vec![task, "--tests".to_string(), test_filter];
-        if is_debug() {
-            args.push("--debug-jvm".to_string());
-        }
-
-        TaskCommand {
-            command,
-            args,
-            cwd: self.root.to_string_lossy().to_string(),
-            env: vec![],
-            then: vec![],
-        }
+        task(self.command(), args, self.cwd(), vec![])
     }
 
     fn run_all_tests(&self, file: &str) -> TaskCommand {
-        let command = which_wrapper(&self.root, "gradle");
         let module = self.find_module(file);
 
-        let task = if let Some(m) = module {
-            let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
-            format!(":{gradle_path}:test")
-        } else {
-            ":test".to_string()
-        };
+        let args = self.test_args(&module, None);
 
-        let mut args = vec![task];
-        if is_debug() {
-            args.push("--debug-jvm".to_string());
-        }
-
-        TaskCommand {
-            command,
-            args,
-            cwd: self.root.to_string_lossy().to_string(),
-            env: vec![],
-            then: vec![],
-        }
+        task(self.command(), args, self.cwd(), vec![])
     }
 }
