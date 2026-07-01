@@ -1,9 +1,9 @@
 mod build_tool;
 mod command;
+mod platform_paths;
 
 use crate::build_tool::get_workspace_root;
 use std::env;
-use std::path::{Path, PathBuf};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -139,17 +139,7 @@ pub fn get_jdwp_args() -> String {
 }
 
 fn task_clear_cache() {
-    let cache_dir = if let Ok(xdg) = env::var("XDG_CACHE_HOME") {
-        PathBuf::from(xdg)
-    } else if cfg!(target_os = "macos") {
-        env::var("HOME")
-            .map(|h| Path::new(&h).join("Library/Caches"))
-            .unwrap_or_default()
-    } else {
-        env::var("HOME")
-            .map(|h| Path::new(&h).join(".cache"))
-            .unwrap_or_default()
-    };
+    let cache_dir = platform_paths::get_jdtls_cache_dir();
 
     if !cache_dir.exists() {
         println!("No JDTLS cache found");
