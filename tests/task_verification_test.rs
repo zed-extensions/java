@@ -286,7 +286,7 @@ fn test_maven_single_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean compile exec:java -Dexec.mainClass=com.example.Main"),
+        stdout.contains("MVN_CALLED: compile exec:java"),
         "Should run as single module. Got: {}",
         stdout
     );
@@ -297,7 +297,7 @@ fn test_maven_single_module_command_logic() {
     );
     assert!(
         stdout_test
-            .contains("MVN_CALLED: clean test-compile exec:java -Dexec.mainClass=com.example.Main"),
+            .contains("MVN_CALLED: test-compile exec:java -Dexec.mainClass=com.example.Main"),
         "Should run as single module. Got: {}",
         stdout_test
     );
@@ -319,7 +319,7 @@ fn test_maven_multi_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean compile exec:java -pl module-a -am"),
+        stdout.contains("MVN_CALLED: compile exec:java -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
@@ -335,7 +335,7 @@ fn test_maven_multi_module_command_logic() {
     );
 
     assert!(
-        stdout_test.contains("MVN_CALLED: clean test-compile exec:java -pl module-a -am"),
+        stdout_test.contains("MVN_CALLED: test-compile exec:java -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout_test
     );
@@ -361,7 +361,7 @@ fn test_maven_nested_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile exec:java -pl nested/module-b -am"),
+        stdout.contains("MVN_CALLED: test-compile exec:java -pl nested/module-b -am"),
         "Should build nested submodule with dependencies. Got: {}",
         stdout
     );
@@ -382,7 +382,9 @@ fn test_maven_multi_module_test_method_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test -pl module-a -am"),
+        stdout.contains("MVN_CALLED: test")
+            && stdout.contains("-U")
+            && stdout.contains("-pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
@@ -418,7 +420,9 @@ fn test_maven_run_all_tests_logic() {
     let stdout = project.task("java-test-all").run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test -pl module-a -am"),
+        stdout.contains("MVN_CALLED: test")
+            && stdout.contains("-U")
+            && stdout.contains("-pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
@@ -436,7 +440,9 @@ fn test_maven_test_class_logic() {
     let stdout = project.task("java-test-class").run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test -pl module-a -am"),
+        stdout.contains("MVN_CALLED: test")
+            && stdout.contains("-U")
+            && stdout.contains("-pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );

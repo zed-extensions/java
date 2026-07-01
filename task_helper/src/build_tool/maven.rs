@@ -61,7 +61,7 @@ impl Maven {
     }
 
     fn test_args(module: &Option<PathBuf>) -> Vec<String> {
-        let mut args = vec!["clean".to_string(), "test".to_string()];
+        let mut args = vec!["test".to_string(), "-U".to_string()];
         args.extend(Self::module_prefix(module));
         args.push("-Dsurefire.failIfNoSpecifiedTests=false".to_string());
         args
@@ -82,11 +82,7 @@ impl BuildTool for Maven {
         let compile_goal = if is_test { "test-compile" } else { "compile" };
         let classpath_scope = if is_test { "test" } else { "runtime" };
 
-        let mut args = vec![
-            "clean".to_string(),
-            compile_goal.to_string(),
-            "exec:java".to_string(),
-        ];
+        let mut args = vec![compile_goal.to_string(), "exec:java".to_string()];
         args.extend(Self::module_prefix(&module));
         args.push(format!("-Dexec.mainClass={}", full_name));
         args.push(format!("-Dexec.classpathScope={}", classpath_scope));
