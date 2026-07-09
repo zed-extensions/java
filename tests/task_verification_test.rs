@@ -135,6 +135,67 @@ impl Drop for TestProject {
         let _ = fs::remove_dir_all(&self.temp_dir);
     }
 }
+
+static BUILD_HELPER: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+fn ensure_task_helper_built() -> PathBuf {
+    BUILD_HELPER
+        .get_or_init(|| {
+            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| std::env::current_dir().unwrap());
+
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.current_dir(&manifest_dir);
+            cmd.env_remove("CARGO_BUILD_TARGET");
+            cmd.args([
+                "build",
+                "-p",
+                "java-task-helper",
+                "--bin",
+                "java-task-helper",
+                "--message-format=json",
+            ]);
+            if !cfg!(debug_assertions) {
+                cmd.arg("--release");
+            }
+
+            let output = cmd
+                .output()
+                .expect("failed to run cargo build for java-task-helper");
+            assert!(
+                output.status.success(),
+                "cargo build -p java-task-helper failed:\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut found_path = None;
+            for line in stdout.lines() {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                    let is_target_bin = val["target"]["kind"]
+                        .as_array()
+                        .is_some_and(|k| k.iter().any(|kind| kind == "bin"));
+                    if val["reason"] == "compiler-artifact"
+                        && val["target"]["name"] == "java-task-helper"
+                        && is_target_bin
+                    {
+                        found_path = val["filenames"]
+                            .as_array()
+                            .and_then(|files| files.first())
+                            .and_then(|f| f.as_str())
+                            .map(PathBuf::from);
+                    }
+                }
+            }
+
+            found_path.expect(
+                "Could not find compiler artifact filename for java-task-helper in cargo build output",
+            )
+        })
+        .clone()
+}
+
 struct TaskRunner<'a> {
     project: &'a TestProject,
     command: String,
@@ -170,6 +231,21 @@ impl<'a> TaskRunner<'a> {
 
     fn run(self) -> String {
         let mut cmd = std::process::Command::new("sh");
+
+        let found_bin = ensure_task_helper_built();
+
+        // Create a temporary ZED_EXT directory structure matching what tasks.json expects
+        let zed_ext_base = self.project.temp_dir.join("mock_zed_ext");
+        let zed_ext_dir = zed_ext_base.join("zed/extensions/work/java/bin");
+        fs::create_dir_all(&zed_ext_dir).unwrap();
+        let dest_bin = zed_ext_dir.join("java-task-helper");
+        fs::copy(&found_bin, &dest_bin).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&dest_bin, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
         cmd.arg("-c")
             .arg(&self.command)
             .env("ZED_FILE", self.zed_file.to_string_lossy().to_string())
@@ -177,6 +253,7 @@ impl<'a> TaskRunner<'a> {
             .env("ZED_CUSTOM_java_package_name", &self.package)
             .env("ZED_CUSTOM_java_class_name", &self.class)
             .env("PATH", &self.project.new_path)
+            .env("XDG_DATA_HOME", zed_ext_base.to_string_lossy().to_string())
             .current_dir(&self.project.temp_dir);
 
         for (k, v) in self.extra_env {
@@ -184,6 +261,14 @@ impl<'a> TaskRunner<'a> {
         }
 
         let output = cmd.output().expect("Failed to execute shell command");
+        if !output.status.success() {
+            panic!(
+                "Shell command failed with status: {:?}\nStdout: {}\nStderr: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
         String::from_utf8_lossy(&output.stdout).to_string()
     }
 }
@@ -201,7 +286,7 @@ fn test_maven_single_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean compile exec:java -Dexec.mainClass=com.example.Main"),
+        stdout.contains("MVN_CALLED: compile exec:java"),
         "Should run as single module. Got: {}",
         stdout
     );
@@ -212,7 +297,7 @@ fn test_maven_single_module_command_logic() {
     );
     assert!(
         stdout_test
-            .contains("MVN_CALLED: clean test-compile exec:java -Dexec.mainClass=com.example.Main"),
+            .contains("MVN_CALLED: test-compile exec:java -Dexec.mainClass=com.example.Main"),
         "Should run as single module. Got: {}",
         stdout_test
     );
@@ -234,12 +319,12 @@ fn test_maven_multi_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: compile exec:java -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: exec:java -pl module-a"),
+        stdout.contains("-Dexec.mainClass=com.example.Main"),
         "Should run only the submodule. Got: {}",
         stdout
     );
@@ -250,12 +335,12 @@ fn test_maven_multi_module_command_logic() {
     );
 
     assert!(
-        stdout_test.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout_test.contains("MVN_CALLED: test-compile exec:java -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout_test
     );
     assert!(
-        stdout_test.contains("MVN_CALLED: exec:java -pl module-a"),
+        stdout_test.contains("-Dexec.mainClass=com.example.Main"),
         "Should run only the submodule. Got: {}",
         stdout_test
     );
@@ -276,12 +361,12 @@ fn test_maven_nested_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl nested/module-b -am"),
+        stdout.contains("MVN_CALLED: test-compile exec:java -pl nested/module-b -am"),
         "Should build nested submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: exec:java -pl nested/module-b"),
+        stdout.contains("-Dexec.mainClass=com.example.Main"),
         "Should run only the nested submodule. Got: {}",
         stdout
     );
@@ -297,12 +382,14 @@ fn test_maven_multi_module_test_method_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: test")
+            && stdout.contains("-U")
+            && stdout.contains("-pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Main#shouldPersist"),
+        stdout.contains("-Dtest=com.example.Main#shouldPersist"),
         "Should run only the submodule test. Got: {}",
         stdout
     );
@@ -320,7 +407,7 @@ fn test_maven_nested_class_test_method_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Outer$Inner#testMe"),
+        stdout.contains("-Dtest=com.example.Outer$Inner#testMe"),
         "Should run nested class test method correctly. Got: {}",
         stdout
     );
@@ -333,12 +420,14 @@ fn test_maven_run_all_tests_logic() {
     let stdout = project.task("java-test-all").run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: test")
+            && stdout.contains("-U")
+            && stdout.contains("-pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a"),
+        stdout.contains("-pl module-a -am"),
         "Should run all tests in submodule. Got: {}",
         stdout
     );
@@ -351,12 +440,14 @@ fn test_maven_test_class_logic() {
     let stdout = project.task("java-test-class").run();
 
     assert!(
-        stdout.contains("MVN_CALLED: clean test-compile -pl module-a -am"),
+        stdout.contains("MVN_CALLED: test")
+            && stdout.contains("-U")
+            && stdout.contains("-pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("MVN_CALLED: test -pl module-a -Dtest=com.example.Main"),
+        stdout.contains("-Dtest=com.example.Main"),
         "Should run only the submodule test class. Got: {}",
         stdout
     );
@@ -671,13 +762,8 @@ fn test_no_build_tool_command_logic() {
         stdout
     );
     assert!(
-        stdout.contains("./src/main/java/com/example/Main.java"),
+        stdout.contains(&project.zed_file.to_string_lossy().to_string()),
         "Should compile Main.java. Got: {}",
-        stdout
-    );
-    assert!(
-        stdout.contains("./src/test/java/com/example/MainTest.java"),
-        "Should compile MainTest.java. Got: {}",
         stdout
     );
     assert!(

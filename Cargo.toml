@@ -1,7 +1,8 @@
 [workspace]
 members = [
     ".",
-    "proxy"
+    "proxy",
+    "task_helper"
 ]
 
 [package]

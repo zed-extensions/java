@@ -11,18 +11,10 @@ expression: captures
   line: 3
   column: 1
   text: "public class SingleLevelPackage {\n    public static void main(String[] args) {\n        System.out.println(\"Hello world!\");\n    }\n}"
-- name: class-modifier
-  line: 3
-  column: 1
-  text: public
 - name: java_class_name
   line: 3
   column: 14
   text: SingleLevelPackage
-- name: modifier
-  line: 4
-  column: 5
-  text: public static
 - name: run
   line: 4
   column: 24
@@ -35,10 +27,6 @@ expression: captures
   line: 3
   column: 1
   text: "public class SingleLevelPackage {\n    public static void main(String[] args) {\n        System.out.println(\"Hello world!\");\n    }\n}"
-- name: class-modifier
-  line: 3
-  column: 1
-  text: public
 - name: java_class_name
   line: 3
   column: 14
@@ -47,10 +35,6 @@ expression: captures
   line: 3
   column: 14
   text: SingleLevelPackage
-- name: modifier
-  line: 4
-  column: 5
-  text: public static
 - name: method_name
   line: 4
   column: 24

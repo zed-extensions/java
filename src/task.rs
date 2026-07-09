@@ -7,48 +7,37 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::get_lsp_proxy_path,
     downloadable::Downloadable,
     util::{mark_checked_once, remove_all_files_except, should_use_local_or_download},
 };
 
-const PROXY_BINARY: &str = "java-lsp-proxy";
-const PROXY_INSTALL_PATH: &str = "bin";
+const TASK_HELPER_BINARY: &str = "java-task-helper";
+const TASK_HELPER_INSTALL_PATH: &str = "bin";
 const GITHUB_REPO: &str = "zed-extensions/java";
 
-pub struct Proxy {
+pub struct TaskHelper {
     cached_path: Option<String>,
 }
 
-impl Proxy {
+impl TaskHelper {
     pub fn new() -> Self {
         Self { cached_path: None }
     }
-
-    pub fn binary_path(
-        &mut self,
-        configuration: &Option<Value>,
-        language_server_id: &LanguageServerId,
-        worktree: &Worktree,
-    ) -> zed::Result<String> {
-        let path = self.get_or_download(language_server_id, configuration, worktree)?;
-        Ok(path.to_string_lossy().to_string())
-    }
 }
 
-impl Downloadable for Proxy {
-    const INSTALL_PATH: &'static str = PROXY_INSTALL_PATH;
+impl Downloadable for TaskHelper {
+    const INSTALL_PATH: &'static str = TASK_HELPER_INSTALL_PATH;
 
     fn find_local(&self) -> Option<PathBuf> {
-        let local_binary = PathBuf::from(PROXY_INSTALL_PATH).join(proxy_exec());
+        let local_binary = PathBuf::from(TASK_HELPER_INSTALL_PATH).join(task_helper_exec());
         if metadata(&local_binary).is_ok_and(|m| m.is_file()) {
             return Some(local_binary);
         }
 
-        std::fs::read_dir(PROXY_INSTALL_PATH)
+        std::fs::read_dir(TASK_HELPER_INSTALL_PATH)
             .ok()?
             .filter_map(Result::ok)
-            .map(|e| e.path().join(proxy_exec()))
+            .map(|e| e.path().join(task_helper_exec()))
             .filter(|p| metadata(p).is_ok_and(|m| m.is_file()))
             .last()
     }
@@ -65,7 +54,9 @@ impl Downloadable for Proxy {
                 pre_release: false,
             },
         )
-        .map_err(|err| format!("Failed to fetch latest proxy release from {GITHUB_REPO}: {err}"))?
+        .map_err(|err| {
+            format!("Failed to fetch latest task helper release from {GITHUB_REPO}: {err}")
+        })?
         .version)
     }
 
@@ -75,7 +66,10 @@ impl Downloadable for Proxy {
         language_server_id: &LanguageServerId,
     ) -> zed::Result<PathBuf> {
         let (name, file_type) = asset_name()?;
-        let bin_path = format!("{PROXY_INSTALL_PATH}/{version}/{}", proxy_exec());
+        let bin_path = format!(
+            "{TASK_HELPER_INSTALL_PATH}/{version}/{}",
+            task_helper_exec()
+        );
 
         if metadata(&bin_path).is_ok() {
             self.cached_path = Some(bin_path.clone());
@@ -89,7 +83,7 @@ impl Downloadable for Proxy {
                 pre_release: false,
             },
         )
-        .map_err(|err| format!("Failed to fetch proxy release: {err}"))?;
+        .map_err(|err| format!("Failed to fetch task helper release: {err}"))?;
 
         let asset = release
             .assets
@@ -97,7 +91,7 @@ impl Downloadable for Proxy {
             .find(|a| a.name == name)
             .ok_or_else(|| format!("No asset found matching {name:?}"))?;
 
-        let version_dir = format!("{PROXY_INSTALL_PATH}/{version}");
+        let version_dir = format!("{TASK_HELPER_INSTALL_PATH}/{version}");
 
         set_language_server_installation_status(
             language_server_id,
@@ -105,15 +99,15 @@ impl Downloadable for Proxy {
         );
 
         zed::download_file(&asset.download_url, &version_dir, file_type)
-            .map_err(|err| format!("Failed to download proxy: {err}"))?;
+            .map_err(|err| format!("Failed to download task helper: {err}"))?;
 
         let _ = zed::make_file_executable(&bin_path);
         set_language_server_installation_status(
             language_server_id,
             &LanguageServerInstallationStatus::None,
         );
-        let _ = remove_all_files_except(PROXY_INSTALL_PATH, version);
-        let _ = mark_checked_once(PROXY_INSTALL_PATH, version);
+        let _ = remove_all_files_except(TASK_HELPER_INSTALL_PATH, version);
+        let _ = mark_checked_once(TASK_HELPER_INSTALL_PATH, version);
 
         self.cached_path = Some(bin_path.clone());
         Ok(PathBuf::from(bin_path))
@@ -145,19 +139,11 @@ impl Downloadable for Proxy {
             return Ok(path);
         }
 
-        if let Some(path) = worktree.which(proxy_exec().as_str()) {
+        if let Some(path) = worktree.which(task_helper_exec().as_str()) {
             return Ok(PathBuf::from(path));
         }
 
-        Err(format!("'{}' not found", proxy_exec()))
-    }
-
-    fn user_configured_path(
-        &self,
-        configuration: &Option<Value>,
-        worktree: &Worktree,
-    ) -> Option<String> {
-        get_lsp_proxy_path(configuration, worktree)
+        Err(format!("'{}' not found", task_helper_exec()))
     }
 }
 
@@ -179,15 +165,15 @@ fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
         "tar.gz"
     };
     Ok((
-        format!("java-lsp-proxy-{os_str}-{arch_str}.{ext}"),
+        format!("{TASK_HELPER_BINARY}-{os_str}-{arch_str}.{ext}"),
         file_type,
     ))
 }
 
-fn proxy_exec() -> String {
+fn task_helper_exec() -> String {
     let (os, _arch) = zed::current_platform();
     match os {
-        zed::Os::Linux | zed::Os::Mac => PROXY_BINARY.to_string(),
-        zed::Os::Windows => format!("{PROXY_BINARY}.exe"),
+        zed::Os::Linux | zed::Os::Mac => TASK_HELPER_BINARY.to_string(),
+        zed::Os::Windows => format!("{TASK_HELPER_BINARY}.exe"),
     }
 }

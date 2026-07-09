@@ -608,11 +608,15 @@ The project includes a `justfile` with common development tasks:
 | `just proxy-build` | Build the proxy binary in debug mode |
 | `just proxy-release` | Build the proxy binary in release mode |
 | `just proxy-install` | Build release proxy and copy it to the extension workdir |
+| `just task-build` | Build the task helper binary in debug mode |
+| `just task-release` | Build the task helper binary in release mode |
+| `just task-install` | Build release task helper and copy it to the extension workdir |
+| `just task-test` | Run task helper tests |
 | `just ext-build` | Build the WASM extension in release mode |
 | `just fmt` | Format all code (Rust + tree-sitter queries) |
-| `just clippy` | Run clippy on both crates |
+| `just clippy` | Run clippy on all crates |
 | `just lint` | Format and lint all code |
-| `just all` | Lint, build extension, and install proxy |
+| `just all` | Lint, build extension, and install proxy & task helper |
 
 ### Updating the `java-lsp-proxy` Binary
 
@@ -626,9 +630,9 @@ just proxy-install
 ```
 
 This compiles the proxy for your native target and copies it to the appropriate Zed extension working directory:
-- **macOS**: `~/Library/Application Support/Zed/extensions/work/java/proxy-bin/`
-- **Linux**: `~/.local/share/zed/extensions/work/java/proxy-bin/`
-- **Windows**: `%LOCALAPPDATA%/Zed/extensions/work/java/proxy-bin/`
+- **macOS**: `~/Library/Application Support/Zed/extensions/work/java/bin/`
+- **Linux**: `~/.local/share/zed/extensions/work/java/bin/`
+- **Windows**: `%LOCALAPPDATA%/Zed/extensions/work/java/bin/`
 
 After installing the proxy, restart the language server in Zed for the changes to take effect.
 
@@ -650,12 +654,12 @@ For standard use, the proxy binary is auto-downloaded from GitHub releases for t
 However, if you're **testing local proxy changes** against a remote host, you need to get the binary onto the remote server yourself. The key thing to be aware of is that on remote hosts, extensions are stored under a **different path** than on your local machine — typically:
 
 ```
-~/.local/share/zed/remote_extensions/work/java/proxy-bin/
+~/.local/share/zed/remote_extensions/work/java/bin/
 ```
 
 > **Tip:** If you're unsure of the exact path, SSH into the remote and look for it:
 > ```sh
-> find ~/.local/share/zed -type d -name "proxy-bin" 2>/dev/null
+> find ~/.local/share/zed -type d -name "bin" 2>/dev/null
 > ```
 
 #### Option A: Build on the remote directly
@@ -669,8 +673,8 @@ cd java/proxy
 cargo build --release
 
 # Copy to the remote extensions workdir
-mkdir -p ~/.local/share/zed/remote_extensions/work/java/proxy-bin
-cp target/release/java-lsp-proxy ~/.local/share/zed/remote_extensions/work/java/proxy-bin/
+mkdir -p ~/.local/share/zed/remote_extensions/work/java/bin
+cp target/release/java-lsp-proxy ~/.local/share/zed/remote_extensions/work/java/bin/
 ```
 
 #### Option B: Cross-compile locally and copy
@@ -687,7 +691,7 @@ If you prefer to build on your local machine:
 2. Copy the binary to the remote server:
    ```sh
    scp target/x86_64-unknown-linux-gnu/release/java-lsp-proxy \
-     user@remote:~/.local/share/zed/remote_extensions/work/java/proxy-bin/java-lsp-proxy
+     user@remote:~/.local/share/zed/remote_extensions/work/java/bin/java-lsp-proxy
    ```
 
 After either option, restart the language server in Zed for the changes to take effect.

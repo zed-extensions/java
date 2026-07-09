@@ -1,4 +1,4 @@
-name: Release Proxy Binary
+name: Release Binaries
 
 on:
   release:
@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.asset_name }}
+    name: Build binaries for ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: true
@@ -18,21 +18,27 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-15
             asset_name: java-lsp-proxy-darwin-aarch64.tar.gz
+            helper_asset_name: java-task-helper-darwin-aarch64.tar.gz
           - target: x86_64-apple-darwin
             runner: macos-15-intel
             asset_name: java-lsp-proxy-darwin-x86_64.tar.gz
+            helper_asset_name: java-task-helper-darwin-x86_64.tar.gz
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-22.04
             asset_name: java-lsp-proxy-linux-x86_64.tar.gz
+            helper_asset_name: java-task-helper-linux-x86_64.tar.gz
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-22.04-arm
             asset_name: java-lsp-proxy-linux-aarch64.tar.gz
+            helper_asset_name: java-task-helper-linux-aarch64.tar.gz
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             asset_name: java-lsp-proxy-windows-x86_64.zip
+            helper_asset_name: java-task-helper-windows-x86_64.zip
           - target: aarch64-pc-windows-msvc
             runner: windows-11-arm
             asset_name: java-lsp-proxy-windows-aarch64.zip
+            helper_asset_name: java-task-helper-windows-aarch64.zip
 
     steps:
       - name: Checkout
@@ -48,24 +54,35 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
         shell: bash
 
-      - name: Package binary (Unix)
+      - name: Build task helper binary
+        working-directory: task_helper
+        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+
+      - name: Package binaries (Unix)
         if: runner.os != 'Windows'
         run: |
           tar -czf ${{ matrix.asset_name }} \
             -C target/${{ matrix.target }}/release \
             java-lsp-proxy
+          tar -czf ${{ matrix.helper_asset_name }} \
+            -C target/${{ matrix.target }}/release \
+            java-task-helper
 
-      - name: Package binary (Windows)
+      - name: Package binaries (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Compress-Archive -Path target/${{ matrix.target }}/release/java-lsp-proxy.exe -DestinationPath ${{ matrix.asset_name }}
+          Compress-Archive -Path target/${{ matrix.target }}/release/java-task-helper.exe -DestinationPath ${{ matrix.helper_asset_name }}
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}
+          name: binaries-${{ matrix.target }}
+          path: |
+            ${{ matrix.asset_name }}
+            ${{ matrix.helper_asset_name }}
           retention-days: 1
 
   release:
