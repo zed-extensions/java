@@ -601,7 +601,7 @@ If you're working without a Gradle or Maven project, and the following error `Th
 MyProject/
  ├── .zed/
  │   └── settings.json
- ```
+```
 
 ```jsonc
 "lsp": {
@@ -674,15 +674,42 @@ The project includes a `justfile` with common development tasks:
 | `just task-test` | Run task helper tests |
 | `just bridge-build` | Build the gradle-lsp-bridge binary in debug mode |
 | `just bridge-release` | Build the gradle-lsp-bridge binary in release mode |
+| `just bridge-install` | Build release gradle-lsp-bridge and copy it to the extension workdir |
 | `just ext-build` | Build the WASM extension in release mode |
 | `just fmt` | Format all code (Rust + tree-sitter queries) |
 | `just clippy` | Run clippy on all crates |
 | `just lint` | Format and lint all code |
-| `just all` | Lint, build extension, and install binaries |
+| `just all` | Lint, build extension, and install all native binaries |
 
 ### Testing Local Binary Changes
 
-The two native binaries (`java-lsp-proxy` in `proxy/`, `gradle-lsp-bridge` in `gradle-bridge/`) are **not** rebuilt when you use "Rebuild Dev Extension" — and by default the extension downloads release binaries from GitHub. To test a local build, point the extension directly at the binary in your `target/` directory with the corresponding path setting:
+The three native binaries (`java-lsp-proxy` in `proxy/`, `gradle-lsp-bridge` in `gradle-bridge/`, `java-task-helper` in `task_helper/`) are **not** rebuilt when you use "Rebuild Dev Extension" — and by default the extension downloads release binaries from GitHub. There are two ways to run a local build instead.
+
+#### Option A: Install into the extension workdir (recommended)
+
+The `*-install` recipes build the release binary and copy it into the extension's working directory, where the extension picks it up in place of the downloaded release:
+
+```sh
+just proxy-install     # java-lsp-proxy
+just bridge-install    # gradle-lsp-bridge
+just task-install      # java-task-helper
+```
+
+Each copies to the `bin/` directory of the Zed extension workdir:
+
+- **macOS**: `~/Library/Application Support/Zed/extensions/work/java/bin/`
+- **Linux**: `~/.local/share/zed/extensions/work/java/bin/`
+- **Windows**: `%LOCALAPPDATA%/Zed/extensions/work/java/bin/`
+
+After installing, restart the language server in Zed (`jdtls` or `gradle-language-server`) for the change to take effect.
+
+#### Option B: Point a path setting at your `target/` build
+
+Build the binary without installing it, then point the extension directly at it with the corresponding path setting:
+
+```sh
+just proxy-release     # or: just bridge-release
+```
 
 ```jsonc
 "lsp": {
@@ -701,23 +728,7 @@ The two native binaries (`java-lsp-proxy` in `proxy/`, `gradle-lsp-bridge` in `g
 }
 ```
 
-This compiles the proxy for your native target and copies it to the appropriate Zed extension working directory:
-
-- **macOS**: `~/Library/Application Support/Zed/extensions/work/java/bin/`
-- **Linux**: `~/.local/share/zed/extensions/work/java/bin/`
-- **Windows**: `%LOCALAPPDATA%/Zed/extensions/work/java/bin/`
-
-After installing the proxy, restart the language server in Zed for the changes to take effect.
-
-If you prefer not to use `just`, you can build and copy manually:
-When a path setting is provided, the extension uses that binary as-is and skips the managed download entirely — so there's no need to set `check_updates`.
-Just rebuild and restart the language server to pick up changes:
-
-```sh
-just proxy-release    # or: just bridge-release
-```
-
-After rebuilding, restart the language server in Zed (`jdtls` or `gradle-language-server`) for the new binary to take effect.
+When a path setting is provided, the extension uses that binary as-is and skips the managed download entirely — so there's no need to set `check_updates`. Rebuild and restart the language server to pick up changes.
 
 > **Note:** The gRPC bindings the bridge uses are committed under `gradle-bridge/src/gen/`, so building it needs no `protoc`. They are regenerated only when the bundled Gradle Language Server's `gradle.proto` contract changes — see the header of `gradle-bridge/proto/gradle.proto`.
 
@@ -725,9 +736,9 @@ After rebuilding, restart the language server in Zed (`jdtls` or `gradle-languag
 
 When using [Zed's remote development](https://zed.dev/docs/remote-development) over SSH, the language server and all native binaries run on the **remote host**, not your local machine. For standard use they are auto-downloaded from GitHub releases for the remote server's platform — no action is needed.
 
-For standard use, the proxy binary is auto-downloaded from GitHub releases for the remote server's platform — no action is needed.
+However, if you're **testing local binary changes** against a remote host, you need to get the binary onto the remote server yourself. The path settings (`lsp_proxy_path`, `gradle_bridge_path`) are resolved on the remote host, so once the binary is there you point the setting at it exactly as you would locally.
 
-However, if you're **testing local proxy changes** against a remote host, you need to get the binary onto the remote server yourself. The key thing to be aware of is that on remote hosts, extensions are stored under a **different path** than on your local machine — typically:
+On remote hosts, extensions are stored under a **different path** than on your local machine — typically:
 
 ```text
 ~/.local/share/zed/remote_extensions/work/java/bin/
@@ -738,8 +749,6 @@ However, if you're **testing local proxy changes** against a remote host, you ne
 > ```sh
 > find ~/.local/share/zed -type d -name "bin" 2>/dev/null
 > ```
->
-To test **local binary changes** against a remote host, get the binary onto the remote (anywhere you like) and point the path setting at that remote location. The path settings (`lsp_proxy_path`, `gradle_bridge_path`) are resolved on the remote host, so this works the same as locally.
 
 #### Option A: Build on the remote directly
 
@@ -748,15 +757,16 @@ If you have Rust installed on the remote server, clone the repo there and build 
 ```sh
 # On the remote host
 git clone https://github.com/zed-extensions/java.git
-cd java/proxy
-cargo build --release
+cd java
+cargo build --release -p java-lsp-proxy -p gradle-lsp-bridge -p java-task-helper
+# Binaries are at: <repo>/target/release/{java-lsp-proxy,gradle-lsp-bridge,java-task-helper}
 
 # Copy to the remote extensions workdir
 mkdir -p ~/.local/share/zed/remote_extensions/work/java/bin
-cp target/release/java-lsp-proxy ~/.local/share/zed/remote_extensions/work/java/bin/
-cd java
-cargo build --release -p java-lsp-proxy -p gradle-lsp-bridge -p 
-# Binaries are at: <repo>/target/release/{java-lsp-proxy,gradle-lsp-bridge}
+cp target/release/java-lsp-proxy \
+   target/release/gradle-lsp-bridge \
+   target/release/java-task-helper \
+   ~/.local/share/zed/remote_extensions/work/java/bin/
 ```
 
 #### Option B: Cross-compile locally and copy
@@ -764,17 +774,16 @@ cargo build --release -p java-lsp-proxy -p gradle-lsp-bridge -p
 If you prefer to build on your local machine, cross-compile for the remote target (typically Linux x86_64 or aarch64) and `scp` the binaries anywhere on the remote:
 
 ```sh
+# Build for the remote's target
 cargo build --release --target x86_64-unknown-linux-gnu -p java-lsp-proxy -p gradle-lsp-bridge -p java-task-helper
 # You may need: rustup target add x86_64-unknown-linux-gnu (and a linker in .cargo/config.toml)
 
-2. Copy the binary to the remote server:
-   ```sh
-
+# Copy the binaries to the remote server
 scp target/x86_64-unknown-linux-gnu/release/java-lsp-proxy \
     target/x86_64-unknown-linux-gnu/release/java-task-helper \
     target/x86_64-unknown-linux-gnu/release/gradle-lsp-bridge \
     user@remote:~/java-bins/
-```text
+```
 
 Then set the path settings to the remote paths and restart the language server:
 

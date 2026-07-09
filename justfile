@@ -2,6 +2,7 @@ native_target := `rustc -vV | grep host | awk '{print $2}'`
 ext_dir := if os() == "macos" { env("HOME") / "Library/Application Support/Zed/extensions/work/java" } else if os() == "linux" { env("HOME") / ".local/share/zed/extensions/work/java" } else { env("LOCALAPPDATA") / "Zed/extensions/work/java" }
 proxy_bin := ext_dir / "bin" / "java-lsp-proxy"
 tasks_bin := ext_dir / "bin" / "java-task-helper"
+bridge_bin := ext_dir / "bin" / "gradle-lsp-bridge"
 
 # Build proxy in debug mode
 proxy-build:
@@ -50,6 +51,12 @@ bridge-build:
 bridge-release:
     cargo build --release --target {{ native_target }} -p gradle-lsp-bridge
 
+# Build gradle-lsp-bridge release and install to extension workdir for testing
+bridge-install: bridge-release
+    mkdir -p "{{ ext_dir }}/bin"
+    cp "target/{{ native_target }}/release/gradle-lsp-bridge" "{{ bridge_bin }}"
+    @echo "Installed to {{ ext_dir }}"
+
 # Build WASM extension in release mode
 ext-build:
     cargo build --release
@@ -67,5 +74,5 @@ clippy:
 # Format and lint all code
 lint: fmt clippy
 
-# Build everything: lint, extension, and install proxy & task helper
-all: lint ext-build proxy-install task-install
+# Build everything: lint, extension, and install proxy, task helper & bridge
+all: lint ext-build proxy-install task-install bridge-install
