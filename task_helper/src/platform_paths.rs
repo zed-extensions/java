@@ -18,7 +18,7 @@ pub fn get_jdtls_cache_dir() -> PathBuf {
         .unwrap_or_default()
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub fn get_jdtls_cache_dir() -> PathBuf {
     if let Ok(xdg) = env::var("XDG_CACHE_HOME") {
         return PathBuf::from(xdg);
