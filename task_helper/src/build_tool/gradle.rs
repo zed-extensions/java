@@ -27,7 +27,7 @@ impl Gradle {
     fn gradle_task(&self, module: &Option<PathBuf>, task_name: &str) -> String {
         match module {
             Some(m) => {
-                let gradle_path = m.to_string_lossy().replace('/', ":").replace('\\', ":");
+                let gradle_path = m.to_string_lossy().replace(['/', '\\'], ":");
                 format!(":{gradle_path}:{task_name}")
             }
             None => format!(":{task_name}"),

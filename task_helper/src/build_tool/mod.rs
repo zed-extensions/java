@@ -233,7 +233,7 @@ mod tests {
         File::create(&deep_path).unwrap();
 
         // Call detect_build_tool with a deep file dir — should walk up to root
-        let (_tool, root) = detect_build_tool(&deep_path.parent().unwrap());
+        let (_tool, root) = detect_build_tool(deep_path.parent().unwrap());
         assert_eq!(root, root_path);
 
         // Call from submodule dir — should still walk up to root

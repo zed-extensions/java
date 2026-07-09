@@ -66,10 +66,9 @@ fmt:
     cargo fmt --all
     ts_query_ls format languages
 
-# Run clippy on the WASM extension and the native crates (proxy, bridge, common)
+# Run clippy on all workspace crates (WASM extension + native binaries)
 clippy:
-    cargo clippy --all-targets --fix --allow-dirty
-    cargo clippy --fix --allow-dirty --target {{ native_target }} -p java-lsp-proxy -p gradle-lsp-bridge -p proxy-common
+    cargo clippy --workspace --all-targets --fix --allow-dirty
 
 # Format and lint all code
 lint: fmt clippy
