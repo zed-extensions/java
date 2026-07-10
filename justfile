@@ -70,7 +70,7 @@ fmt:
 clippy:
     cargo clippy --workspace --all-targets --fix --allow-dirty
 
-# Format and lint all code
+# Format and clippy all code
 lint: fmt clippy
 
 # Build everything: lint, extension, and install proxy, task helper & bridge
