@@ -2,10 +2,11 @@ native_target := `rustc -vV | grep host | awk '{print $2}'`
 ext_dir := if os() == "macos" { env("HOME") / "Library/Application Support/Zed/extensions/work/java" } else if os() == "linux" { env("HOME") / ".local/share/zed/extensions/work/java" } else { env("LOCALAPPDATA") / "Zed/extensions/work/java" }
 proxy_bin := ext_dir / "bin" / "java-lsp-proxy"
 tasks_bin := ext_dir / "bin" / "java-task-helper"
+bridge_bin := ext_dir / "bin" / "gradle-lsp-bridge"
 
 # Build proxy in debug mode
 proxy-build:
-    cd proxy && cargo build --target {{ native_target }}
+    cargo build --target {{ native_target }} -p java-lsp-proxy
 
 # Build proxy in release mode
 proxy-release:
@@ -42,6 +43,19 @@ task-clean:
     cd task_helper && cargo clean
 
 # --- Core recipes ---
+# Build gradle-lsp-bridge in debug mode
+bridge-build:
+    cargo build --target {{ native_target }} -p gradle-lsp-bridge
+
+# Build gradle-lsp-bridge in release mode
+bridge-release:
+    cargo build --release --target {{ native_target }} -p gradle-lsp-bridge
+
+# Build gradle-lsp-bridge release and install to extension workdir for testing
+bridge-install: bridge-release
+    mkdir -p "{{ ext_dir }}/bin"
+    cp "target/{{ native_target }}/release/gradle-lsp-bridge" "{{ bridge_bin }}"
+    @echo "Installed to {{ ext_dir }}"
 
 # Build WASM extension in release mode
 ext-build:
@@ -52,13 +66,12 @@ fmt:
     cargo fmt --all
     ts_query_ls format languages
 
-# Run clippy on both crates
+# Run clippy on all workspace crates (WASM extension + native binaries)
 clippy:
-    cargo clippy --all-targets --fix --allow-dirty
-    cd proxy && cargo clippy --all-targets --fix --allow-dirty --target {{ native_target }}
+    cargo clippy --workspace --all-targets --fix --allow-dirty
 
-# Format and lint all code
+# Format and clippy all code
 lint: fmt clippy
 
-# Build everything: lint, extension, and install proxy & task helper
-all: lint ext-build proxy-install task-install
+# Build everything: lint, extension, and install proxy, task helper & bridge
+all: lint ext-build proxy-install task-install bridge-install

@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use crate::lsp::encode_lsp;
+use proxy_common::encode_lsp;
 
 pub const TIMEOUT: Duration = Duration::from_secs(5);
 

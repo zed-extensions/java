@@ -2,6 +2,8 @@
 
 This extension adds support for Java and `.properties` files to [Zed](https://zed.dev). It uses the [Eclipse JDT Language Server](https://projects.eclipse.org/projects/eclipse.jdt.ls) (JDTLS for short) to provide completions, code-actions and diagnostics.
 
+It also provides intelligence for Gradle build files via Microsoft's [Gradle Language Server](https://github.com/microsoft/vscode-gradle): plugin-aware completions, closures, and diagnostics for Groovy `.gradle` scripts, plus highlighting and build-evaluation diagnostics for Kotlin `.gradle.kts` scripts. See [Gradle Build Files](#gradle-build-files) below.
+
 ## Quick Start
 
 Install the extension via Zeds extension manager. It should work out of the box for most people. However, there are some things to know:
@@ -13,7 +15,7 @@ Install the extension via Zeds extension manager. It should work out of the box 
 - You can provide a **custom JDTLS binary** through one of these mechanisms (in priority order):
   1. The `jdtls_launcher` setting — specify an absolute path to a JDTLS launch script
   2. An executable named `jdtls` (or `jdtls.bat` on Windows) on your `$PATH`
-  
+
   When either is found, the extension will skip downloading and launching a managed JDTLS instance and use the provided one instead.
 
 - To support [Lombok](https://projectlombok.org/), the lombok-jar must be downloaded and registered as a Java-Agent when launching JDTLS. By default the extension automatically takes care of that, but in case you don't want that you can set the `lombok_support` configuration-option to `false`.
@@ -57,6 +59,55 @@ Here is a common `settings.json` including the above mentioned configurations:
 }
 ```
 
+## Gradle Build Files
+
+For **Groovy** build scripts (`.gradle`) the extension runs Microsoft's [Gradle Language Server](https://github.com/microsoft/vscode-gradle), giving you completions for Gradle DSL closures, plugin-contributed blocks (e.g. `java {}`, `application {}`), Maven Central dependency coordinates, and syntax diagnostics.
+
+To resolve the *plugin-aware* parts of the model (which plugins are applied, the closures/methods they contribute, and the script classpath), the language server needs the resolved build model. The extension obtains this exactly the way the VS Code Gradle extension does: it drives the bundled `gradle-server` over gRPC via a small native binary, `gradle-lsp-bridge`. The bridge keeps a single `gradle-server` process (and its Gradle daemon) warm for the lifetime of the session, so re-syncs after a build-file save are fast. Both the language server and the bridge are downloaded and managed automatically — no configuration is required.
+
+### Kotlin DSL (`.gradle.kts`)
+
+The Gradle Language Server itself is Groovy-only, so it does **not** provide completions or semantic tokens for Kotlin-DSL build scripts. For `.gradle.kts` files the extension instead provides:
+
+- **Syntax highlighting** via the bundled Kotlin grammar.
+- **Build-evaluation diagnostics** — when `gradle-server` configures the project, Gradle's own Kotlin-DSL compiler reports errors (unresolved references, invalid dependency notations, etc.). The bridge surfaces these as squiggles on the build file with the correct line.
+
+(The Groovy language server's own — invalid — diagnostics for these files are suppressed, since it cannot parse Kotlin.)
+
+Configuration, when you need it, goes under the `gradle-language-server` language server in your `settings.json` (note: this is a **different** block from `jdtls`):
+
+```jsonc
+"lsp": {
+  "gradle-language-server": {
+    "settings": {
+      // All optional — sensible defaults are used when omitted.
+
+      // JDK used to run gradle-server and the Gradle daemon. Falls back to the
+      // $JAVA_HOME environment variable. Modern Gradle requires JVM 17+, so set
+      // this if your default Java is older. Also accepts the legacy key
+      // "java.home". (Same key the jdtls server uses.)
+      "java_home": "/path/to/your/JDK17+",
+
+      // Gradle distribution (mirrors the Gradle Language Server's own schema).
+      // By default the project's Gradle wrapper is used.
+      "gradleWrapperEnabled": true,
+      "gradleVersion": null,        // pin a version when the wrapper is disabled
+      "gradleHome": null,           // a local Gradle installation directory
+      "gradleUserHome": null,       // overrides GRADLE_USER_HOME
+      "gradle_jvm_arguments": null, // e.g. "-Xmx2G" for the Gradle build
+
+      // Path to a locally built gradle-lsp-bridge binary, overriding the
+      // managed download. Primarily for development (see Developing Locally).
+      "gradle_bridge_path": "/path/to/your/gradle-lsp-bridge"
+    }
+  }
+}
+```
+
+> **Note:** The bridge launches `gradle-server` with the JDK resolved from this server's own settings — the `java_home` value under `gradle-language-server` (falling back to the `$JAVA_HOME` environment variable, then an auto-downloaded JDK). Modern Gradle requires JVM 17+, so ensure that JDK satisfies your Gradle distribution.
+>
+> `java_home` is configured **per language server**: the value under `jdtls` does not carry over to `gradle-language-server` (and vice-versa). This is intentional — JDTLS needs a JDK 21+ to run, while the Gradle daemon only needs 17+ — but it means setting `java_home` under `jdtls` alone won't affect Gradle. Set it under `gradle-language-server` too, or rely on the shared `$JAVA_HOME` fallback that applies to both.
+
 ## Project Symbol Search
 
 The extension supports project-wide symbol search with syntax-highlighted results. This feature is powered by JDTLS and can be accessed via Zed's symbol search.
@@ -70,6 +121,7 @@ Debug support is enabled via our [Fork of Java Debug](https://github.com/zed-ind
 ### Launch Mode
 
 To get started with Java, click the `edit debug.json` button in the Debug menu, and replace the contents of the file with the following:
+
 ```jsonc
 [
   {
@@ -141,6 +193,7 @@ For **attach** configurations:
 ### Single-File Debugging
 
 If you're working a lot with single file debugging, you can use the following `debug.json` config instead:
+
 ```jsonc
 [
   {
@@ -160,9 +213,10 @@ If you're working a lot with single file debugging, you can use the following `d
   }
 ]
 ```
-This will compile and launch the debugger using the currently selected file as the entry point. 
+
+This will compile and launch the debugger using the currently selected file as the entry point.
 Ideally, we would implement a run/debug option directly in the runnables (similar to how the Rust extension does it), which would allow you to easily start a debugging session without explicitly updating the entry point.
-Note that integrating the debugger with runnables is currently limited to core languages in Zed, so this is the best workaround for now. 
+Note that integrating the debugger with runnables is currently limited to core languages in Zed, so this is the best workaround for now.
 
 ## Launch Scripts (aka Tasks) in Windows
 
@@ -367,6 +421,7 @@ If a native executable is not available for your platform (or you prefer not to 
 JDTLS provides many configuration options that can be passed via the `initialize` LSP-request. The extension will pass the JSON-object from `lsp.jdtls.initialization_options` in your settings on to JDTLS. Please refer to the [JDTLS Configuration Wiki Page](https://github.com/eclipse-jdtls/eclipse.jdt.ls/wiki/Running-the-JAVA-LS-server-from-the-command-line#initialize-request) for the available options and values.
 
 The extension automatically injects the following defaults into `initialization_options` (unless you override them):
+
 - `workspaceFolders` — set to the worktree root as a `file://` URI
 - `extendedClientCapabilities.classFileContentsSupport` — `true` (enables decompiled source navigation)
 - `extendedClientCapabilities.resolveAdditionalTextEditsSupport` — `true`
@@ -542,12 +597,12 @@ Below is an opinionated example configuration for JDTLS with most options enable
 
 If you're working without a Gradle or Maven project, and the following error `The declared package "Example" does not match the expected package ""` pops up, consider adding these settings under
 
-```
+```text
 MyProject/
  ├── .zed/
  │   └── settings.json
- ```
- 
+```
+
 ```jsonc
 "lsp": {
   "jdtls": {
@@ -568,7 +623,10 @@ If changes are not picked up, clean JDTLS' cache (from a java file run the task 
 
 ## Architecture Note
 
-The extension uses a native binary (`java-lsp-proxy`) that wraps the JDTLS process. This proxy enables the extension to communicate with JDTLS for features like debug class resolution and classpath queries. It is automatically downloaded from the [extension repository releases](https://github.com/zed-extensions/java/releases) and requires no user configuration.
+The extension uses two native binaries, both automatically downloaded from the [extension repository releases](https://github.com/zed-extensions/java/releases) and requiring no user configuration:
+
+- **`java-lsp-proxy`** wraps the JDTLS process, enabling the extension to communicate with JDTLS for features like debug class resolution and classpath queries.
+- **`gradle-lsp-bridge`** bridges Zed to the Gradle Language Server and drives the bundled `gradle-server` over gRPC to supply the resolved build model (see [Gradle Build Files](#gradle-build-files)). It pulls in an async/gRPC stack, so it is kept as a separate binary from the deliberately lean JDTLS proxy.
 
 ## Developing Locally
 
@@ -583,12 +641,14 @@ If you want to contribute to this extension or test local changes, you can insta
 ### Installing as a Dev Extension
 
 1. Clone the repository:
+
    ```sh
    git clone https://github.com/zed-extensions/java.git
    cd java
    ```
 
 2. Make sure you are on the branch that contains the feature or fix you want to test:
+
    ```sh
    git branch --show-current
    # Switch if needed:
@@ -612,86 +672,128 @@ The project includes a `justfile` with common development tasks:
 | `just task-release` | Build the task helper binary in release mode |
 | `just task-install` | Build release task helper and copy it to the extension workdir |
 | `just task-test` | Run task helper tests |
+| `just bridge-build` | Build the gradle-lsp-bridge binary in debug mode |
+| `just bridge-release` | Build the gradle-lsp-bridge binary in release mode |
+| `just bridge-install` | Build release gradle-lsp-bridge and copy it to the extension workdir |
 | `just ext-build` | Build the WASM extension in release mode |
 | `just fmt` | Format all code (Rust + tree-sitter queries) |
 | `just clippy` | Run clippy on all crates |
 | `just lint` | Format and lint all code |
-| `just all` | Lint, build extension, and install proxy & task helper |
+| `just all` | Lint, build extension, and install all native binaries |
 
-### Updating the `java-lsp-proxy` Binary
+### Testing Local Binary Changes
 
-The proxy is a separate native Rust binary (in the `proxy/` directory) that runs alongside the WASM extension. Because it's a native binary, it is **not** rebuilt when you use "Rebuild Dev Extension" — you need to build and install it manually.
+The three native binaries (`java-lsp-proxy` in `proxy/`, `gradle-lsp-bridge` in `gradle-bridge/`, `java-task-helper` in `task_helper/`) are **not** rebuilt when you use "Rebuild Dev Extension" — and by default the extension downloads release binaries from GitHub. There are two ways to run a local build instead.
 
-> **Important:** When testing a manually built proxy, set `"check_updates": "never"` in your `lsp.jdtls.settings` to prevent the extension from downloading a release binary and overwriting your local build.
+#### Option A: Install into the extension workdir (recommended)
+
+The `*-install` recipes build the release binary and copy it into the extension's working directory, where the extension picks it up in place of the downloaded release:
 
 ```sh
-# Build the proxy in release mode and copy it to the extension workdir
-just proxy-install
+just proxy-install     # java-lsp-proxy
+just bridge-install    # gradle-lsp-bridge
+just task-install      # java-task-helper
 ```
 
-This compiles the proxy for your native target and copies it to the appropriate Zed extension working directory:
+Each copies to the `bin/` directory of the Zed extension workdir:
+
 - **macOS**: `~/Library/Application Support/Zed/extensions/work/java/bin/`
 - **Linux**: `~/.local/share/zed/extensions/work/java/bin/`
 - **Windows**: `%LOCALAPPDATA%/Zed/extensions/work/java/bin/`
 
-After installing the proxy, restart the language server in Zed for the changes to take effect.
+After installing, restart the language server in Zed (`jdtls` or `gradle-language-server`) for the change to take effect.
 
-If you prefer not to use `just`, you can build and copy manually:
+#### Option B: Point a path setting at your `target/` build
+
+Build the binary without installing it, then point the extension directly at it with the corresponding path setting:
 
 ```sh
-cd proxy
-cargo build --release --target $(rustc -vV | grep host | awk '{print $2}')
-# Then copy the binary from target/<your-target>/release/java-lsp-proxy
-# to the appropriate extension workdir shown above
+just proxy-release     # or: just bridge-release
 ```
+
+```jsonc
+"lsp": {
+  "jdtls": {
+    "settings": {
+      // Absolute path to your locally built proxy. Replace <target> with your
+      // host triple, e.g. aarch64-apple-darwin (run `rustc -vV | grep host`).
+      "lsp_proxy_path": "/path/to/java/target/<target>/release/java-lsp-proxy"
+    }
+  },
+  "gradle-language-server": {
+    "settings": {
+      "gradle_bridge_path": "/path/to/java/target/<target>/release/gradle-lsp-bridge"
+    }
+  }
+}
+```
+
+When a path setting is provided, the extension uses that binary as-is and skips the managed download entirely — so there's no need to set `check_updates`. Rebuild and restart the language server to pick up changes.
+
+> **Note:** The gRPC bindings the bridge uses are committed under `gradle-bridge/src/gen/`, so building it needs no `protoc`. They are regenerated only when the bundled Gradle Language Server's `gradle.proto` contract changes — see the header of `gradle-bridge/proto/gradle.proto`.
 
 ### Remote Development (SSH)
 
-When using [Zed's remote development](https://zed.dev/docs/remote-development) over SSH, extensions installed locally are automatically propagated to the remote server. The language server and the proxy binary run on the **remote host**, not your local machine.
+When using [Zed's remote development](https://zed.dev/docs/remote-development) over SSH, the language server and all native binaries run on the **remote host**, not your local machine. For standard use they are auto-downloaded from GitHub releases for the remote server's platform — no action is needed.
 
-For standard use, the proxy binary is auto-downloaded from GitHub releases for the remote server's platform — no action is needed.
+However, if you're **testing local binary changes** against a remote host, you need to get the binary onto the remote server yourself. The path settings (`lsp_proxy_path`, `gradle_bridge_path`) are resolved on the remote host, so once the binary is there you point the setting at it exactly as you would locally.
 
-However, if you're **testing local proxy changes** against a remote host, you need to get the binary onto the remote server yourself. The key thing to be aware of is that on remote hosts, extensions are stored under a **different path** than on your local machine — typically:
+On remote hosts, extensions are stored under a **different path** than on your local machine — typically:
 
-```
+```text
 ~/.local/share/zed/remote_extensions/work/java/bin/
 ```
 
 > **Tip:** If you're unsure of the exact path, SSH into the remote and look for it:
+>
 > ```sh
 > find ~/.local/share/zed -type d -name "bin" 2>/dev/null
 > ```
 
 #### Option A: Build on the remote directly
 
-If you have Rust installed on the remote server, you can clone the repo there and build natively:
+If you have Rust installed on the remote server, clone the repo there and build natively:
 
 ```sh
 # On the remote host
 git clone https://github.com/zed-extensions/java.git
-cd java/proxy
-cargo build --release
+cd java
+cargo build --release -p java-lsp-proxy -p gradle-lsp-bridge -p java-task-helper
+# Binaries are at: <repo>/target/release/{java-lsp-proxy,gradle-lsp-bridge,java-task-helper}
 
 # Copy to the remote extensions workdir
 mkdir -p ~/.local/share/zed/remote_extensions/work/java/bin
-cp target/release/java-lsp-proxy ~/.local/share/zed/remote_extensions/work/java/bin/
+cp target/release/java-lsp-proxy \
+   target/release/gradle-lsp-bridge \
+   target/release/java-task-helper \
+   ~/.local/share/zed/remote_extensions/work/java/bin/
 ```
 
 #### Option B: Cross-compile locally and copy
 
-If you prefer to build on your local machine:
+If you prefer to build on your local machine, cross-compile for the remote target (typically Linux x86_64 or aarch64) and `scp` the binaries anywhere on the remote:
 
-1. Cross-compile the proxy for the remote target (typically Linux x86_64 or aarch64):
-   ```sh
-   cd proxy
-   cargo build --release --target x86_64-unknown-linux-gnu
-   ```
-   > You may need to install the target first: `rustup target add x86_64-unknown-linux-gnu` and configure a linker in `.cargo/config.toml`.
+```sh
+# Build for the remote's target
+cargo build --release --target x86_64-unknown-linux-gnu -p java-lsp-proxy -p gradle-lsp-bridge -p java-task-helper
+# You may need: rustup target add x86_64-unknown-linux-gnu (and a linker in .cargo/config.toml)
 
-2. Copy the binary to the remote server:
-   ```sh
-   scp target/x86_64-unknown-linux-gnu/release/java-lsp-proxy \
-     user@remote:~/.local/share/zed/remote_extensions/work/java/bin/java-lsp-proxy
-   ```
+# Copy the binaries to the remote server
+scp target/x86_64-unknown-linux-gnu/release/java-lsp-proxy \
+    target/x86_64-unknown-linux-gnu/release/java-task-helper \
+    target/x86_64-unknown-linux-gnu/release/gradle-lsp-bridge \
+    user@remote:~/java-bins/
+```
 
-After either option, restart the language server in Zed for the changes to take effect.
+Then set the path settings to the remote paths and restart the language server:
+
+```jsonc
+"lsp": {
+  "jdtls": {
+    "settings": { "lsp_proxy_path": "/home/user/java-bins/java-lsp-proxy" }
+  },
+  "gradle-language-server": {
+    "settings": { "gradle_bridge_path": "/home/user/java-bins/gradle-lsp-bridge" }
+  }
+}
+```

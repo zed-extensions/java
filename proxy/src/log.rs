@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::io::{self, Write};
 
-use crate::lsp::encode_lsp;
+use proxy_common::encode_lsp;
 
 /// LSP `MessageType` constants as defined in the specification.
 /// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#messageType

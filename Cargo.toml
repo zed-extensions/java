@@ -2,8 +2,13 @@
 members = [
     ".",
     "proxy",
-    "task_helper"
+    "task_helper",
+    "proxy-common",
+    "gradle-bridge"
 ]
+
+[workspace.dependencies]
+proxy-common = { path = "proxy-common" }
 
 [package]
 name = "zed_java"

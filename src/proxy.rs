@@ -8,11 +8,14 @@ use zed_extension_api::{
 use crate::{
     config::get_lsp_proxy_path,
     downloadable::Downloadable,
-    util::{mark_checked_once, remove_all_files_except, should_use_local_or_download},
+    util::{
+        NATIVE_BIN_DIR, mark_checked_once, platform_asset_name, platform_exec_name,
+        remove_all_files_except, should_use_local_or_download,
+    },
 };
 
 const PROXY_BINARY: &str = "java-lsp-proxy";
-const PROXY_INSTALL_PATH: &str = "bin";
+const PROXY_INSTALL_PATH: &str = NATIVE_BIN_DIR;
 const GITHUB_REPO: &str = "zed-extensions/java";
 
 pub struct Proxy {
@@ -162,32 +165,9 @@ impl Downloadable for Proxy {
 }
 
 fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
-    let (os, arch) = zed::current_platform();
-    let (os_str, file_type) = match os {
-        zed::Os::Mac => ("darwin", DownloadedFileType::GzipTar),
-        zed::Os::Linux => ("linux", DownloadedFileType::GzipTar),
-        zed::Os::Windows => ("windows", DownloadedFileType::Zip),
-    };
-    let arch_str = match arch {
-        zed::Architecture::Aarch64 => "aarch64",
-        zed::Architecture::X8664 => "x86_64",
-        _ => return Err("Unsupported architecture".into()),
-    };
-    let ext = if matches!(file_type, DownloadedFileType::Zip) {
-        "zip"
-    } else {
-        "tar.gz"
-    };
-    Ok((
-        format!("java-lsp-proxy-{os_str}-{arch_str}.{ext}"),
-        file_type,
-    ))
+    platform_asset_name(PROXY_BINARY)
 }
 
 fn proxy_exec() -> String {
-    let (os, _arch) = zed::current_platform();
-    match os {
-        zed::Os::Linux | zed::Os::Mac => PROXY_BINARY.to_string(),
-        zed::Os::Windows => format!("{PROXY_BINARY}.exe"),
-    }
+    platform_exec_name(PROXY_BINARY)
 }
