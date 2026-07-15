@@ -65,7 +65,7 @@ impl Downloadable for GradleBridge {
         self.cached_path.is_some()
     }
 
-    fn fetch_latest_version(&self) -> zed::Result<String> {
+    fn fetch_latest_version(&self, _worktree: &Worktree) -> zed::Result<String> {
         Ok(zed::latest_github_release(
             GITHUB_REPO,
             GithubReleaseOptions {
@@ -81,6 +81,7 @@ impl Downloadable for GradleBridge {
         &mut self,
         version: &str,
         language_server_id: &LanguageServerId,
+        _worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         let (name, file_type) = asset_name()?;
         let bin_path = format!("{BRIDGE_INSTALL_PATH}/{version}/{}", bridge_exec());
@@ -150,8 +151,8 @@ impl Downloadable for GradleBridge {
                 return Ok(path);
             }
             Ok(None) => {
-                if let Ok(version) = self.fetch_latest_version()
-                    && let Ok(path) = self.download(&version, language_server_id)
+                if let Ok(version) = self.fetch_latest_version(worktree)
+                    && let Ok(path) = self.download(&version, language_server_id, worktree)
                 {
                     return Ok(path);
                 }

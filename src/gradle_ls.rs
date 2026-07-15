@@ -5,7 +5,7 @@ use std::{
 
 use zed_extension_api::{
     self as zed, DownloadedFileType, GithubReleaseOptions, LanguageServerId,
-    LanguageServerInstallationStatus, set_language_server_installation_status,
+    LanguageServerInstallationStatus, Worktree, set_language_server_installation_status,
 };
 
 use crate::{
@@ -45,7 +45,7 @@ impl Downloadable for GradleLs {
         self.cached_path.is_some()
     }
 
-    fn fetch_latest_version(&self) -> zed::Result<String> {
+    fn fetch_latest_version(&self, _worktree: &Worktree) -> zed::Result<String> {
         let release = zed::latest_github_release(
             GITHUB_REPO,
             GithubReleaseOptions {
@@ -63,6 +63,7 @@ impl Downloadable for GradleLs {
         &mut self,
         version: &str,
         language_server_id: &LanguageServerId,
+        _worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         let version_dir = PathBuf::from(INSTALL_PATH).join(version);
         let lib_dir = version_dir.join("lib");
