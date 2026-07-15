@@ -260,16 +260,28 @@ pub fn get_java_major_version(java_executable: &PathBuf) -> zed::Result<u32> {
 /// * Could not fetch tags from Github
 /// * Failed to deserialize response
 /// * Unexpected Github response format
-pub fn get_latest_versions_from_tag(repo: &str) -> zed::Result<(String, Option<String>)> {
+pub fn get_latest_versions_from_tag(
+    repo: &str,
+    worktree: &Worktree,
+) -> zed::Result<(String, Option<String>)> {
+    let mut request = HttpRequest::builder()
+        .method(HttpMethod::Get)
+        .url(format!("https://api.github.com/repos/{repo}/tags"));
+
+    // Use GITHUB_TOKEN or GH_TOKEN environment variable if available
+    // to avoid GitHub API rate limiting (60 req/hr unauthenticated vs 5000/hr authenticated).
+    if let Some(token) = github_token(&worktree.shell_env()) {
+        request = request.header("Authorization", format!("token {token}"));
+    }
+
+    let request = request
+        .build()
+        .map_err(|err| format!("{TAG_RETRIEVAL_ERROR}: {err}"))?;
+
     let tags_response_body = serde_json::from_slice::<Value>(
-        &fetch(
-            &HttpRequest::builder()
-                .method(HttpMethod::Get)
-                .url(format!("https://api.github.com/repos/{repo}/tags"))
-                .build()?,
-        )
-        .map_err(|err| format!("{TAG_RETRIEVAL_ERROR}: {err}"))?
-        .body,
+        &fetch(&request)
+            .map_err(|err| format!("{TAG_RETRIEVAL_ERROR}: {err}"))?
+            .body,
     )
     .map_err(|err| format!("{TAG_RESPONSE_ERROR}: {err}"))?;
 
@@ -282,6 +294,15 @@ pub fn get_latest_versions_from_tag(repo: &str) -> zed::Result<(String, Option<S
         latest_version.to_string(),
         second_version.map(|second| second.to_string()),
     ))
+}
+
+fn github_token(shell_env: &[(String, String)]) -> Option<&str> {
+    ["GITHUB_TOKEN", "GH_TOKEN"].into_iter().find_map(|name| {
+        shell_env
+            .iter()
+            .find(|(key, value)| key == name && !value.is_empty())
+            .map(|(_, value)| value.as_str())
+    })
 }
 
 fn get_tag_at(github_tags: &Value, index: usize) -> Option<&str> {
@@ -489,6 +510,33 @@ mod tests {
     #[derive(Deserialize, Serialize)]
     struct ArgsWrapper {
         args: ArgsStringOrList,
+    }
+
+    #[test]
+    fn github_token_prefers_github_token() {
+        let env = vec![
+            ("GH_TOKEN".to_string(), "gh".to_string()),
+            ("GITHUB_TOKEN".to_string(), "github".to_string()),
+        ];
+
+        assert_eq!(github_token(&env), Some("github"));
+    }
+
+    #[test]
+    fn github_token_falls_back_to_gh_token() {
+        let env = vec![
+            ("GITHUB_TOKEN".to_string(), String::new()),
+            ("GH_TOKEN".to_string(), "gh".to_string()),
+        ];
+
+        assert_eq!(github_token(&env), Some("gh"));
+    }
+
+    #[test]
+    fn github_token_ignores_missing_and_empty_tokens() {
+        let env = vec![("GITHUB_TOKEN".to_string(), String::new())];
+
+        assert_eq!(github_token(&env), None);
     }
 
     #[test]

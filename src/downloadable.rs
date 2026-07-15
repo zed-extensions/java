@@ -11,12 +11,13 @@ pub trait Downloadable {
 
     fn loaded(&self) -> bool;
 
-    fn fetch_latest_version(&self) -> zed::Result<String>;
+    fn fetch_latest_version(&self, worktree: &Worktree) -> zed::Result<String>;
 
     fn download(
         &mut self,
         version: &str,
         language_server_id: &LanguageServerId,
+        worktree: &Worktree,
     ) -> zed::Result<PathBuf>;
 
     fn get_or_download(
@@ -36,8 +37,8 @@ pub trait Downloadable {
         }
 
         let downloaded = self
-            .fetch_latest_version()
-            .and_then(|version| self.download(&version, language_server_id));
+            .fetch_latest_version(worktree)
+            .and_then(|version| self.download(&version, language_server_id, worktree));
 
         match downloaded {
             Ok(path) => Ok(path),
@@ -62,5 +63,56 @@ pub trait Downloadable {
         _worktree: &Worktree,
     ) -> Option<String> {
         None
+    }
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use std::path::PathBuf;
+
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn test_check_updates_always_allows_download() {
+        let result = should_use_local_or_download(&None, None, "jdtls").unwrap();
+        assert!(result.is_none(), "Always mode should allow download");
+    }
+
+    #[test]
+    fn test_check_updates_always_with_local_still_downloads() {
+        let local = PathBuf::from("/mock/jdtls/1.44.0");
+        let result = should_use_local_or_download(&None, Some(local), "jdtls").unwrap();
+        assert!(result.is_none(), "Always mode downloads even with local");
+    }
+
+    #[test]
+    fn test_check_updates_never_with_local_uses_it() {
+        let config = Some(json!({"check_updates": "never"}));
+        let local = PathBuf::from("/mock/jdtls/1.44.0");
+        let result = should_use_local_or_download(&config, Some(local.clone()), "jdtls").unwrap();
+        assert_eq!(result, Some(local));
+    }
+
+    #[test]
+    fn test_check_updates_never_without_local_is_error() {
+        let config = Some(json!({"check_updates": "never"}));
+        let result = should_use_local_or_download(&config, None, "jdtls");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_check_updates_once_with_local_uses_it() {
+        let config = Some(json!({"check_updates": "once"}));
+        let local = PathBuf::from("/mock/jdtls/1.44.0");
+        let result = should_use_local_or_download(&config, Some(local.clone()), "jdtls").unwrap();
+        assert_eq!(result, Some(local));
+    }
+
+    #[test]
+    fn test_default_is_always() {
+        let result = should_use_local_or_download(&None, None, "test").unwrap();
+        assert!(result.is_none(), "Default should be Always (None)");
     }
 }

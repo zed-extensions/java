@@ -45,7 +45,7 @@ impl Downloadable for TaskHelper {
         self.cached_path.is_some()
     }
 
-    fn fetch_latest_version(&self) -> zed::Result<String> {
+    fn fetch_latest_version(&self, _worktree: &Worktree) -> zed::Result<String> {
         // The task helper is built and released together with the extension, so
         // the matching release is the one tagged with the extension's own version.
         Ok(format!("v{}", env!("CARGO_PKG_VERSION")))
@@ -55,6 +55,7 @@ impl Downloadable for TaskHelper {
         &mut self,
         version: &str,
         language_server_id: &LanguageServerId,
+        _worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         let (name, file_type) = asset_name()?;
         let bin_path = format!(
@@ -119,8 +120,8 @@ impl Downloadable for TaskHelper {
         }
 
         let downloaded = self
-            .fetch_latest_version()
-            .and_then(|version| self.download(&version, language_server_id));
+            .fetch_latest_version(worktree)
+            .and_then(|version| self.download(&version, language_server_id, worktree));
 
         let download_err = match downloaded {
             Ok(path) => return Ok(path),
