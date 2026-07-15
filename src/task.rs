@@ -142,7 +142,10 @@ impl Downloadable for TaskHelper {
             return Ok(PathBuf::from(path));
         }
 
-        Err(format!("'{}' not found: {download_err}", task_helper_exec()))
+        Err(format!(
+            "'{}' not found: {download_err}",
+            task_helper_exec()
+        ))
     }
 }
 
