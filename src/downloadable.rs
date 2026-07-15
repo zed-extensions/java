@@ -35,8 +35,25 @@ pub trait Downloadable {
             return Ok(path);
         }
 
-        let version = self.fetch_latest_version()?;
-        self.download(&version, language_server_id)
+        let downloaded = self
+            .fetch_latest_version()
+            .and_then(|version| self.download(&version, language_server_id));
+
+        match downloaded {
+            Ok(path) => Ok(path),
+            // The version check or download failed (e.g. GitHub API rate
+            // limiting) — an existing local installation is better than none.
+            Err(err) => match self.find_local() {
+                Some(path) => {
+                    println!(
+                        "Failed to update {}, falling back to local installation: {err}",
+                        Self::INSTALL_PATH
+                    );
+                    Ok(path)
+                }
+                None => Err(err),
+            },
+        }
     }
 
     fn user_configured_path(

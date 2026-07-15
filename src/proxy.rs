@@ -1,9 +1,8 @@
 use std::{fs::metadata, path::PathBuf};
 
 use zed_extension_api::{
-    self as zed, DownloadedFileType, GithubReleaseOptions, LanguageServerId,
-    LanguageServerInstallationStatus, Worktree, serde_json::Value,
-    set_language_server_installation_status,
+    self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Worktree,
+    serde_json::Value, set_language_server_installation_status,
 };
 
 use crate::{
@@ -58,15 +57,9 @@ impl Downloadable for Proxy {
     }
 
     fn fetch_latest_version(&self) -> zed::Result<String> {
-        Ok(zed::latest_github_release(
-            GITHUB_REPO,
-            GithubReleaseOptions {
-                require_assets: true,
-                pre_release: false,
-            },
-        )
-        .map_err(|err| format!("Failed to fetch latest proxy release from {GITHUB_REPO}: {err}"))?
-        .version)
+        // The proxy is built and released together with the extension, so the
+        // matching release is the one tagged with the extension's own version.
+        Ok(format!("v{}", env!("CARGO_PKG_VERSION")))
     }
 
     fn download(
@@ -82,14 +75,8 @@ impl Downloadable for Proxy {
             return Ok(PathBuf::from(bin_path));
         }
 
-        let release = zed::latest_github_release(
-            GITHUB_REPO,
-            GithubReleaseOptions {
-                require_assets: true,
-                pre_release: false,
-            },
-        )
-        .map_err(|err| format!("Failed to fetch proxy release: {err}"))?;
+        let release = zed::github_release_by_tag_name(GITHUB_REPO, version)
+            .map_err(|err| format!("Failed to fetch proxy release {version}: {err}"))?;
 
         let asset = release
             .assets
@@ -139,9 +126,21 @@ impl Downloadable for Proxy {
             return Ok(path);
         }
 
-        if let Ok(version) = self.fetch_latest_version()
-            && let Ok(path) = self.download(&version, language_server_id)
-        {
+        let downloaded = self
+            .fetch_latest_version()
+            .and_then(|version| self.download(&version, language_server_id));
+
+        let download_err = match downloaded {
+            Ok(path) => return Ok(path),
+            Err(err) => err,
+        };
+
+        // The version check or download failed (e.g. GitHub API rate
+        // limiting) — an existing local installation is better than none.
+        if let Some(path) = self.find_local() {
+            println!("Failed to update proxy, falling back to local installation: {download_err}");
+            let s = path.to_string_lossy().to_string();
+            self.cached_path = Some(s);
             return Ok(path);
         }
 
@@ -149,7 +148,7 @@ impl Downloadable for Proxy {
             return Ok(PathBuf::from(path));
         }
 
-        Err(format!("'{}' not found", proxy_exec()))
+        Err(format!("'{}' not found: {download_err}", proxy_exec()))
     }
 
     fn user_configured_path(
