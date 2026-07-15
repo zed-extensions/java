@@ -71,8 +71,8 @@ impl Downloadable for Jdtls {
         self.cached_path.is_some()
     }
 
-    fn fetch_latest_version(&self) -> zed::Result<String> {
-        let (last, _) = get_latest_versions_from_tag(JDTLS_REPO)
+    fn fetch_latest_version(&self, worktree: &Worktree) -> zed::Result<String> {
+        let (last, _) = get_latest_versions_from_tag(JDTLS_REPO, worktree)
             .map_err(|err| format!("Failed to fetch JDTLS versions from {JDTLS_REPO}: {err}"))?;
         Ok(last)
     }
@@ -81,13 +81,14 @@ impl Downloadable for Jdtls {
         &mut self,
         _version: &str,
         language_server_id: &LanguageServerId,
+        worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         set_language_server_installation_status(
             language_server_id,
             &LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO)
+        let (last, second_last) = get_latest_versions_from_tag(JDTLS_REPO, worktree)
             .map_err(|err| format!("Failed to fetch JDTLS versions from {JDTLS_REPO}: {err}"))?;
 
         let (latest_version, latest_version_build) = download_jdtls_milestone(last.as_ref())
@@ -181,8 +182,8 @@ impl Downloadable for Lombok {
         self.cached_path.is_some()
     }
 
-    fn fetch_latest_version(&self) -> zed::Result<String> {
-        let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO)
+    fn fetch_latest_version(&self, worktree: &Worktree) -> zed::Result<String> {
+        let (latest_version, _) = get_latest_versions_from_tag(LOMBOK_REPO, worktree)
             .map_err(|err| format!("Failed to fetch Lombok versions from {LOMBOK_REPO}: {err}"))?;
         Ok(latest_version)
     }
@@ -191,6 +192,7 @@ impl Downloadable for Lombok {
         &mut self,
         version: &str,
         language_server_id: &LanguageServerId,
+        _worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         let prefix = LOMBOK_INSTALL_PATH;
         let jar_name = format!("lombok-{version}.jar");

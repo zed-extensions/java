@@ -420,7 +420,7 @@ impl Downloadable for Debugger {
         self.plugin_path.is_some()
     }
 
-    fn fetch_latest_version(&self) -> zed::Result<String> {
+    fn fetch_latest_version(&self, _worktree: &Worktree) -> zed::Result<String> {
         Ok("0.53.2".to_string())
     }
 
@@ -428,6 +428,7 @@ impl Downloadable for Debugger {
         &mut self,
         _version: &str,
         language_server_id: &LanguageServerId,
+        _worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         self.get_or_download_fork(language_server_id)
     }
