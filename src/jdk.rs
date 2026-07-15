@@ -62,7 +62,7 @@ impl Downloadable for Jdk {
         self.cached_path.is_some()
     }
 
-    fn fetch_latest_version(&self) -> zed::Result<String> {
+    fn fetch_latest_version(&self, _worktree: &Worktree) -> zed::Result<String> {
         Ok(zed::latest_github_release(
             CORRETTO_REPO,
             zed_extension_api::GithubReleaseOptions {
@@ -80,6 +80,7 @@ impl Downloadable for Jdk {
         &mut self,
         version: &str,
         language_server_id: &LanguageServerId,
+        _worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         let jdk_path = get_curr_dir()
             .map_err(|err| format!("Failed to get current directory for JDK installation: {err}"))?
