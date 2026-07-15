@@ -1,9 +1,8 @@
 use std::{fs::metadata, path::PathBuf};
 
 use zed_extension_api::{
-    self as zed, DownloadedFileType, GithubReleaseOptions, LanguageServerId,
-    LanguageServerInstallationStatus, Worktree, serde_json::Value,
-    set_language_server_installation_status,
+    self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Worktree,
+    serde_json::Value, set_language_server_installation_status,
 };
 
 use crate::{
@@ -61,15 +60,9 @@ impl Downloadable for Proxy {
     }
 
     fn fetch_latest_version(&self) -> zed::Result<String> {
-        Ok(zed::latest_github_release(
-            GITHUB_REPO,
-            GithubReleaseOptions {
-                require_assets: true,
-                pre_release: false,
-            },
-        )
-        .map_err(|err| format!("Failed to fetch latest proxy release from {GITHUB_REPO}: {err}"))?
-        .version)
+        // The proxy is built and released together with the extension, so the
+        // matching release is the one tagged with the extension's own version.
+        Ok(format!("v{}", env!("CARGO_PKG_VERSION")))
     }
 
     fn download(
@@ -85,14 +78,8 @@ impl Downloadable for Proxy {
             return Ok(PathBuf::from(bin_path));
         }
 
-        let release = zed::latest_github_release(
-            GITHUB_REPO,
-            GithubReleaseOptions {
-                require_assets: true,
-                pre_release: false,
-            },
-        )
-        .map_err(|err| format!("Failed to fetch proxy release: {err}"))?;
+        let release = zed::github_release_by_tag_name(GITHUB_REPO, version)
+            .map_err(|err| format!("Failed to fetch proxy release {version}: {err}"))?;
 
         let asset = release
             .assets
@@ -133,32 +120,38 @@ impl Downloadable for Proxy {
             return Ok(PathBuf::from(path));
         }
 
-        // Respect the `check_updates` policy:
-        //   Ok(Some) — use the local install,
-        //   Ok(None) — policy allows a download (fall through),
-        //   Err      — Never / Once-exhausted with no local install: do NOT
-        //              download; fall through to the PATH lookup as a last resort.
-        match should_use_local_or_download(configuration, self.find_local(), Self::INSTALL_PATH) {
-            Ok(Some(path)) => {
-                let s = path.to_string_lossy().to_string();
-                self.cached_path = Some(s);
-                return Ok(path);
-            }
-            Ok(None) => {
-                if let Ok(version) = self.fetch_latest_version()
-                    && let Ok(path) = self.download(&version, language_server_id)
-                {
-                    return Ok(path);
-                }
-            }
-            Err(_) => { /* policy forbids download; skip to PATH fallback */ }
+        if let Some(path) =
+            should_use_local_or_download(configuration, self.find_local(), Self::INSTALL_PATH)
+                .unwrap_or(None)
+        {
+            let s = path.to_string_lossy().to_string();
+            self.cached_path = Some(s);
+            return Ok(path);
+        }
+
+        let downloaded = self
+            .fetch_latest_version()
+            .and_then(|version| self.download(&version, language_server_id));
+
+        let download_err = match downloaded {
+            Ok(path) => return Ok(path),
+            Err(err) => err,
+        };
+
+        // The version check or download failed (e.g. GitHub API rate
+        // limiting) — an existing local installation is better than none.
+        if let Some(path) = self.find_local() {
+            println!("Failed to update proxy, falling back to local installation: {download_err}");
+            let s = path.to_string_lossy().to_string();
+            self.cached_path = Some(s);
+            return Ok(path);
         }
 
         if let Some(path) = worktree.which(proxy_exec().as_str()) {
             return Ok(PathBuf::from(path));
         }
 
-        Err(format!("'{}' not found", proxy_exec()))
+        Err(format!("'{}' not found: {download_err}", proxy_exec()))
     }
 
     fn user_configured_path(
