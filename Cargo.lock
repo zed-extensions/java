@@ -1584,7 +1584,7 @@ dependencies = [
 
 [[package]]
 name = "zed_java"
-version = "6.8.21"
+version = "6.8.22"
 dependencies = [
  "hex",
  "insta",
