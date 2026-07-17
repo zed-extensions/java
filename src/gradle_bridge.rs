@@ -1,9 +1,8 @@
 use std::{fs::metadata, path::PathBuf};
 
 use zed_extension_api::{
-    self as zed, DownloadedFileType, GithubReleaseOptions, LanguageServerId,
-    LanguageServerInstallationStatus, Worktree, serde_json::Value,
-    set_language_server_installation_status,
+    self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Worktree,
+    serde_json::Value, set_language_server_installation_status,
 };
 
 use crate::{
@@ -66,15 +65,7 @@ impl Downloadable for GradleBridge {
     }
 
     fn fetch_latest_version(&self, _worktree: &Worktree) -> zed::Result<String> {
-        Ok(zed::latest_github_release(
-            GITHUB_REPO,
-            GithubReleaseOptions {
-                require_assets: true,
-                pre_release: false,
-            },
-        )
-        .map_err(|err| format!("Failed to fetch latest bridge release from {GITHUB_REPO}: {err}"))?
-        .version)
+        Ok(format!("v{}", env!("CARGO_PKG_VERSION")))
     }
 
     fn download(
@@ -91,14 +82,8 @@ impl Downloadable for GradleBridge {
             return Ok(PathBuf::from(bin_path));
         }
 
-        let release = zed::latest_github_release(
-            GITHUB_REPO,
-            GithubReleaseOptions {
-                require_assets: true,
-                pre_release: false,
-            },
-        )
-        .map_err(|err| format!("Failed to fetch bridge release: {err}"))?;
+        let release = zed::github_release_by_tag_name(GITHUB_REPO, version)
+            .map_err(|err| format!("Failed to fetch bridge release: {err}"))?;
 
         let asset = release
             .assets

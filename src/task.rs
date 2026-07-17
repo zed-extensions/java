@@ -7,11 +7,16 @@ use zed_extension_api::{
 
 use crate::{
     downloadable::Downloadable,
-    util::{mark_checked_once, remove_all_files_except, should_use_local_or_download},
+    util::{
+        mark_checked_once, platform_asset_name, platform_exec_name, remove_all_files_except,
+        should_use_local_or_download,
+    },
 };
 
 const TASK_HELPER_BINARY: &str = "java-task-helper";
-const TASK_HELPER_INSTALL_PATH: &str = "bin";
+/// It needs to live in a different directory compared to other vended binaries
+/// to avoid breaking `tasks.json` on each release
+const TASK_HELPER_INSTALL_PATH: &str = "task-bin";
 const GITHUB_REPO: &str = "zed-extensions/java";
 
 pub struct TaskHelper {
@@ -58,10 +63,8 @@ impl Downloadable for TaskHelper {
         _worktree: &Worktree,
     ) -> zed::Result<PathBuf> {
         let (name, file_type) = asset_name()?;
-        let bin_path = format!(
-            "{TASK_HELPER_INSTALL_PATH}/{version}/{}",
-            task_helper_exec()
-        );
+        let exec_name = task_helper_exec();
+        let bin_path = format!("{TASK_HELPER_INSTALL_PATH}/{}", exec_name);
 
         if metadata(&bin_path).is_ok() {
             self.cached_path = Some(bin_path.clone());
@@ -77,14 +80,12 @@ impl Downloadable for TaskHelper {
             .find(|a| a.name == name)
             .ok_or_else(|| format!("No asset found matching {name:?}"))?;
 
-        let version_dir = format!("{TASK_HELPER_INSTALL_PATH}/{version}");
-
         set_language_server_installation_status(
             language_server_id,
             &LanguageServerInstallationStatus::Downloading,
         );
 
-        zed::download_file(&asset.download_url, &version_dir, file_type)
+        zed::download_file(&asset.download_url, TASK_HELPER_INSTALL_PATH, file_type)
             .map_err(|err| format!("Failed to download task helper: {err}"))?;
 
         let _ = zed::make_file_executable(&bin_path);
@@ -92,7 +93,7 @@ impl Downloadable for TaskHelper {
             language_server_id,
             &LanguageServerInstallationStatus::None,
         );
-        let _ = remove_all_files_except(TASK_HELPER_INSTALL_PATH, version);
+        let _ = remove_all_files_except(TASK_HELPER_INSTALL_PATH, &exec_name);
         let _ = mark_checked_once(TASK_HELPER_INSTALL_PATH, version);
 
         self.cached_path = Some(bin_path.clone());
@@ -151,32 +152,9 @@ impl Downloadable for TaskHelper {
 }
 
 fn asset_name() -> zed::Result<(String, DownloadedFileType)> {
-    let (os, arch) = zed::current_platform();
-    let (os_str, file_type) = match os {
-        zed::Os::Mac => ("darwin", DownloadedFileType::GzipTar),
-        zed::Os::Linux => ("linux", DownloadedFileType::GzipTar),
-        zed::Os::Windows => ("windows", DownloadedFileType::Zip),
-    };
-    let arch_str = match arch {
-        zed::Architecture::Aarch64 => "aarch64",
-        zed::Architecture::X8664 => "x86_64",
-        _ => return Err("Unsupported architecture".into()),
-    };
-    let ext = if matches!(file_type, DownloadedFileType::Zip) {
-        "zip"
-    } else {
-        "tar.gz"
-    };
-    Ok((
-        format!("{TASK_HELPER_BINARY}-{os_str}-{arch_str}.{ext}"),
-        file_type,
-    ))
+    platform_asset_name(TASK_HELPER_BINARY)
 }
 
 fn task_helper_exec() -> String {
-    let (os, _arch) = zed::current_platform();
-    match os {
-        zed::Os::Linux | zed::Os::Mac => TASK_HELPER_BINARY.to_string(),
-        zed::Os::Windows => format!("{TASK_HELPER_BINARY}.exe"),
-    }
+    platform_exec_name(TASK_HELPER_BINARY)
 }

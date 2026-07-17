@@ -199,10 +199,7 @@ pub fn get_java_executable(
 ///
 /// Returns the executable java name
 pub fn get_java_exec_name() -> String {
-    match current_platform().0 {
-        Os::Windows => "java.exe".to_string(),
-        _ => "java".to_string(),
-    }
+    platform_exec_name("java")
 }
 
 /// The single install directory shared by every native binary the extension
@@ -211,9 +208,8 @@ pub fn get_java_exec_name() -> String {
 /// other's `remove_all_files_except` cleanup.
 pub const NATIVE_BIN_DIR: &str = "bin";
 
-/// The platform-specific executable file name for a downloaded native binary
-/// (appends `.exe` on Windows). Shared by the proxy and the Gradle bridge, which
-/// differ only in `binary`.
+/// The platform-specific executable file name for a binary
+/// (appends `.exe` on Windows).
 pub fn platform_exec_name(binary: &str) -> String {
     match current_platform().0 {
         Os::Windows => format!("{binary}.exe"),
