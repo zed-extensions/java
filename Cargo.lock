@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "gradle-lsp-bridge"
-version = "6.8.20"
+version = "6.8.23"
 dependencies = [
  "prost",
  "proxy-common",
@@ -645,7 +645,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "java-lsp-proxy"
-version = "6.8.20"
+version = "6.8.23"
 dependencies = [
  "proxy-common",
  "serde",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "java-task-helper"
-version = "0.1.0"
+version = "6.8.23"
 dependencies = [
  "serde",
  "serde_json",
@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-common"
-version = "6.8.20"
+version = "6.8.23"
 dependencies = [
  "libc",
  "serde",

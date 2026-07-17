@@ -1,7 +1,7 @@
 native_target := `rustc -vV | grep host | awk '{print $2}'`
 ext_dir := if os() == "macos" { env("HOME") / "Library/Application Support/Zed/extensions/work/java" } else if os() == "linux" { env("HOME") / ".local/share/zed/extensions/work/java" } else { env("LOCALAPPDATA") / "Zed/extensions/work/java" }
 proxy_bin := ext_dir / "bin" / "java-lsp-proxy"
-tasks_bin := ext_dir / "bin" / "java-task-helper"
+tasks_bin := ext_dir / "task-bin" / "java-task-helper"
 bridge_bin := ext_dir / "bin" / "gradle-lsp-bridge"
 
 # Build proxy in debug mode
@@ -30,7 +30,7 @@ task-release:
 
 # Build task helper release and install to extension workdir for testing
 task-install: task-release
-    mkdir -p "{{ ext_dir }}/bin"
+    mkdir -p "{{ ext_dir }}/task-bin"
     cp "target/{{ native_target }}/release/java-task-helper" "{{ tasks_bin }}"
     @echo "Installed to {{ ext_dir }}"
 

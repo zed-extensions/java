@@ -1,6 +1,6 @@
 [package]
 name = "java-lsp-proxy"
-version = "6.8.20"
+version = "6.8.23"
 edition = "2021"
 publish = false
 license = "Apache-2.0"
