@@ -12,7 +12,7 @@ proxy-common = { path = "proxy-common" }
 
 [package]
 name = "zed_java"
-version = "6.8.22"
+version = "6.8.23"
 edition = "2024"
 publish = false
 license = "Apache-2.0"
