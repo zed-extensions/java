@@ -228,6 +228,10 @@ impl<'a> TaskRunner<'a> {
             .push(("ZED_CUSTOM_java_outer_class_name", o.to_string()));
         self
     }
+    fn env(mut self, key: &'static str, value: &str) -> Self {
+        self.extra_env.push((key, value.to_string()));
+        self
+    }
 
     fn run(self) -> String {
         let mut cmd = std::process::Command::new("sh");
@@ -236,7 +240,11 @@ impl<'a> TaskRunner<'a> {
 
         // Create a temporary ZED_EXT directory structure matching what tasks.json expects
         let zed_ext_base = self.project.temp_dir.join("mock_zed_ext");
-        let zed_ext_dir = zed_ext_base.join("zed/extensions/work/java/task-bin");
+        let zed_ext_dir = if cfg!(target_os = "macos") {
+            zed_ext_base.join("Library/Application Support/Zed/extensions/work/java/task-bin")
+        } else {
+            zed_ext_base.join("zed/extensions/work/java/task-bin")
+        };
         fs::create_dir_all(&zed_ext_dir).unwrap();
         let dest_bin = zed_ext_dir.join("java-task-helper");
         fs::copy(&found_bin, &dest_bin).unwrap();
@@ -253,6 +261,7 @@ impl<'a> TaskRunner<'a> {
             .env("ZED_CUSTOM_java_package_name", &self.package)
             .env("ZED_CUSTOM_java_class_name", &self.class)
             .env("PATH", &self.project.new_path)
+            .env("HOME", &zed_ext_base)
             .env("XDG_DATA_HOME", zed_ext_base.to_string_lossy().to_string())
             .current_dir(&self.project.temp_dir);
 
@@ -286,8 +295,16 @@ fn test_maven_single_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: compile exec:java"),
+        stdout.contains("MVN_CALLED: compile exec:exec"),
         "Should run as single module. Got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("-Dexec.executable=java")
+            && stdout.contains("-Dexec.args=-classpath %classpath com.example.Main")
+            && stdout.contains("-Dexec.inheritIo=true")
+            && stdout.contains("-Dexec.longClasspath=true"),
+        "Should launch the main class in a standalone JVM. Got: {}",
         stdout
     );
     assert!(
@@ -296,8 +313,8 @@ fn test_maven_single_module_command_logic() {
         stdout
     );
     assert!(
-        stdout_test
-            .contains("MVN_CALLED: test-compile exec:java -Dexec.mainClass=com.example.Main"),
+        stdout_test.contains("MVN_CALLED: test-compile exec:exec")
+            && stdout_test.contains("-Dexec.args=-classpath %classpath com.example.Main"),
         "Should run as single module. Got: {}",
         stdout_test
     );
@@ -319,12 +336,12 @@ fn test_maven_multi_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: compile exec:java -pl module-a -am"),
+        stdout.contains("MVN_CALLED: compile exec:exec -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("-Dexec.mainClass=com.example.Main"),
+        stdout.contains("-Dexec.args=-classpath %classpath com.example.Main"),
         "Should run only the submodule. Got: {}",
         stdout
     );
@@ -335,12 +352,12 @@ fn test_maven_multi_module_command_logic() {
     );
 
     assert!(
-        stdout_test.contains("MVN_CALLED: test-compile exec:java -pl module-a -am"),
+        stdout_test.contains("MVN_CALLED: test-compile exec:exec -pl module-a -am"),
         "Should build submodule with dependencies. Got: {}",
         stdout_test
     );
     assert!(
-        stdout_test.contains("-Dexec.mainClass=com.example.Main"),
+        stdout_test.contains("-Dexec.args=-classpath %classpath com.example.Main"),
         "Should run only the submodule. Got: {}",
         stdout_test
     );
@@ -361,12 +378,12 @@ fn test_maven_nested_module_command_logic() {
         .run();
 
     assert!(
-        stdout.contains("MVN_CALLED: test-compile exec:java -pl nested/module-b -am"),
+        stdout.contains("MVN_CALLED: test-compile exec:exec -pl nested/module-b -am"),
         "Should build nested submodule with dependencies. Got: {}",
         stdout
     );
     assert!(
-        stdout.contains("-Dexec.mainClass=com.example.Main"),
+        stdout.contains("-Dexec.args=-classpath %classpath com.example.Main"),
         "Should run only the nested submodule. Got: {}",
         stdout
     );
@@ -463,7 +480,7 @@ fn test_maven_single_level_package_logic() {
         .run();
 
     assert!(
-        stdout.contains("-Dexec.mainClass=example.Main"),
+        stdout.contains("-Dexec.args=-classpath %classpath example.Main"),
         "Should include the single-level package in Maven. Got: {}",
         stdout
     );
@@ -475,8 +492,32 @@ fn test_maven_default_package_command_logic() {
     let stdout = project.task("java-main").package("").class("Main").run();
 
     assert!(
-        stdout.contains("-Dexec.mainClass=Main"),
+        stdout.contains("-Dexec.args=-classpath %classpath Main"),
         "Should not include leading dot for default package in Maven. Got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_maven_debugs_standalone_jvm() {
+    let project = TestProject::new("maven_debug", "maven", None);
+    let stdout = project
+        .task("java-main")
+        .env("ZED_JAVA_DEBUG", "1")
+        .env("ZED_JAVA_DEBUG_PORT", "6123")
+        .run();
+
+    assert!(
+        stdout.contains(
+            "-Dexec.args=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=6123 \
+             -classpath %classpath com.example.Main"
+        ),
+        "Should pass JDWP options to the standalone JVM. Got: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("MAVEN_OPTS"),
+        "Should not debug the Maven process. Got: {}",
         stdout
     );
 }

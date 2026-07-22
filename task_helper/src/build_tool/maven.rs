@@ -36,6 +36,19 @@ impl Maven {
         is_debug().then(|| "-Dmaven.surefire.debug".to_string())
     }
 
+    fn application_args(full_name: &str) -> String {
+        let mut args = vec![];
+        if is_debug() {
+            args.push(get_jdwp_args());
+        }
+        args.extend([
+            "-classpath".to_string(),
+            "%classpath".to_string(),
+            full_name.to_string(),
+        ]);
+        format!("-Dexec.args={}", args.join(" "))
+    }
+
     fn test_filter(
         package: &str,
         class: &str,
@@ -82,12 +95,15 @@ impl BuildTool for Maven {
         let compile_goal = if is_test { "test-compile" } else { "compile" };
         let classpath_scope = if is_test { "test" } else { "runtime" };
 
-        let mut args = vec![compile_goal.to_string(), "exec:java".to_string()];
+        let mut args = vec![compile_goal.to_string(), "exec:exec".to_string()];
         args.extend(Self::module_prefix(&module));
-        args.push(format!("-Dexec.mainClass={}", full_name));
+        args.push("-Dexec.executable=java".to_string());
+        args.push(Self::application_args(&full_name));
         args.push(format!("-Dexec.classpathScope={}", classpath_scope));
+        args.push("-Dexec.inheritIo=true".to_string());
+        args.push("-Dexec.longClasspath=true".to_string());
 
-        task(self.command(), args, self.cwd(), Self::debug_env())
+        task(self.command(), args, self.cwd(), vec![])
     }
 
     fn run_test_method(
