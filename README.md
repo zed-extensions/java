@@ -39,6 +39,10 @@ Here is a common `settings.json` including the above mentioned configurations:
       "min_memory": "1G",   // default: "1G"
       "max_memory": "2G",   // default: unset (no -Xmx limit)
 
+      // Parent directory for JDTLS workspace data. The extension appends a
+      // unique jdtls-<workspace-hash> directory for each worktree.
+      "data_directory": "/path/to/jdtls-data",
+
       // Controls when to check for updates for managed components
       // - "always" (default): Check for the latest version at most once every 24 hours
       //   and reuse the last successfully resolved version between checks
@@ -59,6 +63,19 @@ Here is a common `settings.json` including the above mentioned configurations:
   }
 }
 ```
+
+`data_directory` must be an absolute parent directory. For example,
+`"data_directory": "C:/Opt/zed-jdtls"` produces a workspace-specific path such
+as `C:/Opt/zed-jdtls/jdtls-<workspace-hash>`. The setting applies to both the
+extension-managed JDTLS and a JDTLS launcher selected through `jdtls_launcher`
+or `PATH`. An invalid configured value prevents JDTLS from starting instead of
+falling back to the default cache location. Changing it causes JDTLS to create
+a fresh workspace index; the old cache is not moved or deleted automatically.
+
+The bundled **Clear default JDTLS cache** task only removes caches from the
+extension's default OS cache location. When `data_directory` is configured,
+delete the `jdtls-*` directories beneath that parent manually, then restart the
+language server.
 
 ## Gradle Build Files
 

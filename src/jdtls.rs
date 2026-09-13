@@ -16,7 +16,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{get_lombok_jar, is_java_autodownload},
+    config::{get_jdtls_data_directory, get_lombok_jar, is_java_autodownload},
     downloadable::Downloadable,
     jdk::Jdk,
     util::{
@@ -248,17 +248,14 @@ fn parse_memory_value(s: &str) -> Option<u64> {
 }
 
 pub fn build_jdtls_launch_args(
-    jdtls_path: &PathBuf,
+    jdtls_path: &Path,
+    jdtls_data_path: &Path,
     configuration: &Option<Value>,
     worktree: &Worktree,
     jvm_args: Vec<String>,
     language_server_id: &LanguageServerId,
     jdk: &mut Jdk,
 ) -> zed::Result<Vec<String>> {
-    if let Some(jdtls_launcher) = get_jdtls_launcher_from_path(worktree) {
-        return Ok(vec![jdtls_launcher]);
-    }
-
     let mut java_executable = get_java_executable(configuration, worktree, language_server_id)
         .map_err(|err| format!("Failed to locate Java executable for JDTLS: {err}"))?;
     let java_major_version = get_java_major_version(&java_executable)
@@ -283,8 +280,6 @@ pub fn build_jdtls_launch_args(
     let jar_path = find_equinox_launcher(&jdtls_base_path).map_err(|err| {
         format!("Failed to find JDTLS equinox launcher in {jdtls_base_path:?}: {err}")
     })?;
-    let jdtls_data_path = get_jdtls_data_path(worktree)
-        .map_err(|err| format!("Failed to determine JDTLS data path: {err}"))?;
 
     let mut args = vec![
         path_to_string(java_executable)?,
@@ -326,12 +321,8 @@ pub fn build_jdtls_launch_args(
         "java.base/java.lang=ALL-UNNAMED".to_string(),
     ]);
     args.extend(jvm_args);
-    args.extend(vec![
-        "-jar".to_string(),
-        path_to_string(jar_path)?,
-        "-data".to_string(),
-        path_to_string(jdtls_data_path)?,
-    ]);
+    args.extend(vec!["-jar".to_string(), path_to_string(jar_path)?]);
+    append_jdtls_data_args(&mut args, jdtls_data_path)?;
     if java_major_version >= 24 {
         args.push("-Djdk.xml.maxGeneralEntitySizeLimit=0".to_string());
         args.push("-Djdk.xml.totalEntitySizeLimit=0".to_string());
@@ -491,7 +482,23 @@ fn find_equinox_launcher(jdtls_base_directory: &Path) -> Result<PathBuf, String>
         .ok_or_else(|| "Cannot find equinox launcher".to_string())
 }
 
-fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
+pub fn get_configured_jdtls_data_path(
+    configuration: &Option<Value>,
+    worktree: &Worktree,
+) -> zed::Result<Option<PathBuf>> {
+    let base_directory = get_jdtls_data_directory(configuration, worktree)?;
+    Ok(base_directory.map(|base_directory| {
+        build_jdtls_data_path(Path::new(&base_directory), &worktree.root_path())
+    }))
+}
+
+pub fn append_jdtls_data_args(args: &mut Vec<String>, data_path: &Path) -> zed::Result<()> {
+    args.push("-data".to_string());
+    args.push(path_to_string(data_path)?);
+    Ok(())
+}
+
+pub fn get_default_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
     let env = worktree.shell_env();
     let base_cachedir = match current_platform().0 {
         Os::Mac => env
@@ -524,10 +531,13 @@ fn get_jdtls_data_path(worktree: &Worktree) -> zed::Result<PathBuf> {
             .map(|path| path.join("caches"))
     })?;
 
-    let cache_key = worktree.root_path();
-    let hex_digest = get_sha1_hex(&cache_key);
+    Ok(build_jdtls_data_path(&base_cachedir, &worktree.root_path()))
+}
+
+fn build_jdtls_data_path(base_directory: &Path, cache_key: &str) -> PathBuf {
+    let hex_digest = get_sha1_hex(cache_key);
     let unique_dir_name = format!("jdtls-{hex_digest}");
-    Ok(base_cachedir.join(unique_dir_name))
+    base_directory.join(unique_dir_name)
 }
 
 fn get_binary_name() -> &'static str {
@@ -667,5 +677,40 @@ mod tests {
         assert!(!old.exists());
         assert!(staging.exists());
         let _ = fs::remove_dir_all(prefix);
+    }
+
+    #[test]
+    fn data_paths_are_stable_and_isolated_by_worktree() {
+        let base_directory = Path::new("/tmp/custom-jdtls");
+        let first = build_jdtls_data_path(base_directory, "/workspace/first");
+        let first_again = build_jdtls_data_path(base_directory, "/workspace/first");
+        let second = build_jdtls_data_path(base_directory, "/workspace/second");
+
+        assert_eq!(first, first_again);
+        assert_ne!(first, second);
+        assert_eq!(first.parent(), Some(base_directory));
+        assert!(
+            first
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("jdtls-"))
+        );
+    }
+
+    #[test]
+    fn data_path_arguments_are_appended_as_a_pair() {
+        let mut args = vec!["jdtls".to_string()];
+        let data_path = Path::new("/tmp/custom-jdtls/jdtls-workspace");
+
+        append_jdtls_data_args(&mut args, data_path).unwrap();
+
+        assert_eq!(
+            args,
+            vec![
+                "jdtls".to_string(),
+                "-data".to_string(),
+                data_path.to_string_lossy().to_string()
+            ]
+        );
     }
 }

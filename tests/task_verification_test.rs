@@ -162,6 +162,10 @@ impl<'a> TaskRunner<'a> {
             .push(("ZED_CUSTOM_java_method_name", m.to_string()));
         self
     }
+    fn env(mut self, key: &'static str, value: String) -> Self {
+        self.extra_env.push((key, value));
+        self
+    }
     fn outer_class(mut self, o: &str) -> Self {
         self.extra_env
             .push(("ZED_CUSTOM_java_outer_class_name", o.to_string()));
@@ -703,4 +707,30 @@ fn test_no_build_tool_command_logic() {
         "Should run with java. Got: {}",
         stdout
     );
+}
+
+#[test]
+fn test_clear_cache_task_only_removes_default_jdtls_directories() {
+    let project = TestProject::new("clear_jdtls_cache", "none", None);
+    let default_cache = project.temp_dir.join("default-cache");
+    let default_jdtls = default_cache.join("jdtls-default");
+    let unrelated = default_cache.join("unrelated");
+    let custom_jdtls = project.temp_dir.join("custom-cache").join("jdtls-custom");
+    fs::create_dir_all(&default_jdtls).unwrap();
+    fs::create_dir_all(&unrelated).unwrap();
+    fs::create_dir_all(&custom_jdtls).unwrap();
+
+    let stdout = project
+        .task("java-clear-cache")
+        .env(
+            "XDG_CACHE_HOME",
+            default_cache.to_string_lossy().to_string(),
+        )
+        .run();
+
+    assert!(!default_jdtls.exists());
+    assert!(unrelated.exists());
+    assert!(custom_jdtls.exists());
+    assert!(stdout.contains("Default JDTLS cache cleared"));
+    assert!(stdout.contains("data_directory"));
 }
