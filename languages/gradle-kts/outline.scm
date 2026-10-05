@@ -22,18 +22,12 @@
   (simple_identifier) @name) @item
 
 (property_declaration
-  [
-    "val"
-    "var"
-  ] @context
+  (binding_pattern_kind) @context
   (variable_declaration
     (simple_identifier) @name)) @item
 
 (property_declaration
-  [
-    "val"
-    "var"
-  ] @context
+  (binding_pattern_kind) @context
   (multi_variable_declaration
     (variable_declaration
       (simple_identifier) @name) @item))

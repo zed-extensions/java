@@ -956,6 +956,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-kotlin"
+version = "0.4.0"
+source = "git+https://github.com/fwcd/tree-sitter-kotlin?rev=1852ea17b7f60fb3f9d84e0b1555d56b46b39fb1#1852ea17b7f60fb3f9d84e0b1555d56b46b39fb1"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-language"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1291,6 +1300,7 @@ dependencies = [
  "sha1",
  "tree-sitter",
  "tree-sitter-java",
+ "tree-sitter-kotlin",
  "zed_extension_api",
 ]
 
