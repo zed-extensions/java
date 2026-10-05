@@ -133,7 +133,7 @@
 ] @number
 
 [
-  "null" ; should be highlighted the same as booleans
+  (null_literal) ; should be highlighted the same as booleans
   (boolean_literal)
 ] @boolean
 
@@ -275,9 +275,7 @@
   "?:"
   "!!"
   "is"
-  "!is"
   "in"
-  "!in"
   "as"
   "as?"
   ".."
@@ -303,10 +301,10 @@
 
 ; NOTE: `interpolated_identifier`s can be highlighted in any way
 (string_literal
-  "$" @punctuation.special
+  (interpolation_identifier_start) @punctuation.special
   (interpolated_identifier) @none)
 
 (string_literal
-  "${" @punctuation.special
+  (interpolation_expression_start) @punctuation.special
   (interpolated_expression) @none
-  "}" @punctuation.special)
+  (interpolation_expression_end) @punctuation.special)
