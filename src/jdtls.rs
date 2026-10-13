@@ -321,7 +321,11 @@ pub fn build_jdtls_launch_args(
         "java.base/java.lang=ALL-UNNAMED".to_string(),
     ]);
     args.extend(jvm_args);
-    args.extend(vec!["-jar".to_string(), path_to_string(jar_path)?]);
+    args.extend(vec![
+        "-jar".to_string(),
+        path_to_string(jar_path)?,
+        "-nosplash".to_string(),
+    ]);
     append_jdtls_data_args(&mut args, jdtls_data_path)?;
     if java_major_version >= 24 {
         args.push("-Djdk.xml.maxGeneralEntitySizeLimit=0".to_string());
