@@ -10,7 +10,7 @@ Install the extension via Zeds extension manager. It should work out of the box 
 
 - It is generally recommended to open projects with the Zed-project root at the Java project root folder (where you would commonly have your `pom.xml` or `build.gradle` file). The extension will automatically detect Maven and Gradle projects in subdirectories, but opening at the project root provides the best experience. If you're working with a non-standard project layout or encounter issues with classpath resolution, see [Advanced Configuration/JDTLS initialization Options](#advanced-configurationjdtls-initialization-options) for fine-tuning.
 
-- By default the extension will download and run the latest official version of JDTLS for you, but this requires Java version 21 or higher to be available on your system via either the `$JAVA_HOME` environment variable or as a `java(.exe)` executable on your `$PATH`. The `java_home` configuration option allows you to specify a **separate** JDK 21+ installation specifically for running JDTLS — this is useful when your system default Java is a lower version required by your project. Note that `java_home` is also passed as the `JAVA_HOME` environment variable to the JDTLS process; to configure runtimes for your project itself, use `initialization_options.settings.java.configuration.runtimes` (see [Configuring Project Runtimes](#configuring-project-runtimes) below).
+- By default the extension will download and run the latest official version of JDTLS for you. Recent JDTLS versions require Java version 25 or higher to be available on your system via either the `$JAVA_HOME` environment variable or as a `java(.exe)` executable on your `$PATH`. The `java_home` configuration option allows you to specify a **separate** JDK 25+ installation specifically for running JDTLS — this is useful when your system default Java is a lower version required by your project. Note that `java_home` is also passed as the `JAVA_HOME` environment variable to the JDTLS process; to configure runtimes for your project itself, use `initialization_options.settings.java.configuration.runtimes` (see [Configuring Project Runtimes](#configuring-project-runtimes) below).
 
 - You can provide a **custom JDTLS binary** through one of these mechanisms (in priority order):
   1. The `jdtls_launcher` setting — specify an absolute path to a JDTLS launch script
@@ -20,7 +20,7 @@ Install the extension via Zeds extension manager. It should work out of the box 
 
 - To support [Lombok](https://projectlombok.org/), the lombok-jar must be downloaded and registered as a Java-Agent when launching JDTLS. By default the extension automatically takes care of that, but in case you don't want that you can set the `lombok_support` configuration-option to `false`.
 
-- The option to let the extension automatically download a JDK can be enabled by setting `jdk_auto_download` to `true`. When enabled, the extension will download [Amazon Corretto](https://aws.amazon.com/corretto/) (an OpenJDK distribution) if no valid `java_home` is provided or if the specified one does not meet the minimum version requirement (Java 21). User-provided JDKs **always** take precedence.
+- The option to let the extension automatically download a JDK can be enabled by setting `jdk_auto_download` to `true`. When enabled, the extension will download [Amazon Corretto](https://aws.amazon.com/corretto/) (an OpenJDK distribution) if no valid `java_home` is provided or if the specified one does not meet the minimum version requirement (Java 25). User-provided JDKs that meet the minimum version requirement **always** take precedence.
 
 Here is a common `settings.json` including the above mentioned configurations:
 
@@ -28,9 +28,9 @@ Here is a common `settings.json` including the above mentioned configurations:
 "lsp": {
  "jdtls": {
     "settings": {
-      // Path to a JDK 21+ used to run JDTLS.
+      // Path to a JDK 25+ used to run JDTLS.
       // Also accepts the legacy key "java.home".
-      "java_home": "/path/to/your/JDK21+",
+      "java_home": "/path/to/your/JDK25+",
       "lombok_support": true,
       "jdk_auto_download": false,
 
@@ -128,7 +128,7 @@ Configuration, when you need it, goes under the `gradle-language-server` languag
 
 > **Note:** The bridge launches `gradle-server` with the JDK resolved from this server's own settings — the `java_home` value under `gradle-language-server` (falling back to the `$JAVA_HOME` environment variable, then an auto-downloaded JDK). Modern Gradle requires JVM 17+, so ensure that JDK satisfies your Gradle distribution.
 >
-> `java_home` is configured **per language server**: the value under `jdtls` does not carry over to `gradle-language-server` (and vice-versa). This is intentional — JDTLS needs a JDK 21+ to run, while the Gradle daemon only needs 17+ — but it means setting `java_home` under `jdtls` alone won't affect Gradle. Set it under `gradle-language-server` too, or rely on the shared `$JAVA_HOME` fallback that applies to both.
+> `java_home` is configured **per language server**: the value under `jdtls` does not carry over to `gradle-language-server` (and vice-versa). This is intentional — JDTLS needs a JDK 25+ to run, while the Gradle daemon only needs 17+ — but it means setting `java_home` under `jdtls` alone won't affect Gradle. Set it under `gradle-language-server` too, or rely on the shared `$JAVA_HOME` fallback that applies to both.
 
 ## Project Symbol Search
 
@@ -248,14 +248,14 @@ There is a fairly straightforward fix that you can apply to make it work on Wind
 
 ## Configuring Project Runtimes
 
-If your project targets a Java version different from the one running JDTLS, you can register multiple JDK installations via `java.configuration.runtimes`. JDTLS will use these to compile and run your project at the correct language level, while still running itself on JDK 21+.
+If your project targets a Java version different from the one running JDTLS, you can register multiple JDK installations via `java.configuration.runtimes`. JDTLS will use these to compile and run your project at the correct language level, while still running itself on JDK 25+.
 
 ```jsonc
 "lsp": {
   "jdtls": {
     "settings": {
-      // JDK 21+ for running JDTLS itself
-      "java_home": "/usr/lib/jvm/java-21-openjdk"
+      // JDK 25+ for running JDTLS itself
+      "java_home": "/usr/lib/jvm/java-25-openjdk"
     },
     "initialization_options": {
       "settings": {

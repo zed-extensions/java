@@ -31,7 +31,7 @@ const JDTLS_REPO: &str = "eclipse-jdtls/eclipse.jdt.ls";
 const LOMBOK_INSTALL_PATH: &str = "lombok";
 const LOMBOK_REPO: &str = "projectlombok/lombok";
 
-const JAVA_VERSION_ERROR: &str = "JDTLS requires at least Java version 21 to run. You can either specify a different JDK to use by configuring lsp.jdtls.settings.java_home to point to a different JDK, or set lsp.jdtls.settings.jdk_auto_download to true to let the extension automatically download one for you.";
+const JAVA_VERSION_ERROR: &str = "Current JDTLS versions require at least Java version 25 to run. You can either specify a different JDK to use by configuring lsp.jdtls.settings.java_home to point to a different JDK, or set lsp.jdtls.settings.jdk_auto_download to true to let the extension automatically download one for you.";
 // --- Jdtls Component ---
 
 pub struct Jdtls {
@@ -258,14 +258,20 @@ pub fn build_jdtls_launch_args(
 ) -> zed::Result<Vec<String>> {
     let mut java_executable = get_java_executable(configuration, worktree, language_server_id)
         .map_err(|err| format!("Failed to locate Java executable for JDTLS: {err}"))?;
-    let java_major_version = get_java_major_version(&java_executable)
+    let mut java_major_version = get_java_major_version(&java_executable)
         .map_err(|err| format!("Failed to determine Java version: {err}"))?;
-    if java_major_version < 21 {
+    if java_major_version < 25 {
         if is_java_autodownload(configuration) {
             java_executable = jdk
                 .get_bin_path(language_server_id, configuration, worktree)
                 .map_err(|err| format!("Failed to auto-download JDK for JDTLS: {err}"))?
                 .join(get_java_exec_name());
+            java_major_version = get_java_major_version(&java_executable).map_err(|err| {
+                format!("Failed to determine auto-downloaded Java version: {err}")
+            })?;
+            if java_major_version < 25 {
+                return Err(JAVA_VERSION_ERROR.to_string());
+            }
         } else {
             return Err(JAVA_VERSION_ERROR.to_string());
         }
