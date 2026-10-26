@@ -15,6 +15,7 @@ use proxy_common::{
     spawn_parent_monitor, LspReader,
 };
 use serde_json::{json, Value};
+use sha1::{Digest, Sha1};
 use std::{
     collections::{HashMap, HashSet},
     env, fs,
@@ -588,7 +589,7 @@ fn queue_rewrite_response(
 // --- Utilities ---
 
 fn hex_encode(s: &str) -> String {
-    s.as_bytes().iter().map(|b| format!("{b:02x}")).collect()
+    hex::encode(Sha1::digest(s.as_bytes()))
 }
 
 fn clear_latest_workspace(latest: &Mutex<Option<u64>>, token: u64) {
@@ -1245,5 +1246,35 @@ mod tests {
         });
 
         assert_eq!(completion_resolve_fallback(&error, &tracked), None);
+    }
+
+    #[test]
+    fn proxy_id_stays_under_macos_filename_limit() {
+        let long_workspace = format!("/Users/test/{}", "a".repeat(200));
+
+        let id = hex_encode(&long_workspace);
+
+        assert!(
+            id.len() <= 255,
+            "proxy_id exceeded macOS filename limit: {} bytes",
+            id.len()
+        );
+        assert_eq!(id.len(), 40, "SHA-1 hex should always be 40 chars");
+    }
+
+    #[test]
+    fn proxy_port_file_works_for_long_workdir() {
+        let temp = std::env::temp_dir().join("java-proxy-long-path-test");
+        let _ = fs::remove_dir_all(&temp);
+        let long_workspace = temp.join("a".repeat(200));
+        fs::create_dir_all(&long_workspace).unwrap();
+
+        let proxy_id = hex_encode(long_workspace.to_string_lossy().trim_end_matches('/'));
+        let port_file = long_workspace.join("proxy").join(&proxy_id);
+
+        fs::create_dir_all(port_file.parent().unwrap()).unwrap();
+        fs::write(&port_file, "3000").unwrap();
+
+        assert!(port_file.file_name().unwrap().len() <= 255);
     }
 }
