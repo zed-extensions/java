@@ -5,6 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::json;
+use sha1::{Digest, Sha1};
 use zed_extension_api::{
     self as zed,
     http_client::{HttpMethod, HttpRequest, fetch},
@@ -89,11 +90,7 @@ where
 }
 
 fn string_to_hex(s: &str) -> String {
-    let mut hex_string = String::new();
-    for byte in s.as_bytes() {
-        hex_string.push_str(&format!("{byte:02x}"));
-    }
-    hex_string
+    hex::encode(Sha1::digest(s.as_bytes()))
 }
 
 #[derive(Serialize, Deserialize)]
