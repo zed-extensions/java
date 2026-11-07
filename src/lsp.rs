@@ -104,6 +104,7 @@ pub enum LspResponse<T> {
 pub struct LspError {
     code: i64,
     message: String,
+    #[serde(default)]
     data: Value,
 }
 
