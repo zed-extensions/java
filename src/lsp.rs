@@ -104,6 +104,7 @@ pub enum LspResponse<T> {
 pub struct LspError {
     code: i64,
     message: String,
+    #[serde(default)]
     data: Value,
 }
 
@@ -113,4 +114,34 @@ pub struct MainClassEntry {
     pub main_class: String,
     pub project_name: String,
     pub file_path: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_response_without_data_defaults_to_null() {
+        let response: LspResponse<Vec<MainClassEntry>> = serde_json::from_str(
+            r#"{
+                "jsonrpc": "2.0",
+                "id": "proxy-http-1",
+                "error": {
+                    "code": -32601,
+                    "message": "No delegateCommandHandler for vscode.java.resolveMainClass"
+                }
+            }"#,
+        )
+        .expect("an LSP error response may omit data");
+
+        let LspResponse::Error { error } = response else {
+            panic!("expected an LSP error response");
+        };
+        assert_eq!(error.data, Value::Null);
+        assert_eq!(error.code, -32601);
+        assert_eq!(
+            error.message,
+            "No delegateCommandHandler for vscode.java.resolveMainClass"
+        );
+    }
 }
