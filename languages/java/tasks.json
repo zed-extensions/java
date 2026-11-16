@@ -7,6 +7,9 @@
     "tags": [
       "java-main"
     ],
+    "env": {
+      "ZED_JAVA_RUNNABLE": "main"
+    },
     "shell": {
       "with_arguments": {
         "program": "/bin/sh",

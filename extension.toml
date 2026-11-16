@@ -36,6 +36,8 @@ languages = ["Gradle", "Gradle KTS"]
 
 [debug_adapters.Java]
 
+[debug_locators.java]
+
 [[capabilities]]
 kind = "process:exec"
 command = "*"

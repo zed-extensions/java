@@ -14,8 +14,9 @@ use crate::{
     downloadable::Downloadable,
     lsp,
     util::{
-        ArgsStringOrList, create_path_if_not_exists, get_curr_dir, path_to_string,
-        record_successful_update_check, should_use_local_or_download, update_check_path,
+        ArgsStringOrList, create_path_if_not_exists, get_curr_dir, path_to_file_uri,
+        path_to_string, record_successful_update_check, should_use_local_or_download,
+        update_check_path,
     },
 };
 
@@ -23,6 +24,8 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 struct JavaDebugLaunchConfig {
     request: String,
+    #[serde(skip_serializing)]
+    main_file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     project_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,11 +58,73 @@ struct JavaDebugLaunchConfig {
     java_exec: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MainMethod {
+    main_class: String,
+    project_name: Option<String>,
+}
+
+impl JavaDebugLaunchConfig {
+    fn prepare_main_file(
+        &mut self,
+        mut execute_command: impl FnMut(&str, Value) -> zed::Result<Value>,
+    ) -> zed::Result<bool> {
+        let Some(main_file) = &self.main_file else {
+            return Ok(false);
+        };
+
+        let response = execute_command(
+            "vscode.java.resolveMainMethod",
+            json!([path_to_file_uri(main_file)]),
+        )
+        .map_err(|err| format!("Failed to resolve main method in {main_file}: {err}"))?;
+        let entries: Vec<MainMethod> = serde_json::from_value(response)
+            .map_err(|err| format!("Invalid main method response for {main_file}: {err}"))?;
+        let mut entries = entries.into_iter().filter(|entry| {
+            self.main_class
+                .as_ref()
+                .is_none_or(|main_class| main_class == &entry.main_class)
+                && self
+                    .project_name
+                    .as_ref()
+                    .is_none_or(|project_name| Some(project_name) == entry.project_name.as_ref())
+        });
+        let entry = entries
+            .next()
+            .ok_or_else(|| format!("No matching Java main method found in {main_file}"))?;
+        if entries.next().is_some() {
+            return Err(format!(
+                "Multiple Java main methods found in {main_file}; specify mainClass and projectName in .zed/debug.json"
+            ));
+        }
+
+        let params = json!({
+            "mainClass": entry.main_class,
+            "projectName": entry.project_name,
+            "isFullBuild": false,
+        });
+        let status = execute_command("vscode.java.buildWorkspace", json!([params.to_string()]))
+            .map_err(|err| format!("Failed to build Java workspace: {err}"))?;
+        if status.as_u64() != Some(BUILD_SUCCEEDED) {
+            return Err(format!(
+                "Java build did not succeed ({status}); fix compilation errors or retry before debugging"
+            ));
+        }
+
+        self.main_class = Some(entry.main_class);
+        self.project_name = entry.project_name;
+        Ok(true)
+    }
+}
+
 const TEST_SCOPE: &str = "$Test";
 const AUTO_SCOPE: &str = "$Auto";
 const RUNTIME_SCOPE: &str = "$Runtime";
 
 const SCOPES: [&str; 3] = [TEST_SCOPE, AUTO_SCOPE, RUNTIME_SCOPE];
+
+const BUILD_SUCCEEDED: u64 = 1;
 
 const DEBUGGER_INSTALL_PATH: &str = "debugger";
 
@@ -287,7 +352,17 @@ impl Debugger {
 
         let workspace_folder = worktree.root_path();
 
-        let (main_class, project_name) = {
+        let file_launch = config.prepare_main_file(|command, arguments| {
+            lsp::request(
+                &workspace_folder,
+                "workspace/executeCommand",
+                json!({ "command": command, "arguments": arguments }),
+            )
+        })?;
+
+        let (main_class, project_name) = if file_launch {
+            (config.main_class.take(), config.project_name.take())
+        } else {
             let arguments = [config.main_class.clone(), config.project_name.clone()]
                 .iter()
                 .flatten()
@@ -479,6 +554,242 @@ impl Downloadable for Debugger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn prepare_file_launch(
+        config: Value,
+        main_methods: Value,
+        build_status: Value,
+    ) -> (
+        JavaDebugLaunchConfig,
+        zed::Result<bool>,
+        Vec<(String, Value)>,
+    ) {
+        let mut config: JavaDebugLaunchConfig = serde_json::from_value(config).unwrap();
+        let mut requests = Vec::new();
+        let result = config.prepare_main_file(|command, arguments| {
+            requests.push((command.to_string(), arguments));
+            match command {
+                "vscode.java.resolveMainMethod" => Ok(main_methods.clone()),
+                "vscode.java.buildWorkspace" => Ok(build_status.clone()),
+                _ => panic!("Unexpected command: {command}"),
+            }
+        });
+
+        (config, result, requests)
+    }
+
+    #[test]
+    fn file_launch_resolves_the_source_project_and_builds_before_launch() {
+        let (config, result, requests) = prepare_file_launch(
+            json!({
+                "request": "launch",
+                "mainFile": "/workspace/module b/src/主类 #1%.java",
+                "env": { "APP_MODE": "development" },
+                "args": ["hello"],
+            }),
+            json!([{
+                "mainClass": "example.Main",
+                "projectName": "module-b",
+                "range": {
+                    "start": { "line": 3, "character": 23 },
+                    "end": { "line": 3, "character": 27 },
+                },
+            }]),
+            json!(1),
+        );
+
+        assert!(result.unwrap());
+        assert_eq!(requests.len(), 2);
+        assert_eq!(
+            requests[0],
+            (
+                "vscode.java.resolveMainMethod".into(),
+                json!(["file:///workspace/module%20b/src/%E4%B8%BB%E7%B1%BB%20%231%25.java"]),
+            )
+        );
+        assert_eq!(requests[1].0, "vscode.java.buildWorkspace");
+        assert_eq!(
+            serde_json::from_str::<Value>(requests[1].1[0].as_str().unwrap()).unwrap(),
+            json!({
+                "mainClass": "example.Main",
+                "projectName": "module-b",
+                "isFullBuild": false,
+            })
+        );
+        let config = serde_json::to_value(config).unwrap();
+        assert_eq!(config["mainClass"], "example.Main");
+        assert_eq!(config["projectName"], "module-b");
+        assert_eq!(config["env"], json!({ "APP_MODE": "development" }));
+        assert_eq!(config["args"], "hello");
+        assert!(config.get("mainFile").is_none());
+    }
+
+    #[test]
+    fn manual_launch_without_main_file_skips_file_resolution_and_build() {
+        let mut config: JavaDebugLaunchConfig = serde_json::from_value(json!({
+            "request": "launch",
+            "mainClass": "example.Main",
+            "projectName": "module-a",
+        }))
+        .unwrap();
+
+        assert!(
+            !config
+                .prepare_main_file(|command, _| panic!("Unexpected command: {command}"))
+                .unwrap()
+        );
+        assert_eq!(config.main_class.as_deref(), Some("example.Main"));
+        assert_eq!(config.project_name.as_deref(), Some("module-a"));
+    }
+
+    #[test]
+    fn missing_main_method_does_not_build_or_fall_back_to_another_project() {
+        for (filters, entries) in [
+            (json!({}), json!([])),
+            (
+                json!({ "mainClass": "example.Missing" }),
+                json!([{ "mainClass": "example.Main", "projectName": "module-a" }]),
+            ),
+            (
+                json!({ "projectName": "module-b" }),
+                json!([{ "mainClass": "example.Main", "projectName": "module-a" }]),
+            ),
+        ] {
+            let mut config = json!({
+                "request": "launch",
+                "mainFile": "/workspace/Main.java",
+            });
+            config
+                .as_object_mut()
+                .unwrap()
+                .extend(filters.as_object().unwrap().clone());
+            let (_, result, requests) = prepare_file_launch(config, entries, json!(1));
+
+            assert!(result.unwrap_err().contains("No matching Java main method"));
+            assert_eq!(requests.len(), 1);
+        }
+    }
+
+    #[test]
+    fn multiple_main_methods_require_selection_before_building() {
+        let (_, result, requests) = prepare_file_launch(
+            json!({ "request": "launch", "mainFile": "/workspace/Main.java" }),
+            json!([
+                { "mainClass": "example.Main", "projectName": "module-a" },
+                { "mainClass": "example.Other", "projectName": "module-a" },
+            ]),
+            json!(1),
+        );
+
+        assert!(result.unwrap_err().contains("Multiple Java main methods"));
+        assert_eq!(requests.len(), 1);
+    }
+
+    #[test]
+    fn explicit_class_and_project_select_the_matching_file_entry() {
+        let (config, result, requests) = prepare_file_launch(
+            json!({
+                "request": "launch",
+                "mainFile": "/workspace/Main.java",
+                "mainClass": "example.Main",
+                "projectName": "module-b",
+            }),
+            json!([
+                { "mainClass": "example.Main", "projectName": "module-a" },
+                { "mainClass": "example.Other", "projectName": "module-b" },
+                { "mainClass": "example.Main", "projectName": "module-b" },
+            ]),
+            json!(1),
+        );
+
+        assert!(result.unwrap());
+        assert_eq!(config.main_class.as_deref(), Some("example.Main"));
+        assert_eq!(config.project_name.as_deref(), Some("module-b"));
+        assert_eq!(
+            serde_json::from_str::<Value>(requests[1].1[0].as_str().unwrap()).unwrap()["projectName"],
+            "module-b"
+        );
+    }
+
+    #[test]
+    fn file_resolution_preserves_an_unnamed_project() {
+        let (config, result, requests) = prepare_file_launch(
+            json!({ "request": "launch", "mainFile": "/workspace/Main.java" }),
+            json!([{ "mainClass": "Main", "projectName": null }]),
+            json!(1),
+        );
+
+        assert!(result.unwrap());
+        assert_eq!(config.main_class.as_deref(), Some("Main"));
+        assert!(config.project_name.is_none());
+        assert!(
+            serde_json::from_str::<Value>(requests[1].1[0].as_str().unwrap()).unwrap()["projectName"]
+                .is_null()
+        );
+    }
+
+    #[test]
+    fn unsuccessful_or_unknown_build_status_stops_the_launch() {
+        for status in [
+            json!(0),
+            json!(2),
+            json!(3),
+            json!(100),
+            json!("SUCCEED"),
+            json!("UNKNOWN"),
+            Value::Null,
+        ] {
+            let (config, result, requests) = prepare_file_launch(
+                json!({ "request": "launch", "mainFile": "/workspace/Main.java" }),
+                json!([{ "mainClass": "example.Main", "projectName": "module-a" }]),
+                status,
+            );
+
+            assert!(result.unwrap_err().contains("Java build did not succeed"));
+            assert!(config.main_class.is_none());
+            assert_eq!(requests.len(), 2);
+        }
+    }
+
+    #[test]
+    fn file_resolution_and_build_request_failures_stop_the_launch() {
+        for failed_command in [
+            "vscode.java.resolveMainMethod",
+            "vscode.java.buildWorkspace",
+        ] {
+            let mut config: JavaDebugLaunchConfig = serde_json::from_value(json!({
+                "request": "launch",
+                "mainFile": "/workspace/Main.java",
+            }))
+            .unwrap();
+            let mut requests = Vec::new();
+            let result = config.prepare_main_file(|command, _| {
+                requests.push(command.to_string());
+                if command == failed_command {
+                    return Err("LSP request failed".into());
+                }
+                Ok(json!([{ "mainClass": "example.Main", "projectName": "module-a" }]))
+            });
+
+            assert!(result.unwrap_err().contains("LSP request failed"));
+            assert_eq!(requests.last().unwrap(), failed_command);
+            assert!(config.main_class.is_none());
+        }
+    }
+
+    #[test]
+    fn invalid_main_method_responses_stop_before_building() {
+        for response in [Value::Null, json!({}), json!([{ "mainClass": 42 }])] {
+            let (_, result, requests) = prepare_file_launch(
+                json!({ "request": "launch", "mainFile": "/workspace/Main.java" }),
+                response,
+                json!(1),
+            );
+
+            assert!(result.unwrap_err().contains("Invalid main method response"));
+            assert_eq!(requests.len(), 1);
+        }
+    }
 
     fn injected_bundle(plugin_path: PathBuf) -> String {
         let debugger = Debugger {
