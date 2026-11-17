@@ -8,7 +8,8 @@
       "java-main"
     ],
     "env": {
-      "ZED_JAVA_RUNNABLE": "main"
+      "ZED_JAVA_RUNNABLE": "main",
+      "ZED_JAVA_MAIN_CLASS": "$ZED_CUSTOM_java_class_name"
     },
     "shell": {
       "with_arguments": {

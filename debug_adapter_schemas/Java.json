@@ -16,11 +16,11 @@
         },
         "mainClass": {
           "type": "string",
-          "description": "The fully qualified name of the class containing the main method. If not specified, the debugger automatically resolves the possible main class from the current project."
+          "description": "The fully qualified name of the class containing the main method. With mainFile, a simple class name can select an entry in that file. If not specified, the debugger automatically resolves the possible main class from the current project."
         },
         "mainFile": {
           "type": "string",
-          "description": "The absolute path to a Java source file, or $ZED_FILE. Resolves the main class and project from this file and builds before launch. Use mainClass and projectName to disambiguate multiple entries."
+          "description": "The absolute path to a Java source file. Use $ZED_FILE for the currently focused Java source file. Resolves the main class and project from this file and builds before launch. Use mainClass and projectName to disambiguate multiple entries."
         },
         "args": {
           "oneOf": [

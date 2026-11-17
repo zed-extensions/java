@@ -82,13 +82,14 @@ impl JavaDebugLaunchConfig {
         let entries: Vec<MainMethod> = serde_json::from_value(response)
             .map_err(|err| format!("Invalid main method response for {main_file}: {err}"))?;
         let mut entries = entries.into_iter().filter(|entry| {
-            self.main_class
+            self.main_class.as_ref().is_none_or(|main_class| {
+                main_class == &entry.main_class
+                    || (!main_class.contains('.')
+                        && entry.main_class.rsplit('.').next() == Some(main_class.as_str()))
+            }) && self
+                .project_name
                 .as_ref()
-                .is_none_or(|main_class| main_class == &entry.main_class)
-                && self
-                    .project_name
-                    .as_ref()
-                    .is_none_or(|project_name| Some(project_name) == entry.project_name.as_ref())
+                .is_none_or(|project_name| Some(project_name) == entry.project_name.as_ref())
         });
         let entry = entries
             .next()
@@ -709,6 +710,73 @@ mod tests {
             serde_json::from_str::<Value>(requests[1].1[0].as_str().unwrap()).unwrap()["projectName"],
             "module-b"
         );
+    }
+
+    #[test]
+    fn gutter_class_selects_the_clicked_main_in_the_same_file() {
+        for package in ["example.", ""] {
+            let expected_class = format!("{package}Other");
+            let (config, result, requests) = prepare_file_launch(
+                json!({
+                    "request": "launch",
+                    "mainFile": "/workspace/Main.java",
+                    "mainClass": "Other",
+                }),
+                json!([
+                    { "mainClass": format!("{package}Main"), "projectName": "module-a" },
+                    { "mainClass": expected_class, "projectName": "module-a" },
+                ]),
+                json!(1),
+            );
+
+            assert!(result.unwrap());
+            assert_eq!(config.main_class.as_deref(), Some(expected_class.as_str()));
+            assert_eq!(config.project_name.as_deref(), Some("module-a"));
+            assert_eq!(
+                serde_json::from_str::<Value>(requests[1].1[0].as_str().unwrap()).unwrap()["mainClass"],
+                expected_class
+            );
+        }
+    }
+
+    #[test]
+    fn class_hints_do_not_match_suffixes_or_other_packages() {
+        for (main_class, entry_class) in [
+            ("Main", "example.OtherMain"),
+            ("another.Main", "example.Main"),
+        ] {
+            let (_, result, requests) = prepare_file_launch(
+                json!({
+                    "request": "launch",
+                    "mainFile": "/workspace/OtherMain.java",
+                    "mainClass": main_class,
+                }),
+                json!([{ "mainClass": entry_class, "projectName": "module-a" }]),
+                json!(1),
+            );
+
+            assert!(result.unwrap_err().contains("No matching Java main method"));
+            assert_eq!(requests.len(), 1);
+        }
+    }
+
+    #[test]
+    fn simple_class_hint_does_not_hide_ambiguous_projects() {
+        let (_, result, requests) = prepare_file_launch(
+            json!({
+                "request": "launch",
+                "mainFile": "/workspace/Main.java",
+                "mainClass": "Main",
+            }),
+            json!([
+                { "mainClass": "example.Main", "projectName": "module-a" },
+                { "mainClass": "example.Main", "projectName": "module-b" },
+            ]),
+            json!(1),
+        );
+
+        assert!(result.unwrap_err().contains("Multiple Java main methods"));
+        assert_eq!(requests.len(), 1);
     }
 
     #[test]

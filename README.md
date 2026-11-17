@@ -154,8 +154,9 @@ mapping.
 
 If you disable the built-in Java tasks and provide your own main-method task,
 add `"ZED_JAVA_RUNNABLE": "main"` to that task's `env` object to opt in. Its
-environment variables are forwarded to the debug configuration, excluding this
-marker. Test runnables are not handled by this locator.
+environment variables are forwarded to the debug configuration, excluding the
+locator's `ZED_JAVA_RUNNABLE` and `ZED_JAVA_MAIN_CLASS` metadata. Test runnables
+are not handled by this locator.
 
 ### Main methods with JDTLS
 
@@ -172,17 +173,24 @@ Use the `Java` debug adapter with JDTLS enabled:
 }
 ```
 
-The gutter scenario records `mainFile: "$ZED_FILE"`. When you start debugging,
-the adapter asks JDTLS to resolve the main method in that file, preserves its
-project identity, and builds before resolving the classpath and starting the
-session. A failed or cancelled build stops the launch. JDTLS must have imported
-the project for this launch step.
+The gutter scenario records `mainFile: "$ZED_FILE"`, where `$ZED_FILE` is the
+Java source file associated with the action, and a `mainClass` hint from the
+clicked class. The built-in task supplies this hint through
+`"ZED_JAVA_MAIN_CLASS": "$ZED_CUSTOM_java_class_name"`; custom tasks can opt in
+with the same metadata. When you start debugging, the adapter asks JDTLS to
+resolve the main methods in that file and selects the matching class. It
+preserves the resolved fully qualified name and project identity, and builds
+before resolving the classpath and starting the session. A failed or cancelled
+build stops the launch. JDTLS must have imported the project for this launch step.
 Build requests have a five-minute proxy timeout; other requests retain their
 five-second timeout.
 
-If a source file contains multiple main classes, the adapter reports an ambiguity
-instead of choosing one. Create a configuration in `.zed/debug.json` with
-`mainFile`, `mainClass`, and, if needed, `projectName` to select the entry.
+This selects the clicked class even when a source file contains multiple main
+classes, without requiring `.zed/debug.json`. A custom task without a class hint
+uses file discovery alone. If multiple entries still match, create a configuration
+in `.zed/debug.json` with `mainFile`, `mainClass`, and, if needed, `projectName`
+to select the entry. With `mainFile`, `mainClass` accepts either a simple or fully
+qualified class name.
 Existing launch configurations without `mainFile` retain their current behavior.
 
 ### Main methods with Metals

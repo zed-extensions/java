@@ -196,17 +196,12 @@ impl Extension for Java {
 
     fn dap_locator_create_scenario(
         &mut self,
-        locator_name: String,
+        _locator_name: String,
         build_task: zed::TaskTemplate,
         resolved_label: String,
         debug_adapter_name: String,
     ) -> Option<zed::DebugScenario> {
-        debug_locator::create_scenario(
-            &locator_name,
-            build_task,
-            resolved_label,
-            &debug_adapter_name,
-        )
+        debug_locator::create_scenario(build_task, resolved_label, &debug_adapter_name)
     }
 
     fn dap_config_to_scenario(
