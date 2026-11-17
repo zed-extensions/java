@@ -138,6 +138,94 @@ JDTLS uses **CamelCase fuzzy matching** for symbol queries. For example, searchi
 
 ## Debugger
 
+### Main-method gutter actions
+
+Java main-method gutter positions come from the Tree-sitter runnable queries.
+The debug locator recognizes main tasks by their `ZED_JAVA_RUNNABLE=main`
+environment marker, independently of the language server and debug adapter.
+It then generates a launch configuration for the selected debug adapter.
+Neither step calls a language server, starts a debug session, or runs the task's
+shell command.
+
+The locator supports the `Java` (JDTLS) and `Metals` debug adapters. With either
+adapter selected, Java main-method gutter actions include `Debug: Run <class>`;
+no `.zed/debug.json` is required. Other adapters need their own configuration
+mapping.
+
+If you disable the built-in Java tasks and provide your own main-method task,
+add `"ZED_JAVA_RUNNABLE": "main"` to that task's `env` object to opt in. Its
+environment variables are forwarded to the debug configuration, excluding the
+locator's `ZED_JAVA_RUNNABLE` and `ZED_JAVA_MAIN_CLASS` metadata. Test runnables
+are not handled by this locator.
+
+### Main methods with JDTLS
+
+Use the `Java` debug adapter with JDTLS enabled:
+
+```jsonc
+{
+  "languages": {
+    "Java": {
+      "language_servers": ["jdtls", "!metals"],
+      "debuggers": ["Java"]
+    }
+  }
+}
+```
+
+The gutter scenario records `mainFile: "$ZED_FILE"`, where `$ZED_FILE` is the
+Java source file associated with the action, and a `mainClass` hint from the
+clicked class. The built-in task supplies this hint through
+`"ZED_JAVA_MAIN_CLASS": "$ZED_CUSTOM_java_class_name"`; custom tasks can opt in
+with the same metadata. When you start debugging, the adapter asks JDTLS to
+resolve the main methods in that file and selects the matching class. It
+preserves the resolved fully qualified name and project identity, and builds
+before resolving the classpath and starting the session. A failed or cancelled
+build stops the launch. JDTLS must have imported the project for this launch step.
+Build requests have a five-minute proxy timeout; other requests retain their
+five-second timeout.
+
+This selects the clicked class even when a source file contains multiple main
+classes, without requiring `.zed/debug.json`. A custom task without a class hint
+uses file discovery alone. If multiple entries still match, create a configuration
+in `.zed/debug.json` with `mainFile`, `mainClass`, and, if needed, `projectName`
+to select the entry. With `mainFile`, `mainClass` accepts either a simple or fully
+qualified class name.
+Existing launch configurations without `mainFile` retain their current behavior.
+
+### Main methods with Metals
+
+If you use Metals instead of JDTLS, install the
+[Scala extension](https://github.com/scalameta/metals-zed) and select its debug
+adapter for Java:
+
+```jsonc
+{
+  "languages": {
+    "Java": {
+      "language_servers": ["metals", "!jdtls"],
+      "debuggers": ["Metals"]
+    }
+  }
+}
+```
+
+With the Metals adapter selected, the gutter actions for Java main methods and
+their classes include `Debug: Run <class>`. No `.zed/debug.json` is required.
+The generated configuration contains `path: "$ZED_FILE"` and
+`runType: "runOrTestFile"`. When you start debugging, the Metals adapter contacts
+its language server to discover the main class and build target and prepare the
+session through its existing build-server integration. Metals must have imported
+your project for this launch step. Debugging uses Metals' file discovery rather
+than the task's command or arguments.
+
+This requires Metals to be available for Java in your Scala extension
+installation, and its DAP proxy to be enabled. The Scala extension's
+[debugging documentation](https://github.com/scalameta/metals-zed#debugging)
+describes its setup and restrictions.
+
+### Debugging with JDTLS
+
 Debug support is enabled via our [Fork of Java Debug](https://github.com/zed-industries/java-debug), which the extension will automatically download and start for you. Please refer to the [Zed Documentation](https://zed.dev/docs/debugger#getting-started) for general information about how debugging works in Zed.
 
 ### Launch Mode
