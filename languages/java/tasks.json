@@ -29,6 +29,9 @@
       "java-test-method",
       "java-test-method-nested"
     ],
+    "env": {
+      "ZED_JAVA_RUNNABLE": "test-method"
+    },
     "shell": {
       "with_arguments": {
         "program": "/bin/sh",
@@ -47,6 +50,9 @@
       "java-test-class",
       "java-test-class-nested"
     ],
+    "env": {
+      "ZED_JAVA_RUNNABLE": "test-class"
+    },
     "shell": {
       "with_arguments": {
         "program": "/bin/sh",
