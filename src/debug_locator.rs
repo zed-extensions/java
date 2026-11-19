@@ -3,17 +3,26 @@ use zed_extension_api::{self as zed, serde_json::json};
 const RUNNABLE_ENV: &str = "ZED_JAVA_RUNNABLE";
 const MAIN_CLASS_ENV: &str = "ZED_JAVA_MAIN_CLASS";
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum JavaRunnable {
     Main,
+    TestMethod,
+    TestClass,
 }
 
 impl JavaRunnable {
     fn from_task(task: &zed::TaskTemplate) -> Option<Self> {
-        task.env
+        match task
+            .env
             .iter()
-            .any(|(name, value)| name == RUNNABLE_ENV && value == "main")
-            .then_some(Self::Main)
+            .find(|(name, _)| name == RUNNABLE_ENV)
+            .map(|(_, value)| value.as_str())
+        {
+            Some("main") => Some(Self::Main),
+            Some("test-method") => Some(Self::TestMethod),
+            Some("test-class") => Some(Self::TestClass),
+            _ => None,
+        }
     }
 
     fn debug_config(self, debug_adapter_name: &str) -> Option<zed::serde_json::Value> {
@@ -27,6 +36,20 @@ impl JavaRunnable {
                 "path": "$ZED_FILE",
                 "runType": "runOrTestFile",
             })),
+            (Self::TestMethod | Self::TestClass, "Java") => {
+                let mut target = json!({
+                    "file": "$ZED_FILE",
+                    "className": "$ZED_CUSTOM_java_class_name",
+                    "outerClass": "${ZED_CUSTOM_java_outer_class_name:}",
+                });
+                if self == Self::TestMethod {
+                    target["method"] = "$ZED_CUSTOM_java_method_name".into();
+                }
+                Some(json!({
+                    "request": "launch",
+                    "testTarget": target,
+                }))
+            }
             _ => None,
         }
     }
@@ -39,7 +62,8 @@ pub fn create_scenario(
 ) -> Option<zed::DebugScenario> {
     let runnable = JavaRunnable::from_task(&build_task)?;
     let mut config = runnable.debug_config(debug_adapter_name)?;
-    if debug_adapter_name == "Java"
+    if runnable == JavaRunnable::Main
+        && debug_adapter_name == "Java"
         && let Some((_, main_class)) = build_task
             .env
             .iter()
@@ -182,14 +206,36 @@ mod tests {
 
     #[test]
     fn test_runnables_are_not_converted_to_main_sessions() {
-        for runnable in ["test-method", "test-class", "test-all"] {
+        for runnable in ["test-method", "test-class"] {
             let mut task = main_task();
             task.env = vec![(RUNNABLE_ENV.into(), runnable.into())];
 
-            assert_eq!(JavaRunnable::from_task(&task), None);
-            for adapter in ["Java", "Metals"] {
-                assert!(create_scenario(task.clone(), "Test Main".into(), adapter).is_none());
+            {
+                let scenario = create_scenario(task.clone(), "Debug test".into(), "Java").unwrap();
+                let config: Value = from_str(&scenario.config).unwrap();
+                assert_eq!(config["testTarget"]["file"], "$ZED_FILE");
+                assert_eq!(
+                    config["testTarget"]["className"],
+                    "$ZED_CUSTOM_java_class_name"
+                );
+                assert!(config.get("mainFile").is_none());
+                assert!(config.get("path").is_none());
+                assert_eq!(
+                    config["testTarget"].get("method").is_some(),
+                    runnable == "test-method"
+                );
             }
+            assert!(create_scenario(task, "Debug test".into(), "Metals").is_none());
+        }
+    }
+
+    #[test]
+    fn whole_project_test_tasks_are_not_converted() {
+        let mut task = main_task();
+        task.env = vec![(RUNNABLE_ENV.into(), "test-all".into())];
+
+        for adapter in ["Java", "Metals"] {
+            assert!(create_scenario(task.clone(), "Run tests".into(), adapter).is_none());
         }
     }
 

@@ -24,8 +24,19 @@ struct HttpBody {
 impl HttpBody {
     fn timeout(&self) -> Duration {
         if self.method == "workspace/executeCommand"
-            && self.params.get("command").and_then(Value::as_str)
-                == Some("vscode.java.buildWorkspace")
+            && self
+                .params
+                .get("command")
+                .and_then(Value::as_str)
+                .is_some_and(|command| {
+                    matches!(
+                        command,
+                        "vscode.java.buildWorkspace"
+                            | "java.reloadBundles"
+                            | "vscode.java.test.findTestTypesAndMethods"
+                            | "vscode.java.test.junit.argument"
+                    )
+                })
         {
             BUILD_TIMEOUT
         } else {
@@ -91,6 +102,27 @@ pub fn handle_http(
         }
     };
 
+    if req.method == "zed/javaTestRunner/start" {
+        let result = req.params["adapterPort"]
+            .as_u64()
+            .and_then(|port| u16::try_from(port).ok())
+            .filter(|port| *port > 0)
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid DAP port")
+            })
+            .and_then(crate::test_runner::start);
+        let response = match result {
+            Ok((dap_port, result_port)) => serde_json::json!({
+                "result": { "dapPort": dap_port, "resultPort": result_port }
+            }),
+            Err(error) => serde_json::json!({
+                "error": { "code": -32603, "message": error.to_string() }
+            }),
+        };
+        write_response(&mut stream, &response);
+        return;
+    }
+
     let seq = counter.fetch_add(1, Ordering::Relaxed);
     let id = Value::String(format!("{owned_id_prefix}http-{seq}"));
     let rx = pending.register(id.clone());
@@ -147,7 +179,11 @@ pub fn handle_http(
         })
     };
 
-    let resp_body = serde_json::to_vec(&response).unwrap();
+    write_response(&mut stream, &response);
+}
+
+fn write_response(stream: &mut std::net::TcpStream, response: &Value) {
+    let resp_body = serde_json::to_vec(response).unwrap();
     let http_resp = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
         resp_body.len()

@@ -4,6 +4,7 @@ mod http;
 mod log;
 mod output;
 mod pending;
+mod test_runner;
 
 use completions::{process_completions, sanitize_resolved_completion};
 use decompile::{DecompileCoordinator, Priority, RewriteJob, RewriteMode, SharedWriter};

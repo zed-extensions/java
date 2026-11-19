@@ -1,4 +1,8 @@
-use std::env;
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+};
 
 use zed_extension_api::{
     self as zed, CodeLabel, CodeLabelSpan, LanguageServerId, Worktree,
@@ -18,7 +22,7 @@ use crate::{
     },
     language_server::LanguageServer,
     proxy::Proxy,
-    util::{path_to_file_uri, path_to_string},
+    util::{expand_home_path, path_to_file_uri, path_to_string},
 };
 
 pub struct JdtlsServer {
@@ -28,6 +32,8 @@ pub struct JdtlsServer {
     pub jdk: Jdk,
     pub debugger: Debugger,
     pub cached_workspace: Option<String>,
+    pub language_server_id: Option<LanguageServerId>,
+    test_bundle_hosts: HashMap<String, PathBuf>,
 }
 
 impl JdtlsServer {
@@ -39,7 +45,13 @@ impl JdtlsServer {
             jdk: Jdk::new(),
             debugger: Debugger::new(),
             cached_workspace: None,
+            language_server_id: None,
+            test_bundle_hosts: HashMap::new(),
         }
+    }
+
+    pub fn test_bundle_host(&self, workspace: &str) -> Option<&Path> {
+        self.test_bundle_hosts.get(workspace).map(PathBuf::as_path)
     }
 }
 
@@ -89,7 +101,7 @@ impl LanguageServer for JdtlsServer {
 
         let configured_launcher = get_jdtls_launcher(&configuration, worktree)
             .or_else(|| get_jdtls_launcher_from_path(worktree));
-        if let Some(launcher) = configured_launcher {
+        let test_bundle_host = if let Some(launcher) = configured_launcher {
             args.push(launcher);
             if let Some(lombok_jvm_arg) = lombok_jvm_arg {
                 args.push(format!("--jvm-arg={lombok_jvm_arg}"));
@@ -97,6 +109,12 @@ impl LanguageServer for JdtlsServer {
             if let Some(data_path) = configured_data_path.as_deref() {
                 append_jdtls_data_args(&mut args, data_path)?;
             }
+            configuration
+                .as_ref()
+                .and_then(|settings| settings.get("jdtls_home"))
+                .and_then(Value::as_str)
+                .map(|path| expand_home_path(worktree, path.to_owned()).map(PathBuf::from))
+                .transpose()?
         } else {
             let data_path = match configured_data_path {
                 Some(data_path) => data_path,
@@ -119,7 +137,8 @@ impl LanguageServer for JdtlsServer {
                 )
                 .map_err(|err| format!("Failed to build JDTLS launch arguments: {err}"))?,
             );
-        }
+            Some(jdtls_path)
+        };
 
         if let Err(err) =
             self.debugger
@@ -128,7 +147,14 @@ impl LanguageServer for JdtlsServer {
             println!("Failed to download debugger: {err}");
         };
 
-        self.cached_workspace = Some(worktree.root_path());
+        let workspace = worktree.root_path();
+        if let Some(host) = test_bundle_host {
+            self.test_bundle_hosts.insert(workspace.clone(), host);
+        } else {
+            self.test_bundle_hosts.remove(&workspace);
+        }
+        self.cached_workspace = Some(workspace);
+        self.language_server_id = Some(language_server_id.clone());
 
         Ok(zed::Command {
             command: proxy_path,
@@ -169,13 +195,11 @@ impl LanguageServer for JdtlsServer {
             .or_insert(json!(true));
 
         if self.debugger.plugin_path().is_some() {
-            return Ok(Some(
-                self.debugger
-                    .inject_plugin_into_options(Some(options))
-                    .map_err(|err| {
-                        format!("Failed to inject debugger plugin into options: {err}")
-                    })?,
-            ));
+            return self
+                .debugger
+                .inject_plugin_into_options(Some(options))
+                .map(Some)
+                .map_err(|err| format!("Failed to inject debugger plugin into options: {err}"));
         }
 
         Ok(Some(options))

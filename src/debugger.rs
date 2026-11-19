@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use zed_extension_api::{
@@ -13,6 +17,7 @@ use crate::{
     config::get_java_debug_jar,
     downloadable::Downloadable,
     lsp,
+    test_debugger::TestTarget,
     util::{
         ArgsStringOrList, create_path_if_not_exists, get_curr_dir, path_to_file_uri,
         path_to_string, record_successful_update_check, should_use_local_or_download,
@@ -26,6 +31,8 @@ struct JavaDebugLaunchConfig {
     request: String,
     #[serde(skip_serializing)]
     main_file: Option<String>,
+    #[serde(skip_serializing)]
+    test_target: Option<TestTarget>,
     #[serde(skip_serializing_if = "Option::is_none")]
     project_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -336,7 +343,14 @@ impl Debugger {
         })
     }
 
-    pub fn inject_config(&self, worktree: &Worktree, config_string: String) -> zed::Result<String> {
+    pub fn inject_config(
+        &self,
+        worktree: &Worktree,
+        config_string: String,
+        language_server_id: Option<&LanguageServerId>,
+        test_bundle_host: Option<&Path>,
+    ) -> zed::Result<(String, TcpArgumentsTemplate)> {
+        let workspace_folder = worktree.root_path();
         let config: Value = serde_json::from_str(&config_string)
             .map_err(|err| format!("Failed to parse debug config: {err}"))?;
 
@@ -345,21 +359,64 @@ impl Debugger {
             .and_then(Value::as_str)
             .is_some_and(|req| req != "launch")
         {
-            return Ok(config_string);
+            return Ok((config_string, self.start_session(&workspace_folder)?));
         }
 
         let mut config = serde_json::from_value::<JavaDebugLaunchConfig>(config)
             .map_err(|err| format!("Failed to parse Java debug config: {err}"))?;
 
-        let workspace_folder = worktree.root_path();
+        let mut connection = None;
 
-        let file_launch = config.prepare_main_file(|command, arguments| {
-            lsp::request(
-                &workspace_folder,
-                "workspace/executeCommand",
-                json!({ "command": command, "arguments": arguments }),
-            )
-        })?;
+        let test_launch = if let Some(target) = &config.test_target {
+            let language_server_id = language_server_id.ok_or("JDTLS is not initialized")?;
+            let runner =
+                crate::test_support::prepare(language_server_id, worktree, test_bundle_host)?;
+            let launch = target.resolve(Some(&runner), |command, arguments| {
+                if command == "zed/javaTestRunner/start" {
+                    let mut template = self.start_session(&workspace_folder)?;
+                    let ports = lsp::request::<TestSessionPorts>(
+                        &workspace_folder,
+                        command,
+                        json!({ "adapterPort": template.port }),
+                    )?;
+                    template.port = Some(ports.dap_port);
+                    connection = Some(template);
+                    Ok(json!(ports.result_port))
+                } else {
+                    lsp::request(
+                        &workspace_folder,
+                        "workspace/executeCommand",
+                        json!({ "command": command, "arguments": arguments }),
+                    )
+                }
+            })?;
+            config.main_class = Some(
+                launch
+                    .main_class
+                    .ok_or("Java test runner main class is missing")?,
+            );
+            config.project_name = Some(launch.project_name);
+            config.class_paths = Some(launch.classpath);
+            config.module_paths = Some(launch.modulepath);
+            config.cwd = config.cwd.or(Some(launch.working_directory));
+            config.args = Some(test_arguments(
+                launch.program_arguments,
+                config.args.take(),
+            )?);
+            config.vm_args = Some(test_arguments(launch.vm_arguments, config.vm_args.take())?);
+            config.console = Some("internalConsole".into());
+            true
+        } else {
+            false
+        };
+        let file_launch = test_launch
+            || config.prepare_main_file(|command, arguments| {
+                lsp::request(
+                    &workspace_folder,
+                    "workspace/executeCommand",
+                    json!({ "command": command, "arguments": arguments }),
+                )
+            })?;
 
         let (main_class, project_name) = if file_launch {
             (config.main_class.take(), config.project_name.take())
@@ -445,7 +502,11 @@ impl Debugger {
             .map_err(|err| format!("Failed to stringify debug config: {err}"))?
             .replace("${workspaceFolder}", &workspace_folder);
 
-        Ok(config)
+        let connection = match connection {
+            Some(connection) => connection,
+            None => self.start_session(&workspace_folder)?,
+        };
+        Ok((config, connection))
     }
 
     pub fn plugin_path(&self) -> Option<&PathBuf> {
@@ -489,6 +550,34 @@ impl Debugger {
                 Ok(options)
             }
         }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TestSessionPorts {
+    dap_port: u16,
+    result_port: u16,
+}
+
+fn test_arguments(
+    mut generated: Vec<String>,
+    extra: Option<ArgsStringOrList>,
+) -> zed::Result<ArgsStringOrList> {
+    match extra {
+        Some(ArgsStringOrList::List(extra)) => {
+            generated.extend(extra);
+            Ok(ArgsStringOrList::List(generated))
+        }
+        Some(ArgsStringOrList::String(extra)) => {
+            let generated = serde_json::to_value(ArgsStringOrList::List(generated))
+                .map_err(|error| error.to_string())?;
+            Ok(ArgsStringOrList::String(format!(
+                "{} {extra}",
+                generated.as_str().unwrap_or_default()
+            )))
+        }
+        None => Ok(ArgsStringOrList::List(generated)),
     }
 }
 
