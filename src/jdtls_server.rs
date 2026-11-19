@@ -22,7 +22,7 @@ use crate::{
     },
     language_server::LanguageServer,
     proxy::Proxy,
-    util::{path_to_file_uri, path_to_string},
+    util::{expand_home_path, path_to_file_uri, path_to_string},
 };
 
 pub struct JdtlsServer {
@@ -32,6 +32,7 @@ pub struct JdtlsServer {
     pub jdk: Jdk,
     pub debugger: Debugger,
     pub cached_workspace: Option<String>,
+    pub language_server_id: Option<LanguageServerId>,
     test_bundle_hosts: HashMap<String, PathBuf>,
 }
 
@@ -44,6 +45,7 @@ impl JdtlsServer {
             jdk: Jdk::new(),
             debugger: Debugger::new(),
             cached_workspace: None,
+            language_server_id: None,
             test_bundle_hosts: HashMap::new(),
         }
     }
@@ -100,11 +102,6 @@ impl LanguageServer for JdtlsServer {
         let configured_launcher = get_jdtls_launcher(&configuration, worktree)
             .or_else(|| get_jdtls_launcher_from_path(worktree));
         let test_bundle_host = if let Some(launcher) = configured_launcher {
-            let host = Path::new(&launcher)
-                .canonicalize()
-                .ok()
-                .and_then(|path| path.parent()?.parent().map(Path::to_path_buf))
-                .filter(|path| path.join("plugins").is_dir());
             args.push(launcher);
             if let Some(lombok_jvm_arg) = lombok_jvm_arg {
                 args.push(format!("--jvm-arg={lombok_jvm_arg}"));
@@ -112,7 +109,12 @@ impl LanguageServer for JdtlsServer {
             if let Some(data_path) = configured_data_path.as_deref() {
                 append_jdtls_data_args(&mut args, data_path)?;
             }
-            host
+            configuration
+                .as_ref()
+                .and_then(|settings| settings.get("jdtls_home"))
+                .and_then(Value::as_str)
+                .map(|path| expand_home_path(worktree, path.to_owned()).map(PathBuf::from))
+                .transpose()?
         } else {
             let data_path = match configured_data_path {
                 Some(data_path) => data_path,
@@ -152,6 +154,7 @@ impl LanguageServer for JdtlsServer {
             self.test_bundle_hosts.remove(&workspace);
         }
         self.cached_workspace = Some(workspace);
+        self.language_server_id = Some(language_server_id.clone());
 
         Ok(zed::Command {
             command: proxy_path,

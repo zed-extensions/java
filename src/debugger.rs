@@ -347,6 +347,7 @@ impl Debugger {
         &self,
         worktree: &Worktree,
         config_string: String,
+        language_server_id: Option<&LanguageServerId>,
         test_bundle_host: Option<&Path>,
     ) -> zed::Result<(String, TcpArgumentsTemplate)> {
         let workspace_folder = worktree.root_path();
@@ -367,7 +368,9 @@ impl Debugger {
         let mut connection = None;
 
         let test_launch = if let Some(target) = &config.test_target {
-            let runner = crate::test_support::prepare(&workspace_folder, test_bundle_host)?;
+            let language_server_id = language_server_id.ok_or("JDTLS is not initialized")?;
+            let runner =
+                crate::test_support::prepare(language_server_id, worktree, test_bundle_host)?;
             let launch = target.resolve(Some(&runner), |command, arguments| {
                 if command == "zed/javaTestRunner/start" {
                     let mut template = self.start_session(&workspace_folder)?;

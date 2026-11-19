@@ -236,6 +236,9 @@ With JDTLS, the first test debug launch downloads the pinned Microsoft Java Test
 Runner. The extension loads the bundles into the running language server, discovers
 tests in the selected file, and resolves the framework's launch arguments. JUnit
 methods use their JDT handles, including parameter types.
+For a custom JDTLS launcher, set `lsp.jdtls.settings.jdtls_home` to the absolute
+path of the JDTLS installation that contains `plugins/`. This lets the extension
+skip runner bundles already shipped with that installation.
 TestNG uses its bundled runner. A local callback socket receives the test runner's
 result protocol; this does not provide a test-results explorer. Build failures,
 missing targets, and ambiguous method names stop the launch.

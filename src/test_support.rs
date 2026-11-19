@@ -4,15 +4,27 @@ use std::{
 };
 
 use zed_extension_api::{
-    self as zed, DownloadedFileType,
+    self as zed, DownloadedFileType, LanguageServerId, LanguageServerInstallationStatus, Worktree,
     serde_json::{Value, json},
+    set_language_server_installation_status,
 };
+
+use crate::downloadable::Downloadable;
 
 const VERSION: &str = "0.47.0";
 const DOWNLOAD_URL: &str = "https://open-vsx.org/api/vscjava/vscode-java-test/0.47.0/file/vscjava.vscode-java-test-0.47.0.vsix";
 
-pub fn prepare(workspace: &str, host: Option<&Path>) -> zed::Result<String> {
-    let (mut bundles, runner) = install()?;
+pub fn prepare(
+    language_server_id: &LanguageServerId,
+    worktree: &Worktree,
+    host: Option<&Path>,
+) -> zed::Result<String> {
+    let mut test_runner = TestRunner;
+    let directory = match test_runner.find_local() {
+        Some(path) => path,
+        None => test_runner.get_or_download(language_server_id, &None, worktree)?,
+    };
+    let (mut bundles, runner) = load_installation(&directory)?;
     if let Some(host) = host {
         let plugins = host.join("plugins");
         bundles.retain(|bundle| {
@@ -22,7 +34,7 @@ pub fn prepare(workspace: &str, host: Option<&Path>) -> zed::Result<String> {
         });
     }
     let loaded = crate::lsp::request::<bool>(
-        workspace,
+        &worktree.root_path(),
         "workspace/executeCommand",
         json!({"command": "java.reloadBundles", "arguments": [bundles]}),
     )
@@ -33,29 +45,73 @@ pub fn prepare(workspace: &str, host: Option<&Path>) -> zed::Result<String> {
     Ok(runner)
 }
 
-fn install() -> zed::Result<(Vec<String>, String)> {
-    let directory = std::env::current_dir()
-        .map_err(|error| error.to_string())?
-        .join("java-test")
-        .join(VERSION);
-    if load_installation(&directory).is_err() {
+struct TestRunner;
+
+impl Downloadable for TestRunner {
+    const INSTALL_PATH: &'static str = "java-test";
+
+    fn find_local(&self) -> Option<PathBuf> {
+        let directory = std::env::current_dir()
+            .ok()?
+            .join(Self::INSTALL_PATH)
+            .join(VERSION);
+        load_installation(&directory).ok().map(|_| directory)
+    }
+
+    fn loaded(&self) -> bool {
+        self.find_local().is_some()
+    }
+
+    fn fetch_latest_version(&self, _worktree: &Worktree) -> zed::Result<String> {
+        Ok(VERSION.to_owned())
+    }
+
+    fn version_for_download(
+        &self,
+        _language_server_id: &LanguageServerId,
+        _configuration: &Option<Value>,
+        worktree: &Worktree,
+    ) -> zed::Result<(String, bool)> {
+        self.fetch_latest_version(worktree)
+            .map(|version| (version, false))
+    }
+
+    fn download(
+        &mut self,
+        version: &str,
+        language_server_id: &LanguageServerId,
+        _worktree: &Worktree,
+    ) -> zed::Result<PathBuf> {
+        let directory = std::env::current_dir()
+            .map_err(|error| error.to_string())?
+            .join(Self::INSTALL_PATH)
+            .join(version);
         let staging = directory.with_extension("installing");
         if staging.exists() {
             fs::remove_dir_all(&staging).map_err(|error| error.to_string())?;
         }
-        zed::download_file(
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::Downloading,
+        );
+        let downloaded = zed::download_file(
             DOWNLOAD_URL,
             &staging.to_string_lossy(),
             DownloadedFileType::Zip,
-        )
-        .map_err(|error| format!("Failed to install Java Test Runner {VERSION}: {error}"))?;
+        );
+        set_language_server_installation_status(
+            language_server_id,
+            &LanguageServerInstallationStatus::None,
+        );
+        downloaded
+            .map_err(|error| format!("Failed to install Java Test Runner {version}: {error}"))?;
         load_installation(&staging)?;
         if directory.exists() {
             fs::remove_dir_all(&directory).map_err(|error| error.to_string())?;
         }
         fs::rename(staging, &directory).map_err(|error| error.to_string())?;
+        Ok(directory)
     }
-    load_installation(&directory)
 }
 
 fn load_installation(directory: &std::path::Path) -> zed::Result<(Vec<String>, String)> {

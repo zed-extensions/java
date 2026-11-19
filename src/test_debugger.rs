@@ -1,3 +1,6 @@
+//! Test discovery and launch follow the upstream VS Code Java Test Runner protocol.
+//! https://github.com/microsoft/vscode-java-test/blob/0.47.0/src/controller/testController.ts
+
 use serde::{Deserialize, Serialize};
 use zed_extension_api::{
     self as zed,
@@ -29,6 +32,29 @@ struct TestItem {
     children: Vec<TestItem>,
 }
 
+// Protocol values from https://github.com/microsoft/vscode-java-test/blob/0.47.0/src/java-test-runner.api.ts
+#[derive(Debug, PartialEq, Eq)]
+enum TestKind {
+    JUnit5,
+    JUnit4,
+    TestNg,
+    JUnit6,
+}
+
+impl TestKind {
+    fn from_protocol(value: &Value) -> zed::Result<Self> {
+        let code = value.as_u64().or_else(|| value.as_str()?.parse().ok());
+
+        match code {
+            Some(0) => Ok(Self::JUnit5),
+            Some(1) => Ok(Self::JUnit4),
+            Some(2) => Ok(Self::TestNg),
+            Some(3) => Ok(Self::JUnit6),
+            _ => Err(format!("Unsupported Java test kind: {value}")),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestLaunch {
@@ -58,6 +84,7 @@ impl TestTarget {
         .map_err(|error| format!("Failed to discover Java tests in {}: {error}", self.file))?;
         let items: Vec<TestItem> = serde_json::from_value(response)
             .map_err(|error| format!("Invalid Java test discovery response: {error}"))?;
+
         let mut classes = Vec::new();
         collect_classes(&items, &mut classes);
         let class_suffix = if self.outer_class.is_empty() {
@@ -78,6 +105,7 @@ impl TestTarget {
                 self.file
             ));
         }
+
         let item = if let Some(method) = &self.method {
             let mut methods = class.children.iter().filter(|item| {
                 let name = item.full_name.rsplit('#').next().unwrap_or("");
@@ -96,10 +124,8 @@ impl TestTarget {
         } else {
             class
         };
-        if !(0..=3).any(|kind| is_level(&item.test_kind, kind)) {
-            return Err(format!("Unsupported Java test kind: {}", item.test_kind));
-        }
-        let testng = is_level(&item.test_kind, 2);
+
+        let testng = matches!(TestKind::from_protocol(&item.test_kind)?, TestKind::TestNg);
         let test_name = if self.method.is_some() && !testng {
             item.jdt_handler
                 .as_deref()
@@ -107,6 +133,7 @@ impl TestTarget {
         } else {
             &item.full_name
         };
+
         let params = json!({
             "projectName": item.project_name,
             "testLevel": item.test_level,
@@ -132,6 +159,7 @@ impl TestTarget {
                 .ok_or("Java test launch response has no body")?,
         )
         .map_err(|error| format!("Invalid Java test launch arguments: {error}"))?;
+
         let status = request(
             "vscode.java.buildWorkspace",
             json!([json!({
@@ -144,6 +172,7 @@ impl TestTarget {
         if status.as_u64() != Some(1) {
             return Err(format!("Java test build did not succeed ({status})"));
         }
+
         if testng {
             let runner = runner_jar.ok_or("The Java TestNG runner is not installed")?;
             launch.main_class = Some("com.microsoft.java.test.runner.Launcher".into());
@@ -164,6 +193,7 @@ impl TestTarget {
             launch.program_arguments = vec!["testng".into()];
             launch.program_arguments.extend(methods);
         }
+
         let port = request("zed/javaTestRunner/start", json!({}))?
             .as_u64()
             .filter(|port| *port > 0 && *port <= u16::MAX as u64)
@@ -207,6 +237,15 @@ fn collect_classes<'a>(items: &'a [TestItem], classes: &mut Vec<&'a TestItem>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accepts_supported_test_kind_codes_and_rejects_unknown_kinds() {
+        assert_eq!(TestKind::from_protocol(&json!(0)), Ok(TestKind::JUnit5));
+        assert_eq!(TestKind::from_protocol(&json!("1")), Ok(TestKind::JUnit4));
+        assert_eq!(TestKind::from_protocol(&json!(2)), Ok(TestKind::TestNg));
+        assert_eq!(TestKind::from_protocol(&json!("3")), Ok(TestKind::JUnit6));
+        assert!(TestKind::from_protocol(&json!(100)).is_err());
+    }
 
     fn target(method: Option<&str>) -> TestTarget {
         TestTarget {

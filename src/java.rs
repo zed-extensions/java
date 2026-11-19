@@ -157,6 +157,7 @@ impl Extension for Java {
             .inject_config(
                 worktree,
                 config.config,
+                self.jdtls_server.language_server_id.as_ref(),
                 self.jdtls_server.test_bundle_host(&workspace),
             )
             .map_err(|err| format!("Failed to prepare debug session: {err}"))?;
