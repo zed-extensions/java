@@ -15,8 +15,6 @@ use crate::{
 
 const INSTALL_PATH: &str = "gradle-ls";
 const SUPPORTED_VERSION: &str = "3.18.0";
-const VSIX_PUBLISHER: &str = "vscjava";
-const VSIX_EXTENSION: &str = "vscode-gradle";
 
 pub struct GradleLs {
     cached_path: Option<PathBuf>,
@@ -77,7 +75,7 @@ impl Downloadable for GradleLs {
             .map_err(|err| format!("Failed to create Gradle LS directory: {err}"))?;
 
         let download_url = format!(
-            "https://{VSIX_PUBLISHER}.gallery.vsassets.io/_apis/public/gallery/publisher/{VSIX_PUBLISHER}/extension/{VSIX_EXTENSION}/{version}/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage"
+            "https://open-vsx.org/api/vscjava/vscode-gradle/{SUPPORTED_VERSION}/file/vscjava.vscode-gradle-{SUPPORTED_VERSION}.vsix"
         );
 
         // The VSIX is a zip file. We download and extract it into a temp location,
