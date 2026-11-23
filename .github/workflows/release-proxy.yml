@@ -54,7 +54,7 @@ jobs:
       # cdylib) out of the native target build. The Gradle bridge implements
       # vscode-gradle 3.18's JSON-RPC transport over platform-local IPC.
       - name: Build binaries
-        run: cargo build --release --target ${{ matrix.target }} -p java-lsp-proxy -p gradle-lsp-bridge
+        run: cargo build --locked --release --target ${{ matrix.target }} -p java-lsp-proxy -p gradle-lsp-bridge
         shell: bash
 
       - name: Package binaries (Unix)

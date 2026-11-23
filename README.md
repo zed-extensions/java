@@ -745,7 +745,7 @@ If you want to contribute to this extension or test local changes, you can insta
 ### Prerequisites
 
 - [Rust](https://rustup.rs/) toolchain
-- The `wasm32-wasip1` target: `rustup target add wasm32-wasip1`
+- The `wasm32-wasip2` target: `rustup target add wasm32-wasip2`
 - [just](https://github.com/casey/just) command runner (optional but recommended)
 
 ### Installing as a Dev Extension

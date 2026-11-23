@@ -9,7 +9,7 @@ proxy-build:
 
 # Build proxy in release mode
 proxy-release:
-    cd proxy && cargo build --release --target {{ native_target }}
+    cargo build --release --target {{ native_target }} -p java-lsp-proxy
 
 # Build proxy release and install to extension workdir for testing
 proxy-install: proxy-release
@@ -18,6 +18,7 @@ proxy-install: proxy-release
     @echo "Installed to {{ ext_dir }}"
 
 # --- Core recipes ---
+
 # Build gradle-lsp-bridge in debug mode
 bridge-build:
     cargo build --target {{ native_target }} -p gradle-lsp-bridge
@@ -34,7 +35,7 @@ bridge-install: bridge-release
 
 # Build WASM extension in release mode
 ext-build:
-    cargo build --release
+    cargo build --locked --release --target wasm32-wasip2 -p zed_java
 
 # Format all code
 fmt:

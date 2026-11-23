@@ -1,5 +1,4 @@
 grammars/
 target/
-proxy/target/
 extension.wasm
 .DS_Store
