@@ -29,6 +29,7 @@
             "file": { "type": "string" },
             "className": { "type": "string" },
             "outerClass": { "type": "string" },
+            "packageName": { "type": "string" },
             "method": { "type": "string" }
           },
           "required": ["file", "className"],

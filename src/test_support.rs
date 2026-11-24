@@ -12,18 +12,22 @@ use zed_extension_api::{
 use crate::downloadable::Downloadable;
 
 const VERSION: &str = "0.47.0";
-const DOWNLOAD_URL: &str = "https://open-vsx.org/api/vscjava/vscode-java-test/0.47.0/file/vscjava.vscode-java-test-0.47.0.vsix";
 
 pub fn prepare(
     language_server_id: &LanguageServerId,
     worktree: &Worktree,
     host: Option<&Path>,
 ) -> zed::Result<String> {
+    crate::lsp::request::<Value>(
+        &worktree.root_path(),
+        "workspace/executeCommand",
+        json!({"command": "java.project.getAll", "arguments": []}),
+    )
+    .map_err(|error| {
+        format!("JDTLS is not responding for this workspace. Check its launcher and language server log, then restart JDTLS: {error}")
+    })?;
     let mut test_runner = TestRunner;
-    let directory = match test_runner.find_local() {
-        Some(path) => path,
-        None => test_runner.get_or_download(language_server_id, &None, worktree)?,
-    };
+    let directory = test_runner.get_or_download(language_server_id, &None, worktree)?;
     let (mut bundles, runner) = load_installation(&directory)?;
     if let Some(host) = host {
         let plugins = host.join("plugins");
@@ -49,6 +53,18 @@ struct TestRunner;
 
 impl Downloadable for TestRunner {
     const INSTALL_PATH: &'static str = "java-test";
+
+    fn get_or_download(
+        &mut self,
+        language_server_id: &LanguageServerId,
+        _configuration: &Option<Value>,
+        worktree: &Worktree,
+    ) -> zed::Result<PathBuf> {
+        match self.find_local() {
+            Some(path) => Ok(path),
+            None => self.download(VERSION, language_server_id, worktree),
+        }
+    }
 
     fn find_local(&self) -> Option<PathBuf> {
         let directory = std::env::current_dir()
@@ -94,11 +110,11 @@ impl Downloadable for TestRunner {
             language_server_id,
             &LanguageServerInstallationStatus::Downloading,
         );
-        let downloaded = zed::download_file(
-            DOWNLOAD_URL,
-            &staging.to_string_lossy(),
-            DownloadedFileType::Zip,
+        let url = format!(
+            "https://open-vsx.org/api/vscjava/vscode-java-test/{version}/file/vscjava.vscode-java-test-{version}.vsix"
         );
+        let downloaded =
+            zed::download_file(&url, &staging.to_string_lossy(), DownloadedFileType::Zip);
         set_language_server_installation_status(
             language_server_id,
             &LanguageServerInstallationStatus::None,

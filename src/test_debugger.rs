@@ -16,6 +16,7 @@ pub struct TestTarget {
     pub class_name: String,
     #[serde(default)]
     pub outer_class: String,
+    pub package_name: Option<String>,
     pub method: Option<String>,
 }
 
@@ -86,16 +87,37 @@ impl TestTarget {
             .map_err(|error| format!("Invalid Java test discovery response: {error}"))?;
 
         let mut classes = Vec::new();
-        collect_classes(&items, &mut classes);
+        collect_classes(&items, false, &mut classes);
         let class_suffix = if self.outer_class.is_empty() {
             self.class_name.clone()
         } else {
             format!("{}.{}", self.outer_class, self.class_name)
         };
-        let mut matches = classes.into_iter().filter(|item| {
-            let name = item.full_name.replace('$', ".");
-            name == class_suffix || name.ends_with(&format!(".{class_suffix}"))
+        let expected_name = self.package_name.as_ref().map(|package| {
+            if package.is_empty() {
+                class_suffix.clone()
+            } else {
+                format!("{package}.{class_suffix}")
+            }
         });
+        let mut matches = classes
+            .iter()
+            .filter(|(item, nested)| {
+                let name = item.full_name.replace('$', ".");
+                let is_nested = *nested
+                    || item.full_name.contains('$')
+                    || classes.iter().any(|(other, _)| {
+                        let parent = other.full_name.replace('$', ".");
+                        name.starts_with(&format!("{parent}."))
+                    });
+                if let Some(expected) = &expected_name {
+                    &name == expected
+                } else {
+                    (!self.outer_class.is_empty() || !is_nested)
+                        && (name == class_suffix || name.ends_with(&format!(".{class_suffix}")))
+                }
+            })
+            .map(|(item, _)| *item);
         let class = matches
             .next()
             .ok_or_else(|| format!("No matching test class found in {}", self.file))?;
@@ -225,12 +247,17 @@ fn is_level(value: &Value, expected: u64) -> bool {
             .is_some_and(|value| value == expected.to_string())
 }
 
-fn collect_classes<'a>(items: &'a [TestItem], classes: &mut Vec<&'a TestItem>) {
+fn collect_classes<'a>(
+    items: &'a [TestItem],
+    nested: bool,
+    classes: &mut Vec<(&'a TestItem, bool)>,
+) {
     for item in items {
-        if is_level(&item.test_level, 5) {
-            classes.push(item);
+        let is_class = is_level(&item.test_level, 5);
+        if is_class {
+            classes.push((item, nested));
         }
-        collect_classes(&item.children, classes);
+        collect_classes(&item.children, nested || is_class, classes);
     }
 }
 
@@ -252,6 +279,7 @@ mod tests {
             file: "/workspace/module with spaces/src/ExampleTest.java".into(),
             class_name: "ExampleTest".into(),
             outer_class: String::new(),
+            package_name: None,
             method: method.map(str::to_owned),
         }
     }
@@ -362,6 +390,42 @@ mod tests {
                             params["testNames"],
                             json!(["example.ExampleTest.NestedTest"])
                         );
+                        arguments()
+                    }
+                    "vscode.java.buildWorkspace" => json!(1),
+                    "zed/javaTestRunner/start" => json!(12345),
+                    _ => panic!("Unexpected command"),
+                })
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn top_level_class_does_not_match_nested_class_with_same_name() {
+        let mut items = discovery("0");
+        items[0]["children"].as_array_mut().unwrap().push(json!({
+            "fullName": "example.ExampleTest.CollisionTest",
+            "projectName": "module-a", "testLevel": 5, "testKind": 0
+        }));
+        items.as_array_mut().unwrap().push(json!({
+            "fullName": "example.CollisionTest",
+            "projectName": "module-a", "testLevel": 5, "testKind": 0
+        }));
+        items.as_array_mut().unwrap().push(json!({
+            "fullName": "example.OtherOuter.CollisionTest",
+            "projectName": "module-a", "testLevel": 5, "testKind": 0
+        }));
+        let mut selected = target(None);
+        selected.class_name = "CollisionTest".into();
+        selected.package_name = Some("example".into());
+        selected
+            .resolve(None, |command, params| {
+                Ok(match command {
+                    "vscode.java.test.findTestTypesAndMethods" => items.clone(),
+                    "vscode.java.test.junit.argument" => {
+                        let params: Value =
+                            serde_json::from_str(params[0].as_str().unwrap()).unwrap();
+                        assert_eq!(params["testNames"], json!(["example.CollisionTest"]));
                         arguments()
                     }
                     "vscode.java.buildWorkspace" => json!(1),

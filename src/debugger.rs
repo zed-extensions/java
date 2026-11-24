@@ -396,8 +396,14 @@ impl Debugger {
                     .ok_or("Java test runner main class is missing")?,
             );
             config.project_name = Some(launch.project_name);
-            config.class_paths = Some(launch.classpath);
-            config.module_paths = Some(launch.modulepath);
+            config.class_paths = Some(merge_test_paths(
+                config.class_paths.take(),
+                launch.classpath,
+            ));
+            config.module_paths = Some(merge_test_paths(
+                config.module_paths.take(),
+                launch.modulepath,
+            ));
             config.cwd = config.cwd.or(Some(launch.working_directory));
             config.args = Some(test_arguments(
                 launch.program_arguments,
@@ -489,7 +495,8 @@ impl Debugger {
         }
 
         classpaths.retain(|class| !SCOPES.contains(&class.as_str()));
-        classpaths.dedup();
+        let mut seen = std::collections::HashSet::new();
+        classpaths.retain(|path| seen.insert(path.clone()));
 
         config.class_paths = Some(classpaths);
 
@@ -558,6 +565,16 @@ impl Debugger {
 struct TestSessionPorts {
     dap_port: u16,
     result_port: u16,
+}
+
+fn merge_test_paths(configured: Option<Vec<String>>, required: Vec<String>) -> Vec<String> {
+    let mut paths = configured.unwrap_or_default();
+    for path in required {
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    }
+    paths
 }
 
 fn test_arguments(
@@ -644,6 +661,17 @@ impl Downloadable for Debugger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_launch_preserves_configured_paths_and_required_entries() {
+        assert_eq!(
+            merge_test_paths(
+                Some(vec!["$Test".into(), "extra.jar".into()]),
+                vec!["runner.jar".into(), "extra.jar".into()]
+            ),
+            ["$Test", "extra.jar", "runner.jar"]
+        );
+    }
 
     fn prepare_file_launch(
         config: Value,

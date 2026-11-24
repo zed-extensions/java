@@ -12,7 +12,7 @@ use zed_extension_api::{
 };
 
 use crate::{
-    config::{get_java_home, get_jdtls_launcher, is_lombok_enabled},
+    config::{get_java_home, get_jdtls_home, get_jdtls_launcher, is_lombok_enabled},
     debugger::Debugger,
     downloadable::Downloadable,
     jdk::Jdk,
@@ -22,7 +22,7 @@ use crate::{
     },
     language_server::LanguageServer,
     proxy::Proxy,
-    util::{expand_home_path, path_to_file_uri, path_to_string},
+    util::{path_to_file_uri, path_to_string},
 };
 
 pub struct JdtlsServer {
@@ -109,12 +109,7 @@ impl LanguageServer for JdtlsServer {
             if let Some(data_path) = configured_data_path.as_deref() {
                 append_jdtls_data_args(&mut args, data_path)?;
             }
-            configuration
-                .as_ref()
-                .and_then(|settings| settings.get("jdtls_home"))
-                .and_then(Value::as_str)
-                .map(|path| expand_home_path(worktree, path.to_owned()).map(PathBuf::from))
-                .transpose()?
+            get_jdtls_home(&configuration, worktree)?
         } else {
             let data_path = match configured_data_path {
                 Some(data_path) => data_path,

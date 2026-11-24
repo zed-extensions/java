@@ -41,6 +41,7 @@ impl JavaRunnable {
                     "file": "$ZED_FILE",
                     "className": "$ZED_CUSTOM_java_class_name",
                     "outerClass": "${ZED_CUSTOM_java_outer_class_name:}",
+                    "packageName": "${ZED_CUSTOM_java_package_name:}",
                 });
                 if self == Self::TestMethod {
                     target["method"] = "$ZED_CUSTOM_java_method_name".into();

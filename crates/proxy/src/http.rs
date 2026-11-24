@@ -13,6 +13,7 @@ use crate::pending::PendingResponses;
 use proxy_common::encode_lsp;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 const BUILD_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Deserialize)]
@@ -23,6 +24,11 @@ struct HttpBody {
 
 impl HttpBody {
     fn timeout(&self) -> Duration {
+        if self.method == "workspace/executeCommand"
+            && self.params["command"] == "java.project.getAll"
+        {
+            return STARTUP_TIMEOUT;
+        }
         if self.method == "workspace/executeCommand"
             && self
                 .params

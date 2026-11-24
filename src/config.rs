@@ -158,6 +158,18 @@ pub fn get_jdtls_launcher(configuration: &Option<Value>, worktree: &Worktree) ->
     None
 }
 
+pub fn get_jdtls_home(
+    configuration: &Option<Value>,
+    worktree: &Worktree,
+) -> Result<Option<std::path::PathBuf>, String> {
+    configuration
+        .as_ref()
+        .and_then(|settings| settings.get("jdtls_home"))
+        .and_then(Value::as_str)
+        .map(|path| expand_home_path(worktree, path.to_owned()).map(std::path::PathBuf::from))
+        .transpose()
+}
+
 /// Returns the max heap size for jdtls (e.g. "2G", "4096m").
 /// Maps to the `-Xmx` JVM argument.
 pub fn get_max_memory(configuration: &Option<Value>) -> Option<String> {
