@@ -155,8 +155,7 @@ mapping.
 If you disable the built-in Java tasks and provide your own main-method task,
 add `"ZED_JAVA_RUNNABLE": "main"` to that task's `env` object to opt in. Its
 environment variables are forwarded to the debug configuration, excluding the
-locator's `ZED_JAVA_RUNNABLE` and `ZED_JAVA_MAIN_CLASS` metadata. Test runnables
-are not handled by this locator.
+locator's `ZED_JAVA_RUNNABLE` and `ZED_JAVA_MAIN_CLASS` metadata.
 
 ### Main methods with JDTLS
 
@@ -223,6 +222,32 @@ This requires Metals to be available for Java in your Scala extension
 installation, and its DAP proxy to be enabled. The Scala extension's
 [debugging documentation](https://github.com/scalameta/metals-zed#debugging)
 describes its setup and restrictions.
+
+### Test gutter actions
+
+Test method and class tasks use the `ZED_JAVA_RUNNABLE=test-method` and
+`ZED_JAVA_RUNNABLE=test-class` markers. Their existing Run commands are preserved.
+The locator creates a `testTarget` containing the source file, class, optional
+outer class, and optional method. Discovery and compilation happen only when
+you select Debug; creating the gutter action does not contact a language server.
+Project-wide test tasks are not converted to debug scenarios.
+
+With JDTLS, the first test debug launch downloads the pinned Microsoft Java Test
+Runner. The extension loads the bundles into the running language server, discovers
+tests in the selected file, and resolves the framework's launch arguments. JUnit
+methods use their JDT handles, including parameter types.
+For a custom JDTLS launcher, set `lsp.jdtls.settings.jdtls_home` to the absolute
+path of the JDTLS installation that contains `plugins/`. This lets the extension
+skip runner bundles already shipped with that installation.
+TestNG uses its bundled runner. A local callback socket receives the test runner's
+result protocol; this does not provide a test-results explorer. Build failures,
+missing targets, and ambiguous method names stop the launch.
+
+Test gutter debugging is available with the `Java` adapter. All invocations of a
+parameterized method are selected together.
+
+Custom project tasks that replace the built-in Java tasks must also include the
+appropriate marker. Select `Java` in `languages.Java.debuggers` for test debugging.
 
 ### Debugging with JDTLS
 

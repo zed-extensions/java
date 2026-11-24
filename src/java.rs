@@ -11,6 +11,8 @@ mod jdtls_server;
 mod language_server;
 mod lsp;
 mod proxy;
+mod test_debugger;
+mod test_support;
 mod util;
 
 use std::str::FromStr;
@@ -142,6 +144,23 @@ impl Extension for Java {
         }
 
         let workspace = worktree.root_path();
+        let request = self
+            .dap_request_kind(
+                adapter_name,
+                Value::from_str(config.config.as_str())
+                    .map_err(|err| format!("Invalid JSON configuration: {err}"))?,
+            )
+            .map_err(|err| format!("Failed to determine debug request kind: {err}"))?;
+        let (configuration, connection) = self
+            .jdtls_server
+            .debugger
+            .inject_config(
+                worktree,
+                config.config,
+                self.jdtls_server.language_server_id.as_ref(),
+                self.jdtls_server.test_bundle_host(&workspace),
+            )
+            .map_err(|err| format!("Failed to prepare debug session: {err}"))?;
 
         Ok(DebugAdapterBinary {
             command: None,
@@ -149,25 +168,10 @@ impl Extension for Java {
             cwd: Some(workspace.clone()),
             envs: vec![],
             request_args: StartDebuggingRequestArguments {
-                request: self
-                    .dap_request_kind(
-                        adapter_name,
-                        Value::from_str(config.config.as_str())
-                            .map_err(|err| format!("Invalid JSON configuration: {err}"))?,
-                    )
-                    .map_err(|err| format!("Failed to determine debug request kind: {err}"))?,
-                configuration: self
-                    .jdtls_server
-                    .debugger
-                    .inject_config(worktree, config.config)
-                    .map_err(|err| format!("Failed to inject debug configuration: {err}"))?,
+                request,
+                configuration,
             },
-            connection: Some(zed::resolve_tcp_template(
-                self.jdtls_server
-                    .debugger
-                    .start_session(&workspace)
-                    .map_err(|err| format!("Failed to start debug session: {err}"))?,
-            )?),
+            connection: Some(zed::resolve_tcp_template(connection)?),
         })
     }
 

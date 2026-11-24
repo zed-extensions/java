@@ -22,6 +22,19 @@
           "type": "string",
           "description": "The absolute path to a Java source file. Use $ZED_FILE for the currently focused Java source file. Resolves the main class and project from this file and builds before launch. Use mainClass and projectName to disambiguate multiple entries."
         },
+        "testTarget": {
+          "type": "object",
+          "description": "Resolve a test class or method from its source file when debugging starts. Requires the bundled Java Test Runner with JDTLS.",
+          "properties": {
+            "file": { "type": "string" },
+            "className": { "type": "string" },
+            "outerClass": { "type": "string" },
+            "packageName": { "type": "string" },
+            "method": { "type": "string" }
+          },
+          "required": ["file", "className"],
+          "additionalProperties": false
+        },
         "args": {
           "oneOf": [
             {
