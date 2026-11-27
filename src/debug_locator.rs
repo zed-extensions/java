@@ -36,7 +36,7 @@ impl JavaRunnable {
                 "path": "$ZED_FILE",
                 "runType": "runOrTestFile",
             })),
-            (Self::TestMethod | Self::TestClass, "Java") => {
+            (Self::TestMethod | Self::TestClass, "Java" | "Metals") => {
                 let mut target = json!({
                     "file": "$ZED_FILE",
                     "className": "$ZED_CUSTOM_java_class_name",
@@ -211,8 +211,8 @@ mod tests {
             let mut task = main_task();
             task.env = vec![(RUNNABLE_ENV.into(), runnable.into())];
 
-            {
-                let scenario = create_scenario(task.clone(), "Debug test".into(), "Java").unwrap();
+            for adapter in ["Java", "Metals"] {
+                let scenario = create_scenario(task.clone(), "Debug test".into(), adapter).unwrap();
                 let config: Value = from_str(&scenario.config).unwrap();
                 assert_eq!(config["testTarget"]["file"], "$ZED_FILE");
                 assert_eq!(
@@ -226,7 +226,6 @@ mod tests {
                     runnable == "test-method"
                 );
             }
-            assert!(create_scenario(task, "Debug test".into(), "Metals").is_none());
         }
     }
 
