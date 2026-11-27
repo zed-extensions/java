@@ -227,8 +227,8 @@ describes its setup and restrictions.
 
 Test method and class tasks use the `ZED_JAVA_RUNNABLE=test-method` and
 `ZED_JAVA_RUNNABLE=test-class` markers. Their existing Run commands are preserved.
-The locator creates a `testTarget` containing the source file, class, optional
-outer class, and optional method. Discovery and compilation happen only when
+The locator creates a `testTarget` containing the source file, package, class,
+optional outer class, and optional method. Discovery and compilation happen only when
 you select Debug; creating the gutter action does not contact a language server.
 Project-wide test tasks are not converted to debug scenarios.
 
@@ -243,11 +243,14 @@ TestNG uses its bundled runner. A local callback socket receives the test runner
 result protocol; this does not provide a test-results explorer. Build failures,
 missing targets, and ambiguous method names stop the launch.
 
-Test gutter debugging is available with the `Java` adapter. All invocations of a
-parameterized method are selected together.
+With a Scala extension that supports Java `testTarget`, selecting the `Metals`
+adapter discovers the test build target and starts a test class or method through
+Metals. Framework and build-server support for selecting individual methods may
+vary. All invocations of a parameterized method are selected together with JDTLS.
 
 Custom project tasks that replace the built-in Java tasks must also include the
-appropriate marker. Select `Java` in `languages.Java.debuggers` for test debugging.
+appropriate marker. Select the desired adapter in `languages.Java.debuggers` for
+test debugging.
 
 ### Debugging with JDTLS
 
