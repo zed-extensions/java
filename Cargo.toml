@@ -36,7 +36,7 @@ members = [
 default-members = ["."]
 
 [workspace.package]
-version = "6.8.30"
+version = "6.8.31"
 
 [workspace.dependencies]
 proxy-common = { path = "crates/proxy-common" }

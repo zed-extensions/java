@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "gradle-lsp-bridge"
-version = "6.8.30"
+version = "6.8.31"
 dependencies = [
  "base64",
  "prost",
@@ -502,7 +502,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "java-lsp-proxy"
-version = "6.8.30"
+version = "6.8.31"
 dependencies = [
  "hex",
  "proxy-common",
@@ -639,7 +639,7 @@ dependencies = [
 
 [[package]]
 name = "proxy-common"
-version = "6.8.30"
+version = "6.8.31"
 dependencies = [
  "libc",
  "percent-encoding",
@@ -1289,7 +1289,7 @@ dependencies = [
 
 [[package]]
 name = "zed_java"
-version = "6.8.30"
+version = "6.8.31"
 dependencies = [
  "hex",
  "insta",
